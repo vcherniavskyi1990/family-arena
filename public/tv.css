@@ -1,0 +1,59 @@
+/* ТБ LG webOS 6.5 ≈ Chromium 79: без flex gap, без inset, без :is(). Канва 1920×1080. */
+html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: #0b0f14; color: #eef2f6; font-family: "Segoe UI", Roboto, Arial, sans-serif; }
+#stage { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; background: radial-gradient(ellipse at 50% 30%, #1d2a3a 0%, #0b0f14 70%); }
+.idle-title { position: absolute; left: 0; right: 0; top: 440px; text-align: center; font-size: 96px; font-weight: 800; }
+.hdr { position: absolute; left: 60px; top: 30px; right: 60px; height: 90px; }
+.hdr .t { font-size: 48px; font-weight: 800; } .hdr .s { font-size: 26px; color: #9fb0c3; margin-top: 4px; }
+.hdr .r { position: absolute; right: 0; top: 0; text-align: right; font-size: 26px; color: #9fb0c3; }
+.qr { position: absolute; width: 260px; text-align: center; } .qr img { width: 240px; height: 240px; background: #1b2430; border-radius: 20px; padding: 12px; box-sizing: border-box; } .qr div { font-size: 22px; color: #9fb0c3; margin-top: 8px; }
+.qr.big { left: 100px; top: 180px; width: 460px; } .qr.big img { width: 440px; height: 440px; }
+.qr.small { right: 60px; bottom: 40px; width: 200px; } .qr.small img { width: 180px; height: 180px; padding: 8px; }
+.heroes { position: absolute; left: 620px; top: 170px; right: 60px; height: 560px; }
+.hero { float: left; width: 280px; height: 260px; margin: 0 20px 20px 0; background: #1b2430; border: 2px solid #33445a; border-radius: 20px; padding: 16px; box-sizing: border-box; text-align: center; }
+.hero .av { width: 110px; height: 110px; margin: 0 auto 8px; border-radius: 18px; background: #243040; font-size: 64px; line-height: 110px; overflow: hidden; } .hero .av img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.hero .n { font-size: 28px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .hero .c { font-size: 20px; color: #9fb0c3; } .hero .st { font-size: 18px; color: #c9d4e0; margin-top: 6px; }
+.feed { position: absolute; left: 100px; top: 700px; width: 980px; } .feed div { font-size: 26px; padding: 6px 0; border-bottom: 1px dotted #33445a; color: #c9d4e0; } .feed .h { font-size: 22px; color: #9fb0c3; text-transform: uppercase; letter-spacing: .08em; border: 0; }
+.legend { position: absolute; left: 1120px; top: 700px; width: 740px; } .legend div { font-size: 24px; padding: 6px 0; } .legend .h { font-size: 22px; color: #9fb0c3; text-transform: uppercase; letter-spacing: .08em; }
+.r-common { color: #c8c8c8 } .r-uncommon { color: #1eff00 } .r-rare { color: #4aa3ff } .r-epic { color: #c77dff } .r-legendary { color: #ff8000; text-shadow: 0 0 16px #ff8000aa }
+/* лобі */
+.lobby { position: absolute; left: 60px; top: 170px; right: 60px; } .lobby .mode { font-size: 40px; margin-bottom: 20px; } .lobby .mode span { color: #9fb0c3; font-size: 28px; }
+.lp { float: left; width: 330px; height: 330px; margin: 0 24px 24px 0; background: #1b2430; border: 4px solid #33445a; border-radius: 24px; text-align: center; padding: 20px; box-sizing: border-box; position: relative; }
+.lp.ready { border-color: #2ecc71; box-shadow: 0 0 30px #2ecc7155; } .lp .av { width: 150px; height: 150px; margin: 0 auto 10px; border-radius: 24px; background: #243040; font-size: 90px; line-height: 150px; overflow: hidden; } .lp .av img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.lp .n { font-size: 34px; font-weight: 800; } .lp .c { font-size: 22px; color: #9fb0c3; } .lp .rd { position: absolute; right: 14px; top: 10px; font-size: 40px; } .lp .team { position: absolute; left: 14px; top: 10px; font-size: 36px; }
+.lp.empty { border-style: dashed; color: #5c6f85; font-size: 30px; line-height: 280px; }
+.hint { position: absolute; left: 60px; bottom: 50px; font-size: 30px; color: #9fb0c3; }
+/* бій */
+.arena { position: absolute; left: 0; top: 130px; width: 1920px; height: 800px; }
+.team { position: absolute; top: 0; width: 760px; height: 800px; } .team.l { left: 80px; } .team.r { right: 80px; }
+.f { position: relative; height: 150px; margin-bottom: 18px; background: #1b2430cc; border: 3px solid #33445a; border-radius: 20px; padding: 12px 16px 12px 150px; box-sizing: border-box; transition: transform .15s, border-color .3s; }
+.team.r .f { padding: 12px 150px 12px 16px; text-align: right; }
+.f.sel { border-color: #f1c40f; } .f.dead { opacity: .35; filter: grayscale(1); } .f.boss { height: 320px; border-color: #ff8000; box-shadow: 0 0 40px #ff800055; padding-left: 16px; padding-right: 330px; }
+.f .av { position: absolute; left: 14px; top: 14px; width: 118px; height: 118px; border-radius: 16px; background: #243040; font-size: 72px; line-height: 118px; text-align: center; overflow: hidden; } .team.r .f .av { left: auto; right: 14px; } .f .av img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.f.boss .av { width: 290px; height: 290px; font-size: 200px; line-height: 290px; }
+.f .n { font-size: 32px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .f.boss .n { font-size: 48px; color: #ff8000; }
+.f .tags { font-size: 24px; height: 32px; color: #c9d4e0; }
+.bar { height: 22px; background: #0b0f14; border-radius: 10px; overflow: hidden; border: 1px solid #33445a; margin-top: 8px; position: relative; } .bar i { display: block; height: 100%; background: #2ecc71; transition: width .5s; } .bar.red i { background: #e74c3c; } .bar.mana { height: 12px; } .bar.mana i { background: #3498db; }
+.bar b { position: absolute; left: 0; right: 0; top: -2px; text-align: center; font-size: 18px; text-shadow: 0 0 4px #000; }
+.f.boss .bar { height: 40px; } .f.boss .bar b { font-size: 28px; top: 4px; }
+.f.hit { animation: shake .4s; border-color: #e74c3c; } .f.healed { border-color: #2ecc71; } .f.blocked { border-color: #3498db; }
+@keyframes shake { 0% { transform: translateX(0) } 25% { transform: translateX(-12px) } 50% { transform: translateX(12px) } 75% { transform: translateX(-6px) } 100% { transform: translateX(0) } }
+.float { position: absolute; font-size: 56px; font-weight: 900; color: #fff; text-shadow: 0 0 8px #000, 0 0 16px #e74c3c; animation: fly 1.4s forwards; pointer-events: none; z-index: 5; }
+.float.crit { font-size: 80px; color: #ffd166; text-shadow: 0 0 8px #000, 0 0 24px #ff8000; } .float.heal { color: #7dffb0; text-shadow: 0 0 8px #000, 0 0 16px #2ecc71; } .float.block { font-size: 44px; color: #8ecbff; } .float.miss { font-size: 44px; color: #ddd; }
+@keyframes fly { 0% { transform: translateY(0) scale(.6); opacity: 0 } 15% { transform: translateY(-10px) scale(1.2); opacity: 1 } 100% { transform: translateY(-120px) scale(1); opacity: 0 } }
+.mid { position: absolute; left: 860px; top: 0; width: 200px; text-align: center; } .mid .round { font-size: 30px; color: #9fb0c3; } .mid .timer { font-size: 120px; font-weight: 900; color: #f1c40f; line-height: 1; } .mid .timer.low { color: #e74c3c; } .mid .vs { font-size: 64px; margin-top: 20px; }
+.mid .room { font-size: 26px; color: #c9d4e0; margin-top: 10px; }
+#ticker { position: absolute; left: 0; right: 0; bottom: 0; height: 150px; padding: 20px 80px; box-sizing: border-box; font-size: 34px; }
+#ticker div { animation: tick .3s; } @keyframes tick { from { opacity: 0; transform: translateY(20px) } to { opacity: 1; transform: none } }
+.cardpop { position: absolute; left: 760px; top: 330px; width: 400px; background: #243040; border: 4px solid #f1c40f; border-radius: 24px; padding: 24px; text-align: center; animation: pop .5s; z-index: 6; }
+.cardpop .ic { font-size: 110px; } .cardpop .nm { font-size: 36px; font-weight: 800; } .cardpop .who { font-size: 24px; color: #9fb0c3; } .cardpop .tx { font-size: 24px; margin-top: 8px; }
+@keyframes pop { from { transform: scale(.3); opacity: 0 } to { transform: none; opacity: 1 } }
+#overlay { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; display: none; align-items: center; justify-content: center; text-align: center; z-index: 10; }
+#overlay.on { display: flex; }
+.banner { background: #0b0f14ee; border: 6px solid #f1c40f; border-radius: 40px; padding: 40px 80px; width: 1600px; max-height: 960px; box-sizing: border-box; overflow: hidden; }
+.banner.lose { border-color: #e74c3c; } .banner.pause { border-color: #3498db; }
+.banner .big { font-size: 72px; font-weight: 900; line-height: 1.1; } .banner .sub { font-size: 36px; color: #c9d4e0; margin-top: 20px; }
+.banner .cols { margin-top: 24px; overflow: hidden; } .banner .loot { float: left; width: 48%; margin: 0 1%; text-align: left; font-size: 26px; } .banner .loot div { padding: 4px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.banner .cnt { margin-top: 24px; font-size: 26px; color: #9fb0c3; }
+.room-intro { background: #0b0f14ee; border: 6px solid #ff8000; border-radius: 40px; padding: 60px 100px; } .room-intro .big { font-size: 100px; font-weight: 900; } .room-intro .sub { font-size: 40px; color: #c9d4e0; margin-top: 10px; }
+.rage { animation: rage .6s infinite alternate; } @keyframes rage { from { box-shadow: 0 0 40px #e74c3c } to { box-shadow: 0 0 90px #ff0000 } }
+.minions { font-size: 36px; }

@@ -62,7 +62,9 @@ export function genItem(rng, level = 1, rarity = null, minRarity = 'common') {
     const extra = rng.pick(['atk', 'def', 'hp', 'crit'].filter(s => s !== slot.stat));
     stats[extra] = extra === 'crit' ? Math.round(mult * 2) / 100 : Math.max(1, Math.round(ITEMS.slots[Object.keys(ITEMS.slots).find(k => ITEMS.slots[k].stat === extra) || 'weapon'].base * (mult - 1)));
   }
-  const name = `${rng.pick(ITEMS.prefixes[r])} ${rng.pick(slot.names).toLowerCase()}${RARITY_ORDER.indexOf(r) >= 1 ? ' ' + rng.pick(ITEMS.suffixes) : ''}`;
+  const [base, gender] = rng.pick(slot.names).split(':');
+  const prefix = rng.pick(ITEMS.prefixes[r]).split('/')[{ m: 0, f: 1, n: 2 }[gender] || 0];
+  const name = `${prefix} ${base.toLowerCase()}${RARITY_ORDER.indexOf(r) >= 1 ? ' ' + rng.pick(ITEMS.suffixes) : ''}`;
   return { id: `it_${Date.now().toString(36)}_${Math.floor(rng.next() * 1e9).toString(36)}`, name, slot: slotId, rarity: r, level, stats };
 }
 

@@ -320,7 +320,8 @@ export class Game {
   }
   tvState() {
     const phase = this.battle ? 'battle' : this.results ? 'results' : Object.keys(this.lobby.players).length ? 'lobby' : 'idle';
-    return { phase, season: this.settings.season, lobby: this.lobbyView(), battle: this.battleView(), results: this.results, paused: this.paused, pauseReason: this.pauseReason,
+    const hm = this.kyiv().hm; const quiet = hm < '07:00' || (hm >= '13:00' && hm < '15:00');
+    return { phase, season: this.settings.season, quiet, now: this.now(), lobby: this.lobbyView(), battle: this.battleView(), results: this.results, paused: this.paused, pauseReason: this.pauseReason,
       heroes: this.playerList.map(p => ({ ...this.publicPlayer(p), xp: p.xp, xpNext: xpForLevel(p.level), kills: p.stats.kills, duelWins: p.stats.duelWins, dungeons: p.stats.dungeons, legendaries: p.stats.legendaries, achievements: p.achievements.length })),
       legendaries: this.history.legendaries.slice(0, 5), feed: this.history.feed.slice(0, 8), pendingQuests: this.pendingQuests().length };
   }

@@ -165,7 +165,7 @@ export function createApp({ dataDir, avatars: avatarsOpt, baseUrl } = {}) {
     if (path === '/quests/approve' && req.method === 'POST') { return ok({ reward: game.questApprove(parent(), body.playerId, body.questId, body.approve !== false) }); }
 
     // --- батьки ---
-    if (path === '/admin/players' && req.method === 'POST') { const p = game.createPlayer(body); return ok({ player: game.publicPlayer(p) }); }
+    if (path === '/admin/players' && req.method === 'POST') { parent(); const p = game.createPlayer(body); return ok({ player: game.publicPlayer(p) }); }
     if (path === '/admin/players/update' && req.method === 'POST') { parent(); game.updatePlayer(body.id, body); return ok(); }
     if (path === '/admin/players/delete' && req.method === 'POST') { const a = parent(); if (!game.checkPin(a, body.pin)) throw err('PIN'); game.deletePlayer(body.id); return ok(); }
     if (path === '/admin/settings' && req.method === 'GET') { parent(); return send(200, game.settings); }
