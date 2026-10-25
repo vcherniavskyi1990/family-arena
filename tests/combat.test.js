@@ -62,7 +62,7 @@ test('бос лютує на половині здоров’я, а крипер
   const boss = fighterFromMob('boss_ravager', 0);
   const a = fighterFromPlayer(player('a', 'warrior'), rng);
   const b = createBattle({ teams: [[a], [boss]], seed: 9 });
-  boss.hp = 100; resolveRound(b);
+  boss.hp = Math.floor(boss.maxHp * 0.45); resolveRound(b);
   assert.equal(boss.raged, true);
   const c = fighterFromMob('creeper', 0); c.hp = 1;
   const p = fighterFromPlayer(player('p', 'warrior'), rng); p.crit = 0;
