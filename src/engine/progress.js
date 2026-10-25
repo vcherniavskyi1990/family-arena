@@ -1,0 +1,140 @@
+// Прогрес героя: досвід і рівні, лут 5 рідкостей, спорядження, крафт, досягнення. Чисті функції над об'єктом гравця.
+import { ITEMS, ACHIEVEMENTS, CARDS, RARITY_ORDER, cardById } from './content.js';
+
+export const MAX_LEVEL = 20;
+export const xpForLevel = (lvl) => Math.round(100 * Math.pow(lvl, 1.5));
+
+export function newPlayer({ id, name, classId, age, role = 'kid', pinHash }) {
+  return {
+    id, name, class: classId, age: age || null, role, pinHash, icon: null, avatar: null, title: null,
+    level: 1, xp: 0, gold: 50, deck: [], collection: [], inventory: [], equipment: {}, achievements: [],
+    stats: { kills: 0, bossKills: 0, dragonKills: 0, duelWins: 0, duels: 0, dungeons: 0, legendaries: 0, blocks: 0, crits: 0, heals: 0, quests: 0, crafts: 0, alertPauses: 0, level: 1 },
+    quests: {}, playedToday: { day: null, minutes: 0 }, createdAt: Date.now(),
+  };
+}
+
+/** Додати досвід; повертає список подій (новий рівень). */
+export function addXp(p, xp) {
+  const ev = [];
+  p.xp += xp;
+  while (p.level < MAX_LEVEL && p.xp >= xpForLevel(p.level)) {
+    p.xp -= xpForLevel(p.level);
+    p.level += 1; p.stats.level = p.level;
+    ev.push({ t: 'levelup', who: p.id, level: p.level });
+  }
+  return ev;
+}
+
+/** Бонуси зі спорядження. */
+export function equipmentBonus(p) {
+  const b = { atk: 0, def: 0, hp: 0, mana: 0, crit: 0 };
+  for (const slot of Object.keys(ITEMS.slots)) {
+    const it = p.equipment[slot];
+    if (it) for (const k of Object.keys(it.stats || {})) b[k] = (b[k] || 0) + it.stats[k];
+  }
+  return b;
+}
+
+export function rollRarity(rng, luck = 0) {
+  const entries = Object.entries(ITEMS.rarities);
+  const total = entries.reduce((s, [, r]) => s + r.weight, 0) + luck;
+  let x = rng.next() * total;
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const [id, r] = entries[i];
+    const w = r.weight + (i >= 2 ? luck / (entries.length - 2) : 0);
+    if (x < w) return id;
+    x -= w;
+  }
+  return 'common';
+}
+
+/** Згенерувати предмет. rarity можна задати (бос дає rare+). */
+export function genItem(rng, level = 1, rarity = null, minRarity = 'common') {
+  let r = rarity || rollRarity(rng, level * 2);
+  if (RARITY_ORDER.indexOf(r) < RARITY_ORDER.indexOf(minRarity)) r = minRarity;
+  const slotId = rng.pick(Object.keys(ITEMS.slots));
+  const slot = ITEMS.slots[slotId];
+  const mult = ITEMS.rarities[r].mult;
+  const main = Math.max(1, Math.round(slot.base * mult * (1 + level * 0.15) * (0.9 + rng.next() * 0.2)));
+  const stats = { [slot.stat]: main };
+  // рідкісні й вище мають другий стат
+  if (RARITY_ORDER.indexOf(r) >= 2) {
+    const extra = rng.pick(['atk', 'def', 'hp', 'crit'].filter(s => s !== slot.stat));
+    stats[extra] = extra === 'crit' ? Math.round(mult * 2) / 100 : Math.max(1, Math.round(ITEMS.slots[Object.keys(ITEMS.slots).find(k => ITEMS.slots[k].stat === extra) || 'weapon'].base * (mult - 1)));
+  }
+  const name = `${rng.pick(ITEMS.prefixes[r])} ${rng.pick(slot.names).toLowerCase()}${RARITY_ORDER.indexOf(r) >= 1 ? ' ' + rng.pick(ITEMS.suffixes) : ''}`;
+  return { id: `it_${Date.now().toString(36)}_${Math.floor(rng.next() * 1e9).toString(36)}`, name, slot: slotId, rarity: r, level, stats };
+}
+
+/** Випадкова карта як трофей (рідкісна+ тільки з босів). */
+export function genCard(rng, classId, minRarity = 'rare') {
+  const pool = CARDS.filter(c => (c.class === 'all' || c.class === classId) && RARITY_ORDER.indexOf(c.rarity) >= RARITY_ORDER.indexOf(minRarity));
+  return pool.length ? rng.pick(pool).id : null;
+}
+
+export function statValue(it) { return Object.values(it.stats).reduce((s, v) => s + (v < 1 ? v * 100 : v), 0) * ITEMS.rarities[it.rarity].mult; }
+
+export function equip(p, itemId) {
+  const it = p.inventory.find(i => i.id === itemId);
+  if (!it) return 'немає предмета';
+  const old = p.equipment[it.slot];
+  p.inventory = p.inventory.filter(i => i.id !== itemId);
+  if (old) p.inventory.push(old);
+  p.equipment[it.slot] = it;
+  return null;
+}
+
+export function unequip(p, slot) {
+  const it = p.equipment[slot];
+  if (!it) return 'нічого не вдягнуто';
+  delete p.equipment[slot];
+  p.inventory.push(it);
+  return null;
+}
+
+/** Крафт: 3 предмети однієї рідкості → 1 предмет наступної рідкості. */
+export function craft(p, itemIds, rng) {
+  if (itemIds.length !== 3) return 'потрібно 3 предмети';
+  const items = itemIds.map(id => p.inventory.find(i => i.id === id));
+  if (items.some(i => !i)) return 'немає предмета';
+  const r = items[0].rarity;
+  if (items.some(i => i.rarity !== r)) return 'рідкість має бути однакова';
+  const idx = RARITY_ORDER.indexOf(r);
+  if (idx >= RARITY_ORDER.length - 1) return 'легендарки не крафтяться';
+  p.inventory = p.inventory.filter(i => !itemIds.includes(i.id));
+  const lvl = Math.max(...items.map(i => i.level));
+  const out = genItem(rng, lvl, RARITY_ORDER[idx + 1]);
+  p.inventory.push(out);
+  p.stats.crafts += 1;
+  if (out.rarity === 'legendary') p.stats.legendaries += 1;
+  return out;
+}
+
+/** Перевірити досягнення; повертає нові. */
+export function checkAchievements(p) {
+  const got = [];
+  for (const a of ACHIEVEMENTS) {
+    if (p.achievements.includes(a.id)) continue;
+    const v = p.stats[a.cond.stat] || 0;
+    if (v >= a.cond.gte) { p.achievements.push(a.id); got.push(a); if (!p.title) p.title = a.title; }
+  }
+  return got;
+}
+
+export function sellPrice(it) { return Math.round(5 * ITEMS.rarities[it.rarity].mult * (1 + it.level * 0.2)); }
+
+/** Колода: 20 карт, не більше 2 однакових, лише дозволені. */
+export function setDeck(p, deck) {
+  if (!Array.isArray(deck) || deck.length !== 20) return 'у колоді має бути 20 карт';
+  const counts = {};
+  for (const id of deck) {
+    const c = cardById[id];
+    if (!c) return `немає карти ${id}`;
+    if (c.class !== 'all' && c.class !== p.class) return `${c.name} не для твого класу`;
+    if (RARITY_ORDER.indexOf(c.rarity) >= 2 && !p.collection.includes(id)) return `${c.name} ще не знайдена`;
+    counts[id] = (counts[id] || 0) + 1;
+    if (counts[id] > 2) return `${c.name} не більше 2 разів`;
+  }
+  p.deck = deck;
+  return null;
+}
