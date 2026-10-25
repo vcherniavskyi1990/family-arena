@@ -1,0 +1,18 @@
+[
+  { "id": "first_blood", "name": "Перша кров", "icon": "🩸", "title": "Новачок", "cond": { "stat": "kills", "gte": 1 } },
+  { "id": "slayer_10", "name": "Мисливець", "icon": "🗡️", "title": "Мисливець", "cond": { "stat": "kills", "gte": 10 } },
+  { "id": "slayer_100", "name": "Легенда арени", "icon": "🏆", "title": "Легенда", "cond": { "stat": "kills", "gte": 100 } },
+  { "id": "boss_1", "name": "Вбивця босів", "icon": "👑", "title": "Вбивця босів", "cond": { "stat": "bossKills", "gte": 1 } },
+  { "id": "dragon", "name": "Драконоборець", "icon": "🐉", "title": "Драконоборець", "cond": { "stat": "dragonKills", "gte": 1 } },
+  { "id": "duel_1", "name": "Перша дуель", "icon": "⚔️", "title": "Дуелянт", "cond": { "stat": "duelWins", "gte": 1 } },
+  { "id": "duel_10", "name": "Гладіатор", "icon": "🏟️", "title": "Гладіатор", "cond": { "stat": "duelWins", "gte": 10 } },
+  { "id": "legendary_1", "name": "Перша легендарка", "icon": "🟠", "title": "Щасливчик", "cond": { "stat": "legendaries", "gte": 1 } },
+  { "id": "blocks_10", "name": "Стіна", "icon": "🧱", "title": "Стіна", "cond": { "stat": "blocks", "gte": 10 } },
+  { "id": "crits_10", "name": "Снайпер", "icon": "🎯", "title": "Снайпер", "cond": { "stat": "crits", "gte": 10 } },
+  { "id": "quests_7", "name": "Господар дому", "icon": "🏠", "title": "Господар", "cond": { "stat": "quests", "gte": 7 } },
+  { "id": "quests_30", "name": "Герой сім'ї", "icon": "💖", "title": "Герой сім'ї", "cond": { "stat": "quests", "gte": 30 } },
+  { "id": "craft_1", "name": "Ремісник", "icon": "🔧", "title": "Ремісник", "cond": { "stat": "crafts", "gte": 1 } },
+  { "id": "level_10", "name": "Десятка", "icon": "🔟", "title": "Ветеран", "cond": { "stat": "level", "gte": 10 } },
+  { "id": "helper", "name": "Старший брат", "icon": "🫂", "title": "Захисник", "cond": { "stat": "heals", "gte": 20 } },
+  { "id": "calm_warrior", "name": "Спокійний воїн", "icon": "🕊️", "title": "Спокійний воїн", "cond": { "stat": "alertPauses", "gte": 1 } }
+]
