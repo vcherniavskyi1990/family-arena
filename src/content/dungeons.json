@@ -1,0 +1,10 @@
+[
+  { "id": "kitchen_caves", "name": "Кухонні печери", "icon": "🍳", "level": 1, "text": "Хтось не помив посуд, і там завелись зомбі.",
+    "rooms": [["zombie", "zombie"], ["skeleton", "spider"], ["slime", "zombie", "skeleton"]], "boss": "boss_ravager" },
+  { "id": "wardrobe_shadows", "name": "Гардеробна тіней", "icon": "🧥", "level": 3, "text": "За куртками щось шарудить.",
+    "rooms": [["creeper", "noob"], ["murloc", "murloc", "spider"], ["enderman", "witch"], ["gnoll", "blaze"]], "boss": "boss_wither" },
+  { "id": "bathroom_kraken", "name": "Ванна кракена", "icon": "🛁", "level": 5, "text": "Злив булькає підозріло.",
+    "rooms": [["murloc", "murloc", "murloc"], ["blaze", "enderman"], ["hacker", "witch"], ["gnoll", "gnoll", "creeper"]], "boss": "boss_ender_dragon" },
+  { "id": "balcony_citadel", "name": "Цитадель на балконі", "icon": "🏰", "level": 8, "text": "Король-ліч оселився між велосипедами.",
+    "rooms": [["hacker", "hacker"], ["enderman", "enderman", "blaze"], ["gnoll", "witch", "witch"], ["hacker", "blaze", "enderman"], ["gnoll", "gnoll", "gnoll"]], "boss": "boss_lich_king" }
+]
