@@ -1,0 +1,12 @@
+{
+  "name": "family-arena",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Родинна арена: ходи з телефонів, бій на ТБ",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test"
+  }
+}
