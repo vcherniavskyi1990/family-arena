@@ -303,3 +303,39 @@ test('тривога з дому: пауза і відбій', () => {
   // ручну паузу відбій не знімає
   g.setPaused(true, 'manual'); g.setAlert(false); assert.equal(g.paused, true);
 });
+
+test('щоденні завдання: 3 на день, прогрес зі статистики, нагорода раз', () => {
+  const g = makeGame();
+  const a = g.createPlayer({ name: 'Віктор', classId: 'warrior', age: 10, pin: '1111' });
+  const b = g.createPlayer({ name: 'Олександр', classId: 'mage', age: 7, pin: '2222' });
+  const d1 = g.dailyFor(a);
+  assert.equal(d1.length, 3);
+  assert.deepEqual(g.dailyFor(a).map(t => t.id), d1.map(t => t.id), 'той самий набір протягом дня');
+  assert.ok(d1.every(t => t.progress === 0 && !t.done));
+  // підкрутимо статистику так, ніби все зроблено
+  const goldBefore = g.players[a.id].gold;
+  for (const t of d1) g.players[a.id].stats[t.stat] = (g.players[a.id].stats[t.stat] || 0) + t.n;
+  const done = g.checkDaily(a);
+  assert.equal(done.length, 3);
+  assert.equal(g.players[a.id].gold, goldBefore + d1.reduce((s, t) => s + t.gold, 0));
+  assert.equal(g.checkDaily(a).length, 0, 'двічі не платить');
+  // наступний день: новий набір
+  g.advance(24 * 3600 * 1000);
+  assert.ok(g.dailyFor(a).every(t => !t.done));
+  assert.notDeepEqual(g.dailyFor(a).map(t => t.id), g.dailyFor(b).map(t => t.id).concat(['x']));
+});
+
+test('сімейні досягнення: спільна статистика, золото всім', () => {
+  const g = makeGame();
+  const dad = g.createPlayer({ name: 'Тато', classId: 'warrior', age: 40, pin: '1234', role: 'admin' });
+  const a = g.createPlayer({ name: 'Віктор', classId: 'archer', age: 10, pin: '1111' });
+  g.players[dad.id].stats.kills = 60; g.players[a.id].stats.kills = 45;
+  const got = g.checkFamily();
+  assert.ok(got.some(x => x.id === 'fam_kills_100'));
+  assert.equal(g.players[a.id].gold, 50 + 30);
+  assert.equal(g.checkFamily().length, 0);
+  const v = g.familyView();
+  assert.equal(v.sums.kills, 105);
+  assert.ok(v.achievements.find(x => x.id === 'fam_kills_100').got);
+  assert.ok(g.tvState().family.achievements.length > 5);
+});
