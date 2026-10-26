@@ -47,3 +47,4 @@ input, select, textarea { font: inherit; width: 100%; padding: 12px; border-radi
 
 .quiz { border-color: #8e44ad; } .quiz .big { font-size: 26px; text-align: center; margin: 6px 0; } .quiz .row button { font-size: 18px; }
 .cimg { width: 40px; height: 40px; object-fit: cover; border-radius: 8px; vertical-align: middle; margin-right: 6px; } .hcard .ico img { width: 56px; height: 56px; object-fit: cover; border-radius: 10px; }
+.hint { border-color: #2ecc71; } .hint div { margin-bottom: 8px; }

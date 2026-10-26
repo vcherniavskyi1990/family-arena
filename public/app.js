@@ -5,11 +5,16 @@
   var app = $('#app');
   var token = localStorage.getItem('arena.token') || null;
   var content = null, state = null, es = null, tab = localStorage.getItem('arena.tab') || 'arena';
-  var ui = { move: { attack: null, blocks: [], cards: [], target: null }, sent: false, craftSel: [], deck: null, pick: null, pin: '', loginPlayer: null, setup: false, heroView: 'gear', avatarCands: null, timerId: null };
+  var ui = { sound: (function () { try { return localStorage.getItem('arena.sound') === '1'; } catch (e) { return false; } })(), move: { attack: null, blocks: [], cards: [], target: null }, sent: false, craftSel: [], deck: null, pick: null, pin: '', loginPlayer: null, setup: false, heroView: 'gear', avatarCands: null, timerId: null };
   var RAR = { common: 'Звичайний', uncommon: 'Незвичайний', rare: 'Рідкісний', epic: 'Епічний', legendary: 'Легендарний' };
   var STAT = { atk: 'удар', def: 'захист', hp: 'здоров’я', mana: 'мана', crit: 'крит' };
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  var audio = null;
+  function beep(freq, ms, type) {
+    if (!ui.sound) return;
+    try { if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)(); var o = audio.createOscillator(), g = audio.createGain(); o.type = type || 'square'; o.frequency.value = freq; g.gain.value = 0.05; o.connect(g); g.connect(audio.destination); o.start(); g.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + ms / 1000); o.stop(audio.currentTime + ms / 1000); } catch (e) { }
+  }
   function toast(msg, ms) { var t = $('#toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(t._t); t._t = setTimeout(function () { t.classList.remove('on'); }, ms || 2200); }
   function api(path, body, method) {
     return fetch('/api' + path, { method: method || (body ? 'POST' : 'GET'), headers: { 'Content-Type': 'application/json', Authorization: token ? 'Bearer ' + token : '' }, body: body ? JSON.stringify(body) : undefined })
@@ -41,7 +46,7 @@
       if (!b.me || !b.me.move) { ui.sent = false; if (!prev || !prev.battle || prev.battle.round !== b.round) ui.move = { attack: null, blocks: [], cards: [], target: ui.move.target }; }
     }
     if (!b) ui.sent = false;
-    if (b && !b.replay && b.lastRound && (!prev || !prev.battle || !prev.battle.lastRound || prev.battle.lastRound.n !== b.lastRound.n)) { if (navigator.vibrate) navigator.vibrate(60); }
+    if (b && !b.replay && b.lastRound && (!prev || !prev.battle || !prev.battle.lastRound || prev.battle.lastRound.n !== b.lastRound.n)) { if (navigator.vibrate) navigator.vibrate(60); beep(440, 120, 'triangle'); }
     if (state.results && (!prev || !prev.results)) { tab = 'arena'; }
   }
 
@@ -174,6 +179,7 @@
     if (!me.alive) return h + '<div class="card warn">💀 Ти повалений. Команда б’ється далі, тримай кулаки!</div>';
     h += '<div class="card" style="margin-top:10px"><div class="row"><span>❤️ ' + me.hp + '/' + me.maxHp + (me.shield ? ' 🛡' + me.shield : '') + '</span><span class="right">🔵 мана ' + me.mana + '/' + me.maxMana + '</span></div><div class="bar"><i style="width:' + (100 * me.hp / me.maxHp) + '%"></i></div></div>';
     if (ui.sent || me.move) return h + '<div class="card ok">✅ Хід зроблено. Чекаємо інших…</div>' + '<div class="muted small">' + moveSummary(me.move || m) + '</div>';
+    if (me.hint) h += '<div class="card hint"><div><b>💡 Порада:</b> ' + esc(me.hint.text) + '</div><button class="btn-green btn-block" id="hint-go">⚡ Зробити так</button></div>';
     h += '<h3>⚔️ Удар (одна зона)</h3><div class="zones">' + content.zones.map(function (z) { return '<button data-att="' + z + '" class="' + (m.attack === z ? 'sel' : '') + '">' + esc(content.zoneNames[z]) + '</button>'; }).join('') + '</div>';
     h += '<h3>🛡 Блок (дві зони)</h3><div class="zones">' + content.zones.map(function (z) { return '<button data-blk="' + z + '" class="' + (m.blocks.indexOf(z) >= 0 ? 'selb' : '') + '">' + esc(content.zoneNames[z]) + '</button>'; }).join('') + '</div>';
     var spent = m.cards.reduce(function (s, id) { return s + cardOf(id).cost; }, 0);
@@ -289,10 +295,13 @@
     if (ui.settings) { var s = ui.settings; h += '<div class="card"><h3>Правила</h3><label class="small muted">Діти грають до</label><input id="s-bed" value="' + esc(s.bedtime) + '"><label class="small muted">і з</label><input id="s-wake" value="' + esc(s.wakeup) + '"><label class="small muted">Хвилин на день, будні</label><input id="s-wd" type="number" value="' + s.limitWeekday + '"><label class="small muted">Хвилин на день, вихідні</label><input id="s-we" type="number" value="' + s.limitWeekend + '"><label class="small muted">Секунд на хід</label><input id="s-round" type="number" value="' + s.roundSeconds + '"><label class="small muted">Назва сезону</label><input id="s-season" value="' + esc(s.season) + '"><label class="row small"><input type="checkbox" id="s-smart" ' + (s.smartCards ? 'checked' : '') + '> 🧠 Розумні карти в бою (математика, англійська)</label><label class="row small"><input type="checkbox" id="s-raid" ' + (s.raidAnyDay ? 'checked' : '') + '> 🗿 Рейд дозволено в будь-який день (не лише вихідні)</label><button class="btn-primary btn-block" id="s-save">Зберегти правила</button></div>'; }
     else api('/admin/settings').then(function (s) { ui.settings = s; render(); });
     if (!ui.players) api('/players').then(function (r) { ui.players = r.players; render(); });
-    return h + '<button class="btn-block" id="logout">Вийти з акаунта</button>';
+    return h + prefsHtml() + '<button class="btn-block" id="logout">Вийти з акаунта</button>';
+  }
+  function prefsHtml() {
+    return '<div class="card"><h3>Налаштування</h3><label class="row small"><input type="checkbox" id="simple" ' + (state.me.simple ? 'checked' : '') + '> 💡 Підказки на хід (простий режим)</label><label class="row small"><input type="checkbox" id="sound" ' + (ui.sound ? 'checked' : '') + '> 🔔 Звук на телефоні (таймер, раунд)</label></div>';
   }
   function renderMore() {
-    return head() + '<div class="card"><h3>Змінити PIN</h3><input id="p-old" type="tel" maxlength="4" placeholder="Старий PIN"><input id="p-new" type="tel" maxlength="4" placeholder="Новий PIN"><button class="btn-sm btn-primary" id="p-save">Зберегти</button></div><div class="card small muted">Додати на головний екран: у браузері «Поділитись» → «На Початковий екран».</div><button class="btn-block" id="logout">Вийти з акаунта</button>';
+    return head() + prefsHtml() + '<div class="card"><h3>Змінити PIN</h3><input id="p-old" type="tel" maxlength="4" placeholder="Старий PIN"><input id="p-new" type="tel" maxlength="4" placeholder="Новий PIN"><button class="btn-sm btn-primary" id="p-save">Зберегти</button></div><div class="card small muted">Додати на головний екран: у браузері «Поділитись» → «На Початковий екран».</div><button class="btn-block" id="logout">Вийти з акаунта</button>';
   }
 
   // ---------- кнопки ----------
@@ -307,6 +316,9 @@
     var d = $('#dungeon'); if (d) d.onchange = function () { act('/lobby/mode', { dungeonId: d.value }); };
     on('[data-target]', function (el) { ui.move.target = el.dataset.target; render(); });
     on('[data-att]', function (el) { ui.move.attack = el.dataset.att; render(); });
+    on('#hint-go', function () { var hh = state.battle.me.hint; ui.sent = true; render(); act('/battle/move', { target: hh.target, attack: hh.attack, blocks: hh.blocks, cards: hh.cards, quiz: ui.move.quiz }).catch(function () { ui.sent = false; render(); }); });
+    on('#simple', function (el) { act('/me/simple', { on: el.checked }, el.checked ? 'Підказки увімкнено' : 'Підказки вимкнено'); });
+    on('#sound', function (el) { ui.sound = el.checked; try { localStorage.setItem('arena.sound', el.checked ? '1' : '0'); } catch (e) { } if (el.checked) beep(660, 120); });
     on('[data-quiz]', function (el) { ui.move.quiz = el.dataset.quiz; render(); });
     on('[data-dm]', function (el) { var k = el.dataset.dm; var body = { kind: k }; if (k === 'spawn') body.mobId = $('#dm-mob').value; if (k === 'treasure') body.playerId = $('#dm-player').value; if (k === 'say') { body.text = $('#dm-text').value; } act('/dm', body, k === 'say' ? 'На ТБ' : 'Зроблено').then(function () { if (k === 'say') $('#dm-text').value = ''; }); });
     on('#replay-stop', function () { act('/admin/replay', { on: false }); });
@@ -356,7 +368,7 @@
     on('#p-save', function () { act('/me/pin', { oldPin: $('#p-old').value, pin: $('#p-new').value }, 'PIN змінено, увійди знову').then(function () { setTimeout(logout, 800); }); });
     on('#logout', function () { api('/logout', {}).catch(function () { }); logout(); });
     clearInterval(ui.timerId);
-    if (state.battle && state.battle.roundEnds) ui.timerId = setInterval(function () { var t = $('#timer'); if (!t) return; var left = Math.max(0, Math.round((state.battle.roundEnds - Date.now()) / 1000)); t.textContent = left; t.classList.toggle('low', left <= 10); }, 500);
+    if (state.battle && state.battle.roundEnds) ui.timerId = setInterval(function () { var t = $('#timer'); if (!t) return; var left = Math.max(0, Math.round((state.battle.roundEnds - Date.now()) / 1000)); t.textContent = left; t.classList.toggle('low', left <= 10); if (left === 5 && !ui.sent) beep(990, 90); }, 500);
   }
   function shrink(file, cb, max) {
     var img = new Image(); var url = URL.createObjectURL(file);
