@@ -10,7 +10,7 @@ import { Store } from './store.js';
 import { Game, err } from './game.js';
 import { Avatars } from './avatar.js';
 
-export const VERSION = '0.2.0';
+export const VERSION = '0.3.0';
 const PUBLIC = new URL('../public/', import.meta.url);
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.ico': 'image/x-icon' };
 
@@ -159,6 +159,7 @@ export function createApp({ dataDir, avatars: avatarsOpt, baseUrl } = {}) {
     if (path === '/lobby/mode' && req.method === 'POST') { game.setMode(need(), body); return ok(); }
     if (path === '/lobby/team' && req.method === 'POST') { game.setTeam(need(), body.team); return ok(); }
     if (path === '/battle/move' && req.method === 'POST') { game.move(need(), body); return ok(); }
+    if (path === '/season') { need(); return send(200, game.seasonView()); }
 
     // --- квести ---
     if (path === '/quests/done' && req.method === 'POST') { game.questDone(need(), body.questId); return ok(); }
@@ -171,6 +172,8 @@ export function createApp({ dataDir, avatars: avatarsOpt, baseUrl } = {}) {
     if (path === '/admin/settings' && req.method === 'GET') { parent(); return send(200, game.settings); }
     if (path === '/admin/settings' && req.method === 'POST') { parent(); game.updateSettings(body); return ok(); }
     if (path === '/admin/pause' && req.method === 'POST') { parent(); game.setPaused(!!body.on, body.reason || 'manual'); return ok(); }
+    if (path === '/admin/season/end' && req.method === 'POST') { return ok({ season: game.endSeason(parent(), body.name) }); }
+    if (path === '/admin/replay' && req.method === 'POST') { const p = parent(); if (body.on === false) game.stopReplay(); else game.startReplay(p); return ok(); }
     if (path === '/admin/avatar/reset' && req.method === 'POST') { parent(); const p = game.players[body.playerId]; if (!p) throw err('немає гравця'); p.avatar = null; p.avatarPending = null; store.save('players'); game.emit(); return ok(); }
     if (path === '/admin/players/create' && req.method === 'POST') { parent(); const p = game.createPlayer(body); return ok({ player: game.publicPlayer(p) }); }
     throw err('немає такого запиту', 404);

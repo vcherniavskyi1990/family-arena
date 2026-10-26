@@ -57,3 +57,8 @@ html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; backgro
 .room-intro { background: #0b0f14ee; border: 6px solid #ff8000; border-radius: 40px; padding: 60px 100px; } .room-intro .big { font-size: 100px; font-weight: 900; } .room-intro .sub { font-size: 40px; color: #c9d4e0; margin-top: 10px; }
 .rage { animation: rage .6s infinite alternate; } @keyframes rage { from { box-shadow: 0 0 40px #e74c3c } to { box-shadow: 0 0 90px #ff0000 } }
 .minions { font-size: 36px; }
+.season { position: absolute; left: 1120px; top: 700px; width: 740px; } .season .h { font-size: 22px; color: #9fb0c3; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 6px; }
+.season div { font-size: 26px; padding: 4px 0; position: relative; } .season .pl { display: inline-block; width: 44px; } .season .pts { position: absolute; right: 0; top: 4px; color: #f1c40f; font-weight: 800; }
+.season .avs { display: inline-block; width: 36px; height: 36px; border-radius: 8px; background: #243040; font-size: 24px; line-height: 36px; text-align: center; vertical-align: middle; overflow: hidden; } .season .avs img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.season .past { font-size: 20px; color: #9fb0c3; margin-top: 6px; }
+.legend.short { top: 940px; } .legend.short div:nth-child(n+4) { display: none; }
