@@ -147,7 +147,7 @@ export function resolveRound(b) {
       const c = cardById[id];
       f.hand.splice(f.hand.indexOf(id), 1); f.discard.push(id); f.mana -= c.cost;
       played.push({ f, c });
-      ev.push({ t: 'card', who: f.id, card: id, name: c.name, icon: c.icon });
+      ev.push({ t: 'card', who: f.id, card: id, name: c.name, icon: c.icon, image: c.image || undefined, text: c.custom ? c.text : undefined });
     }
   }
   const phase = (types) => played.filter(p => types.includes(p.c.type));

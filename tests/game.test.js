@@ -256,3 +256,50 @@ test('тато-ведучий: підмога, зцілення, лють, ск�
   assert.ok(g.playerState(dad).dm.mobs.length > 5);
   assert.equal(g.playerState(a).dm, null);
 });
+
+test('свої карти: дитина створює, батько підтверджує, карта грає в бою', () => {
+  const g = makeGame();
+  const dad = g.createPlayer({ name: 'Тато', classId: 'warrior', age: 40, pin: '1234', role: 'admin' });
+  const a = g.createPlayer({ name: 'Віктор', classId: 'archer', age: 10, pin: '1111' });
+  assert.throws(() => g.createCustomCard(a, { name: 'X', template: 'strike' }), /назва/);
+  assert.throws(() => g.createCustomCard(a, { name: 'Супер', template: 'nuke' }), /шаблон/);
+  const c = g.createCustomCard(a, { name: 'Крипер-бум', template: 'big_strike' });
+  assert.equal(c.approved, false);
+  assert.equal(g.playerState(dad).pendingCards.length, 1);
+  assert.ok(!g.players[a.id].collection.includes(c.id));
+  assert.throws(() => g.approveCustomCard(a, c.id), /батьки/);
+  g.approveCustomCard(dad, c.id, true);
+  assert.ok(g.players[a.id].collection.includes(c.id));
+  assert.ok(g.allowedCards(a).some(x => x.id === c.id), 'карта доступна для колоди');
+  assert.ok(!g.allowedCards(dad).some(x => x.id === c.id), 'чужа карта не доступна');
+  const deck = g.players[a.id].deck.slice(0, 18).concat([c.id, c.id]);
+  g.setDeck(a, deck);
+  // відхилена карта зникає
+  const c2 = g.createCustomCard(a, { name: 'Слабка', template: 'shield' });
+  g.approveCustomCard(dad, c2.id, false);
+  assert.equal(g.customCardsOf(a).length, 1);
+  for (let i = 0; i < 2; i++) g.createCustomCard(a, { name: 'Ще ' + i, template: 'heal' });
+  assert.throws(() => g.createCustomCard(a, { name: 'Четверта', template: 'heal' }), /не більше/);
+  // у бою карта розігрується
+  g.setMode(dad, { mode: 'duel' }); g.join(dad); g.join(a); g.ready(dad, true); g.ready(a, true);
+  const f = g.battle.fighters.find(x => x.id === a.id);
+  f.hand = [c.id]; f.mana = 4;
+  g.move(a, { attack: 'head', blocks: ['chest', 'belt'], cards: [c.id] });
+  g.fire('round');
+  assert.ok(g.lastRound.events.some(e => e.t === 'card' && e.card === c.id && e.name === 'Крипер-бум'));
+});
+
+test('тривога з дому: пауза і відбій', () => {
+  const g = makeGame();
+  const a = g.createPlayer({ name: 'Віктор', classId: 'archer', age: 10, pin: '1111' });
+  g.join(a); g.ready(a, true);
+  g.setAlert(true);
+  assert.equal(g.paused, true); assert.equal(g.pauseReason, 'alert');
+  assert.match(g.tvState().announce.text, /Тривога/);
+  g.setAlert(true); // повтор нічого не ламає
+  g.setAlert(false);
+  assert.equal(g.paused, false);
+  assert.equal(g.players[a.id].stats.alertPauses, 1);
+  // ручну паузу відбій не знімає
+  g.setPaused(true, 'manual'); g.setAlert(false); assert.equal(g.paused, true);
+});

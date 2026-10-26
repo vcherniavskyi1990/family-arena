@@ -1,6 +1,8 @@
 // Гра як єдиний стан у пам'яті: гравці (збережені), лобі, поточний бій, таймери раундів, нагороди, квести, ліміти.
 // Усе, що бачать телефон і ТБ, береться з tvState() і playerState(); зміни розсилаються слухачам (SSE у server.js).
 import { createHash, randomBytes } from 'node:crypto';
+import { mkdirSync, writeFileSync, unlinkSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { makeRng } from './engine/rng.js';
 import { createBattle, fighterFromPlayer, fighterFromMob, submitMove, resolveRound, publicFighter, alive } from './engine/combat.js';
 import { newPlayer, addXp, xpForLevel, equipmentBonus, genItem, genCard, equip, unequip, craft, checkAchievements, setDeck, sellPrice } from './engine/progress.js';
@@ -11,6 +13,15 @@ export const ROUND_SECONDS = 30;
 const RESULTS_SECONDS = 25;
 const ROOM_HEAL = 0.3;
 const REPLAY_FRAMES = 80;
+const CUSTOM_CARD_MAX = 3;
+/** Шаблони «своїх карт»: дитина малює картинку й дає назву, сила з шаблону, щоб баланс не ламався. */
+export const CARD_TEMPLATES = {
+  strike: { name: 'Удар', cost: 2, type: 'damage', value: 12, text: '12 шкоди.' },
+  big_strike: { name: 'Могутній удар', cost: 4, type: 'damage', value: 24, critBonus: 0.2, text: '24 шкоди, шанс криту +20 %.' },
+  shield: { name: 'Щит', cost: 2, type: 'shield', value: 14, text: 'Щит на 14.' },
+  heal: { name: 'Зцілення', cost: 3, type: 'heal', value: 18, text: '+18 здоров’я.' },
+  poison: { name: 'Отрута', cost: 2, type: 'poison', value: 5, turns: 3, text: '5 отрути на 3 ходи.' },
+};
 const SEASON_POINTS = { duelWin: 3, duelLoss: 1, dungeonLoss: 1, quest: 1 };
 
 const DEFAULT_SETTINGS = {
@@ -21,8 +32,10 @@ const DEFAULT_SETTINGS = {
 export const hashPin = (pin, salt) => createHash('sha256').update(`${salt}:${pin}`).digest('hex');
 
 export class Game {
-  constructor({ store, now = () => Date.now(), realTimers = true }) {
+  constructor({ store, now = () => Date.now(), realTimers = true, cardsDir = null }) {
     this.store = store;
+    this.cardsDir = cardsDir; if (cardsDir) mkdirSync(cardsDir, { recursive: true });
+    this.tvOnline = () => true;
     this.now = now;
     this.realTimers = realTimers;
     this.players = store.get('players', () => ({}));
@@ -32,6 +45,8 @@ export class Game {
     if (!this.history.season) this.history.season = { n: 1, startedAt: this.now(), points: {} };
     if (!this.history.pastSeasons) this.history.pastSeasons = [];
     if (!this.history.raids) this.history.raids = [];
+    if (!this.history.customCards) this.history.customCards = [];
+    for (const c of this.history.customCards) if (c.approved) this.registerCard(c);
     this.announce = null;
     this.replay = null;
     this.lobby = { players: {}, mode: 'dungeon', dungeonId: DUNGEONS[0].id };
@@ -220,7 +235,7 @@ export class Game {
     this.lastRound = { n: this.battle.round, events: this.roundEvents, at: this.now() };
     this.roundEnds = null;
     this.recordFrame();
-    const animMs = Math.min(12000, 1500 + ev.length * 450);
+    const animMs = this.tvOnline() ? Math.min(12000, 1500 + ev.length * 450) : Math.min(4000, 1000 + ev.length * 150);
     this.emit();
     if (this.battle.over) { this.setTimer('round', animMs, () => this.afterBattle()); return; }
     this.setTimer('round', animMs, () => this.startRound());
@@ -304,6 +319,12 @@ export class Game {
     this.emit();
     this.setTimer('results', RESULTS_SECONDS * 1000, () => { this.results = null; this.emit(); });
   }
+  /** Тривога з дому (пульт шле POST /api/alert): пауза з причиною alert, оголошення на ТБ. */
+  setAlert(on) {
+    if (on && !(this.paused && this.pauseReason === 'alert')) { this.setPaused(true, 'alert'); this.announce = { text: '🚨 Тривога! Усі в укриття, гра зачекає', by: 'Дім', at: this.now() }; this.feed('🚨 Тривога: гра на паузі'); this.emit(); }
+    else if (!on && this.paused && this.pauseReason === 'alert') { this.setPaused(false); this.announce = { text: '✅ Відбій тривоги. Граємо далі!', by: 'Дім', at: this.now() }; this.feed('✅ Відбій тривоги'); this.emit(); }
+    return { paused: this.paused, reason: this.pauseReason };
+  }
   /** Пауза (тривога): раунд не закривається, таймер стоїть. */
   setPaused(on, reason) {
     this.paused = !!on; this.pauseReason = on ? (reason || 'пауза') : null;
@@ -362,6 +383,41 @@ export class Game {
     for (const p of this.playerList) { this.questsFor(p); for (const [qid, st] of Object.entries(p.quests.state)) if (st === 'pending') out.push({ pid: p.id, name: p.name, quest: questById[qid] }); }
     return out;
   }
+
+  // ---------- свої карти: дитина малює, батьки підтверджують ----------
+  registerCard(c) { if (!cardById[c.id]) { cardById[c.id] = c; CARDS.push(c); } else Object.assign(cardById[c.id], c); }
+  customCardsOf(p) { return this.history.customCards.filter(c => c.owner === p.id); }
+  createCustomCard(p, { name, template, image, mime }) {
+    const t = CARD_TEMPLATES[template]; if (!t) throw err('невідомий шаблон карти');
+    const nm = String(name || '').trim().slice(0, 24); if (nm.length < 2) throw err('назва карти: від 2 літер');
+    if (this.customCardsOf(p).length >= CUSTOM_CARD_MAX) throw err(`не більше ${CUSTOM_CARD_MAX} своїх карт`);
+    const id = `cc_${p.id}_${randomBytes(3).toString('hex')}`;
+    let img = null;
+    if (image && this.cardsDir) {
+      const buf = Buffer.from(String(image), 'base64'); if (buf.length > 2e6) throw err('картинка завелика');
+      const ext = /png/.test(mime || '') ? 'png' : 'jpg'; writeFileSync(join(this.cardsDir, `${id}.${ext}`), buf); img = `/cards/${id}.${ext}`;
+    }
+    const c = { id, name: nm, icon: '🖍️', class: 'all', cost: t.cost, rarity: 'rare', type: t.type, value: t.value, critBonus: t.critBonus, turns: t.turns, text: t.text, custom: true, owner: p.id, author: p.name, image: img, approved: this.isParent(p), createdAt: this.now() };
+    this.history.customCards.push(c); this.store.save('history');
+    if (c.approved) this.approveCustomCard(p, id, true); else this.emit();
+    return c;
+  }
+  approveCustomCard(parent, id, approve = true) {
+    if (!this.isParent(parent)) throw err('лише батьки', 403);
+    const c = this.history.customCards.find(x => x.id === id); if (!c) throw err('немає карти');
+    const owner = this.players[c.owner];
+    if (approve) {
+      c.approved = true; this.registerCard(c);
+      if (owner && !owner.collection.includes(id)) owner.collection.push(id);
+      this.feed(`🖍️ ${c.author} намалював карту «${c.name}», і вона тепер у грі!`);
+    } else {
+      this.history.customCards = this.history.customCards.filter(x => x.id !== id);
+      if (c.image && this.cardsDir) { const f = join(this.cardsDir, c.image.split('/').pop()); if (existsSync(f)) unlinkSync(f); }
+    }
+    this.store.save('history'); this.store.save('players'); this.emit();
+    return c;
+  }
+  pendingCards() { return this.history.customCards.filter(c => !c.approved); }
 
   // ---------- тато-ведучий: втручання в бій з телефона ----------
   dmAction(parent, { kind, mobId, playerId, text }) {
@@ -478,6 +534,7 @@ export class Game {
       replay: this.replay ? { mode: this.replay.mode, names: this.replay.names } : null, hasReplay: !!(this.history.lastReplay && this.history.lastReplay.frames.length),
       battle: b ? { ...this.battleView(), me: f ? { hand: f.hand.map(id => cardById[id]), mana: f.mana, maxMana: f.maxMana, hp: f.hp, maxHp: f.maxHp, alive: f.alive, move: f.move, shield: f.shield, quiz: f.quiz && !f.move ? { kind: f.quiz.kind, q: f.quiz.q, choices: f.quiz.choices } : null } : null } : null,
       quests: this.settings.questsEnabled ? this.questsFor(p) : [], pendingQuests: this.isParent(p) ? this.pendingQuests() : [],
+      customCards: this.customCardsOf(p), pendingCards: this.isParent(p) ? this.pendingCards() : [], cardTemplates: CARD_TEMPLATES, tvOnline: this.tvOnline(),
     };
   }
   content() {

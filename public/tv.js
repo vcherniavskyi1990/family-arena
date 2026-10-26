@@ -132,7 +132,7 @@
     var old = document.querySelector('.cardpop'); if (old) old.remove();
     var card = state.content && state.content[e.card];
     var d = document.createElement('div'); d.className = 'cardpop';
-    d.innerHTML = '<div class="who">' + esc(e.whoName) + ' грає</div><div class="ic">' + esc(e.icon) + '</div><div class="nm">' + esc(e.name) + '</div>' + (card ? '<div class="tx">' + esc(card.text) + '</div>' : '');
+    d.innerHTML = '<div class="who">' + esc(e.whoName) + ' грає</div><div class="ic">' + (e.image ? '<img src="' + esc(e.image) + '" alt="">' : esc(e.icon)) + '</div><div class="nm">' + esc(e.name) + '</div>' + (card || e.text ? '<div class="tx">' + esc(e.text || card.text) + '</div>' : '') + (e.image ? '<div class="who">намалював ' + esc(e.whoName) + '</div>' : '');
     stage.appendChild(d); setTimeout(function () { d.remove(); }, 1000);
   }
   // ---------- підсумки ----------

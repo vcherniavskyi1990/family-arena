@@ -77,3 +77,24 @@ test('Gemini: три варіанти з фальшивого API, вибір о
   assert.equal(av.pick({ id: 'p1' }, names[1], names), `/avatars/${names[1]}`);
   assert.equal(av.list().length, 1);
 });
+
+test('API тривоги: без токена 503, з чужим 403, зі своїм пауза', async () => {
+  const { createApp } = await import('../src/server.js');
+  const { mkdtempSync } = await import('node:fs'); const { tmpdir } = await import('node:os'); const { join } = await import('node:path');
+  const srv = createApp({ dataDir: mkdtempSync(join(tmpdir(), 'alert-')), alertToken: 'secret1' });
+  await new Promise(r => srv.listen(0, r));
+  const base = `http://127.0.0.1:${srv.address().port}`;
+  const r1 = await fetch(base + '/api/alert', { method: 'POST', headers: { 'x-arena-token': 'wrong' }, body: '{"on":true}' });
+  assert.equal(r1.status, 403);
+  const r2 = await fetch(base + '/api/alert', { method: 'POST', headers: { 'x-arena-token': 'secret1', 'content-type': 'application/json' }, body: '{"on":true}' });
+  assert.equal((await r2.json()).paused, true);
+  const h = await (await fetch(base + '/health')).json();
+  assert.equal(h.paused, true); assert.equal(h.tv, false);
+  const r3 = await fetch(base + '/api/alert', { method: 'POST', headers: { 'x-arena-token': 'secret1', 'content-type': 'application/json' }, body: '{"on":false}' });
+  assert.equal((await r3.json()).paused, false);
+  const srv2 = createApp({ dataDir: mkdtempSync(join(tmpdir(), 'alert2-')), alertToken: '' });
+  await new Promise(r => srv2.listen(0, r));
+  const r4 = await fetch(`http://127.0.0.1:${srv2.address().port}/api/alert`, { method: 'POST', body: '{}' });
+  assert.equal(r4.status, 503);
+  srv.closeAllConnections(); srv.close(); srv2.closeAllConnections(); srv2.close();
+});

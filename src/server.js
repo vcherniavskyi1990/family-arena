@@ -10,21 +10,22 @@ import { Store } from './store.js';
 import { Game, err } from './game.js';
 import { Avatars } from './avatar.js';
 
-export const VERSION = '0.4.0';
+export const VERSION = '0.5.0';
 const PUBLIC = new URL('../public/', import.meta.url);
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.ico': 'image/x-icon' };
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.ico': 'image/x-icon', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' };
 
 export function lanAddress() {
   for (const list of Object.values(networkInterfaces())) for (const i of list) if (i.family === 'IPv4' && !i.internal) return i.address;
   return '127.0.0.1';
 }
 
-export function createApp({ dataDir, avatars: avatarsOpt, baseUrl } = {}) {
+export function createApp({ dataDir, avatars: avatarsOpt, baseUrl, alertToken = process.env.ARENA_ALERT_TOKEN } = {}) {
   const dir = dataDir || process.env.ARENA_DATA || join(process.cwd(), 'data');
   const store = new Store(dir);
-  const game = new Game({ store });
+  const game = new Game({ store, cardsDir: join(dir, 'cards') });
   const avatars = avatarsOpt || new Avatars(join(dir, 'avatars'));
   const clients = new Set(); // {res, token|null, tv}
+  game.tvOnline = () => { for (const c of clients) if (c.tv) return true; return false; };
   let pushScheduled = false;
   const pushAll = () => {
     if (pushScheduled) return; pushScheduled = true;
@@ -46,7 +47,15 @@ export function createApp({ dataDir, avatars: avatarsOpt, baseUrl } = {}) {
     const path = url.pathname;
     const send = (code, body, type = 'application/json') => { res.writeHead(code, { 'Content-Type': type, 'Cache-Control': 'no-store' }); res.end(type.startsWith('application/json') ? JSON.stringify(body) : body); };
     try {
-      if (path === '/health') return send(200, { ok: true, version: VERSION, players: game.playerList.length, phase: game.tvState().phase });
+      if (path === '/health') return send(200, { ok: true, version: VERSION, players: game.playerList.length, phase: game.tvState().phase, paused: game.paused, tv: game.tvOnline() });
+      if (path === '/api/alert') {
+        // тривога з дому: пульт (192.168.1.21) шле POST з токеном; гра сама нікуди не ходить
+        if (!alertToken) return send(503, { error: 'ARENA_ALERT_TOKEN не задано в /etc/arena.env' });
+        if (req.method === 'GET') return send(200, { paused: game.paused, reason: game.pauseReason });
+        if ((req.headers['x-arena-token'] || url.searchParams.get('token')) !== alertToken) return send(403, { error: 'токен' });
+        const body = await readBody(req);
+        return send(200, { ok: true, ...game.setAlert(body.on !== false && body.on !== 'false' && body.on !== 0) });
+      }
       if (path === '/api/events') {
         const tv = url.searchParams.get('tv') === '1';
         const token = url.searchParams.get('token');
@@ -59,10 +68,10 @@ export function createApp({ dataDir, avatars: avatarsOpt, baseUrl } = {}) {
         return;
       }
       if (path.startsWith('/api/')) return await api(req, res, url, send);
-      if (path.startsWith('/avatars/')) {
-        const name = path.slice(9);
+      if (path.startsWith('/avatars/') || path.startsWith('/cards/')) {
+        const name = path.split('/')[2] || '';
         if (!/^[\w.-]+$/.test(name)) return send(404, 'no', 'text/plain');
-        const f = join(avatars.dir, name);
+        const f = join(path.startsWith('/cards/') ? game.cardsDir : avatars.dir, name);
         if (!existsSync(f)) return send(404, 'no', 'text/plain');
         res.writeHead(200, { 'Content-Type': MIME[extname(name)] || 'application/octet-stream', 'Cache-Control': 'public, max-age=86400' });
         return res.end(await readFile(f));
@@ -160,6 +169,8 @@ export function createApp({ dataDir, avatars: avatarsOpt, baseUrl } = {}) {
     if (path === '/lobby/team' && req.method === 'POST') { game.setTeam(need(), body.team); return ok(); }
     if (path === '/battle/move' && req.method === 'POST') { game.move(need(), body); return ok(); }
     if (path === '/season') { need(); return send(200, game.seasonView()); }
+    if (path === '/me/card' && req.method === 'POST') { const c = game.createCustomCard(need(), body); return ok({ card: { ...c } }); }
+    if (path === '/admin/card/approve' && req.method === 'POST') { return ok({ card: game.approveCustomCard(parent(), body.id, body.approve !== false) }); }
     if (path === '/dm' && req.method === 'POST') { return ok(game.dmAction(parent(), body)); }
 
     // --- квести ---
