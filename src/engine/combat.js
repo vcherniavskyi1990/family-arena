@@ -138,7 +138,7 @@ export function resolveRound(b) {
     if (typeof f.move === 'string') f.move = normalizeMove(b, f, {});
   }
   const order = alive(b);
-  for (const f of order) if (f.move.smart) ev.push({ t: 'smart', who: f.id });
+  for (const f of order) if (f.move.smart) { ev.push({ t: 'smart', who: f.id }); f.stats.smartHits = (f.stats.smartHits || 0) + 1; }
 
   // 1. Карти: спершу щити, баффи, мана, добір; потім шкода, лікування, отрута, оглушення; потім призови
   const played = [];

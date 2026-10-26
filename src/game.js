@@ -7,7 +7,7 @@ import { makeRng } from './engine/rng.js';
 import { createBattle, fighterFromPlayer, fighterFromMob, submitMove, resolveRound, publicFighter, alive, enemiesOf, MAX_CARDS_PER_TURN } from './engine/combat.js';
 import { newPlayer, addXp, xpForLevel, equipmentBonus, genItem, genCard, equip, unequip, craft, checkAchievements, setDeck, sellPrice } from './engine/progress.js';
 import { makeQuiz, checkQuiz } from './engine/quiz.js';
-import { CLASSES, CARDS, DUNGEONS, QUESTS, ACHIEVEMENTS, DAILY, FAMILY, ITEMS, ZONES, ZONE_NAMES, classById, dungeonById, mobById, questById, cardById, starterDeck, allowedCards } from './engine/content.js';
+import { CLASSES, CARDS, DUNGEONS, QUESTS, ACHIEVEMENTS, DAILY, FAMILY, WORLDBOSS, ITEMS, ZONES, ZONE_NAMES, classById, dungeonById, mobById, questById, cardById, starterDeck, allowedCards } from './engine/content.js';
 
 export const ROUND_SECONDS = 30;
 const RESULTS_SECONDS = 25;
@@ -22,7 +22,9 @@ export const CARD_TEMPLATES = {
   heal: { name: 'Зцілення', cost: 3, type: 'heal', value: 18, text: '+18 здоров’я.' },
   poison: { name: 'Отрута', cost: 2, type: 'poison', value: 5, turns: 3, text: '5 отрути на 3 ходи.' },
 };
-const SEASON_POINTS = { duelWin: 3, duelLoss: 1, dungeonLoss: 1, quest: 1 };
+const SEASON_POINTS = { duelWin: 3, duelLoss: 1, dungeonLoss: 1, quest: 1, worldBoss: 5 };
+/** Бос тижня: спільне здоров’я на всю сім’ю; кожен бій відколює шматок. Нагорода, коли впав. */
+const WORLD_BOSS = { duelWin: 30, duelLoss: 10, dungeonBase: 40, dungeonPerLevel: 15, dungeonPerKill: 3, dungeonLoss: 10, smartMult: 2, gold: 40 };
 
 const DEFAULT_SETTINGS = {
   bedtime: '21:30', wakeup: '07:00', limitWeekday: 45, limitWeekend: 90, roundSeconds: ROUND_SECONDS,
@@ -48,6 +50,7 @@ export class Game {
     if (!this.history.raids) this.history.raids = [];
     if (!this.history.customCards) this.history.customCards = [];
     if (!this.history.family) this.history.family = { achievements: [] };
+    if (!this.history.worldBoss) this.history.worldBoss = null;
     for (const c of this.history.customCards) if (c.approved) this.registerCard(c);
     this.announce = null;
     this.replay = null;
@@ -326,7 +329,8 @@ export class Game {
         this.addMinutes(p, minutes);
       }
       for (const a of this.checkFamily()) ev.push({ t: 'family', name: a.name, icon: a.icon, gold: a.gold });
-      this.results = { mode: 'dungeon', won, raid: !!d.raid, dungeon: dungeonById[r.dungeon].name, xp: Math.round(r.xp / r.players.length), gold: Math.round(r.gold / r.players.length), kills: r.kills.length,
+      const wb = this.hitWorldBoss(r.players, won ? WORLD_BOSS.dungeonBase + WORLD_BOSS.dungeonPerLevel * d.level + WORLD_BOSS.dungeonPerKill * r.kills.length : WORLD_BOSS.dungeonLoss, ev, null, r.team);
+      this.results = { mode: 'dungeon', won, raid: !!d.raid, worldBoss: wb, dungeon: dungeonById[r.dungeon].name, xp: Math.round(r.xp / r.players.length), gold: Math.round(r.gold / r.players.length), kills: r.kills.length,
         loot: r.loot.map(l => ({ ...l, name: this.players[l.pid].name, cardName: l.card ? cardById[l.card].name : undefined })), events: ev.map(e => ({ ...e, whoName: this.players[e.who] && this.players[e.who].name })), players: r.players.map(id => this.publicPlayer(this.players[id])) };
       this.feed(won ? `${d.raid ? '🗿' : '🏆'} ${r.players.map(id => this.players[id].name).join(', ')} пройшли «${dungeonById[r.dungeon].name}»` : `💀 «${dungeonById[r.dungeon].name}» виявилось сильнішим`);
     } else {
@@ -342,7 +346,8 @@ export class Game {
         this.addMinutes(p, minutes);
       }
       for (const a of this.checkFamily()) ev.push({ t: 'family', name: a.name, icon: a.icon, gold: a.gold });
-      this.results = { mode: 'duel', winners: winners.map(id => this.players[id].name), xp: 40, gold: 12, events: ev.map(e => ({ ...e, whoName: this.players[e.who] && this.players[e.who].name })), players: r.players.map(id => this.publicPlayer(this.players[id])) };
+      const wb = this.hitWorldBoss(r.players, 0, ev, (pid) => winners.includes(pid) ? WORLD_BOSS.duelWin : WORLD_BOSS.duelLoss, b.fighters);
+      this.results = { mode: 'duel', worldBoss: wb, winners: winners.map(id => this.players[id].name), xp: 40, gold: 12, events: ev.map(e => ({ ...e, whoName: this.players[e.who] && this.players[e.who].name })), players: r.players.map(id => this.publicPlayer(this.players[id])) };
       this.feed(`⚔️ Дуель виграв: ${winners.map(id => this.players[id].name).join(', ')}`);
     }
     this.history.battles.unshift({ mode: r.mode, players: r.players, at: this.now(), won: this.results.won, winners: this.results.winners });
@@ -598,6 +603,7 @@ export class Game {
     }
     const legend = feed.filter(f => f.text.includes('легендарк')); for (const f of legend.slice(0, 3)) lines.push(f.text);
     const fam = feed.filter(f => f.text.startsWith('👨‍👩‍👦')); for (const f of fam.slice(0, 2)) lines.push(f.text);
+    const wb = this.worldBossView(); lines.push(wb.killed ? `${wb.icon} Бос тижня «${wb.name}» повалений!` : `${wb.icon} Бос тижня «${wb.name}»: ${wb.pct} % здоров’я, ${wb.daysLeft} дн. до нового.`);
     const quests = feed.filter(f => f.text.startsWith('✅')).length; if (quests) lines.push(`Справ по дому зараховано: ${quests}.`);
     const pend = this.pendingQuests().length + this.pendingCards().length; if (pend) lines.push(`⏳ Чекають підтвердження батьків: ${pend}.`);
     if (sv.top.some(p => p.points > 0)) lines.push(`🏆 ${sv.name}: ${sv.top.slice(0, 3).map((p, i) => `${['🥇', '🥈', '🥉'][i]} ${p.name} ${p.points}`).join(', ')}.`);
@@ -614,6 +620,53 @@ export class Game {
   }
 
   // ---------- стан для клієнтів ----------
+  /** Бос тижня: один на всю сім’ю, новий щопонеділка (черга з worldboss.json). */
+  worldBoss() {
+    const week = this.weekKey();
+    let w = this.history.worldBoss;
+    if (!w || w.week !== week) {
+      const n = Math.round(new Date(week + 'T12:00:00Z').getTime() / (7 * 24 * 3600 * 1000));
+      const b = WORLDBOSS[((n % WORLDBOSS.length) + WORLDBOSS.length) % WORLDBOSS.length];
+      w = this.history.worldBoss = { week, id: b.id, hp: b.hp, maxHp: b.hp, dmg: {}, killed: false, killedAt: null };
+      this.store.save('history');
+    }
+    return w;
+  }
+  /** Удар по босу тижня від учасників бою. amount спільний на всіх; perPid(pid) — свій для кожного. Повертає, що показати. */
+  hitWorldBoss(pids, amount, ev = [], perPid = null, fighters = null) {
+    const w = this.worldBoss(); const def = WORLDBOSS.find(b => b.id === w.id);
+    if (w.killed) return { name: def.name, icon: def.icon, hit: 0, killed: true, hp: 0, maxHp: w.maxHp };
+    let total = 0;
+    for (const pid of pids) {
+      const p = this.players[pid]; if (!p) continue;
+      let d = perPid ? perPid(pid) : Math.round(amount / pids.length);
+      if (fighters) { const f = fighters.find(x => x.id === pid); if (f && f.stats && f.stats.smartHits) d = Math.round(d * WORLD_BOSS.smartMult); }
+      w.dmg[pid] = (w.dmg[pid] || 0) + d; total += d;
+    }
+    w.hp = Math.max(0, w.hp - total);
+    let killed = false;
+    if (w.hp === 0) {
+      w.killed = true; w.killedAt = this.now(); killed = true;
+      const names = [];
+      for (const pid of Object.keys(w.dmg)) {
+        const p = this.players[pid]; if (!p) continue;
+        p.gold += WORLD_BOSS.gold; p.stats.worldBoss = (p.stats.worldBoss || 0) + 1; this.addSeasonPoints(pid, SEASON_POINTS.worldBoss); names.push(p.name);
+        for (const a of checkAchievements(p)) ev.push({ t: 'achievement', who: pid, name: a.name, icon: a.icon, title: a.title });
+      }
+      ev.push({ t: 'worldboss', name: def.name, icon: def.icon, gold: WORLD_BOSS.gold });
+      this.feed(`${def.icon} Бос тижня «${def.name}» повалений! ${names.join(', ')}: +${WORLD_BOSS.gold} золота кожному`);
+      this.announce = { text: `${def.icon} Бос тижня «${def.name}» повалений! +${WORLD_BOSS.gold} золота всім`, by: 'Арена', at: this.now() };
+    }
+    this.store.save('history'); this.store.save('players');
+    return { name: def.name, icon: def.icon, hit: total, killed, hp: w.hp, maxHp: w.maxHp };
+  }
+  worldBossView() {
+    const w = this.worldBoss(); const def = WORLDBOSS.find(b => b.id === w.id);
+    const end = new Date(w.week + 'T12:00:00Z'); end.setUTCDate(end.getUTCDate() + 7);
+    const daysLeft = Math.max(0, Math.ceil((end.getTime() - this.now()) / (24 * 3600 * 1000)));
+    const top = Object.entries(w.dmg).map(([pid, dmg]) => ({ pid, name: this.players[pid] ? this.players[pid].name : '?', dmg })).sort((a, b) => b.dmg - a.dmg).slice(0, 5);
+    return { id: w.id, name: def.name, icon: def.icon, text: def.text, hp: w.hp, maxHp: w.maxHp, pct: Math.round(100 * w.hp / w.maxHp), killed: w.killed, top, daysLeft, week: w.week };
+  }
   feed(text) { this.history.feed.unshift({ text, at: this.now() }); this.history.feed = this.history.feed.slice(0, 50); this.store.save('history'); }
   battleView() {
     const b = this.battle; if (!b) return null;
@@ -632,7 +685,7 @@ export class Game {
     return { phase, season: this.settings.season, seasonN: sv.n, seasonTop: sv.top.slice(0, 5), pastSeasons: sv.past.slice(0, 3), quiet, now: this.now(), announce: this.announce, lobby: this.lobbyView(), battle: this.battle ? this.battleView() : this.replayView(), results: this.results, paused: this.paused, pauseReason: this.pauseReason,
       heroes: this.playerList.map(p => ({ ...this.publicPlayer(p), xp: p.xp, xpNext: xpForLevel(p.level), kills: p.stats.kills, duelWins: p.stats.duelWins, dungeons: p.stats.dungeons, legendaries: p.stats.legendaries, achievements: p.achievements.length })),
       legendaries: this.history.legendaries.slice(0, 5), feed: this.history.feed.slice(0, 8), pendingQuests: this.pendingQuests().length,
-      family: this.familyView() };
+      family: this.familyView(), worldBoss: this.worldBossView() };
   }
   playerState(p) {
     const b = this.battle; const f = b && b.fighters.find(x => x.id === p.id);
@@ -647,7 +700,7 @@ export class Game {
       replay: this.replay ? { mode: this.replay.mode, names: this.replay.names } : null, hasReplay: !!(this.history.lastReplay && this.history.lastReplay.frames.length),
       battle: b ? { ...this.battleView(), me: f ? { hand: f.hand.map(id => cardById[id]), mana: f.mana, maxMana: f.maxMana, hp: f.hp, maxHp: f.maxHp, alive: f.alive, move: f.move, shield: f.shield, quiz: f.quiz && !f.move ? { kind: f.quiz.kind, q: f.quiz.q, choices: f.quiz.choices } : null, hint: p.simple && !f.move ? this.hintFor(f) : null } : null } : null,
       quests: this.settings.questsEnabled ? this.questsFor(p) : [], pendingQuests: this.isParent(p) ? this.pendingQuests() : [],
-      daily: this.dailyFor(p), family: this.familyView(),
+      daily: this.dailyFor(p), worldBoss: { ...this.worldBossView(), mine: (this.worldBoss().dmg[p.id] || 0) }, family: this.familyView(),
       customCards: this.customCardsOf(p), pendingCards: this.isParent(p) ? this.pendingCards() : [], cardTemplates: CARD_TEMPLATES, tvOnline: this.tvOnline(),
     };
   }

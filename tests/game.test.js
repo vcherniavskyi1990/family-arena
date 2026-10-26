@@ -387,3 +387,44 @@ test('простий режим: порада на хід і кнопка «як
   g.updatePlayer(kid.id, { simple: false });
   assert.equal(g.players[kid.id].simple, false);
 });
+
+test('бос тижня: кожен бій відколює здоров’я, нагорода всім, новий у понеділок', () => {
+  const g = makeGame();
+  const a = g.createPlayer({ name: 'Віктор', classId: 'warrior', age: 10, pin: '1111' });
+  const b = g.createPlayer({ name: 'Саша', classId: 'mage', age: 7, pin: '2222' });
+  const w0 = g.worldBossView();
+  assert.equal(w0.hp, w0.maxHp); assert.equal(w0.killed, false); assert.ok(w0.name);
+  // дуель до кінця
+  g.setMode(a, { mode: 'duel' }); g.join(a); g.join(b); g.ready(a, true); g.ready(b, true);
+  let guard = 0;
+  while (g.battle && guard++ < 200) {
+    g.move(a, { attack: 'head', blocks: ['chest', 'belt'], cards: [] });
+    if (g.battle && !g.battle.over) g.fire('round');
+    if (g.battle) g.fire('round');
+  }
+  assert.ok(g.results, 'бій закінчився');
+  assert.ok(g.results.worldBoss && g.results.worldBoss.hit >= 40, 'результат показує удар по босу');
+  const w1 = g.worldBossView();
+  assert.equal(w1.hp, w0.maxHp - g.results.worldBoss.hit);
+  assert.equal(w1.top.length, 2);
+  assert.ok(g.playerState(a).worldBoss.mine > 0);
+  // добиваємо: лишаємо 5 здоров’я і б’ємо ще раз
+  g.history.worldBoss.hp = 5;
+  const goldA = g.players[a.id].gold, goldB = g.players[b.id].gold;
+  const ev = [];
+  const r = g.hitWorldBoss([a.id, b.id], 20, ev);
+  assert.equal(r.killed, true); assert.equal(r.hp, 0);
+  assert.equal(g.players[a.id].gold, goldA + 40); assert.equal(g.players[b.id].gold, goldB + 40);
+  assert.ok(g.players[a.id].achievements.includes('worldboss_1'));
+  assert.ok(ev.some(e => e.t === 'worldboss'));
+  assert.ok(g.announce && g.announce.text.includes('повалений'));
+  assert.ok(g.digest().text.includes('повалений'));
+  // далі цього тижня бос уже не б’ється, золото не роздається вдруге
+  assert.equal(g.hitWorldBoss([a.id], 100, []).hit, 0);
+  assert.equal(g.players[a.id].gold, goldA + 40);
+  // новий тиждень = новий бос із повним здоров’ям
+  g.advance(7 * 24 * 3600 * 1000);
+  const w2 = g.worldBossView();
+  assert.equal(w2.killed, false); assert.equal(w2.hp, w2.maxHp); assert.notEqual(w2.id, w1.id);
+  assert.equal(g.tvState().worldBoss.id, w2.id);
+});
