@@ -679,3 +679,12 @@ test('серія днів і щоденний подарунок', () => {
   let guard = 0; while (g2.battle && guard++ < 200) { try { g2.move(b, { attack: 'head', blocks: ['chest', 'belt'], cards: [] }); g2.move(c, { attack: 'chest', blocks: ['head', 'belt'], cards: [] }); } catch (e) {} g2.fire('round'); }
   assert.equal(g2.players[b.id].streak.days, 1);
 });
+
+test('стан служби для батьків', () => {
+  const g = makeGame();
+  const a = g.createPlayer({ name: 'A', classId: 'warrior', age: 40, pin: '1111', role: 'parent' });
+  const s = g.serviceStatus();
+  assert.equal(s.players, 1); assert.equal(s.parents, 1); assert.equal(s.battles, 0); assert.equal(s.lastAlert, null);
+  g.setAlert(true); g.setAlert(false);
+  assert.equal(g.serviceStatus().lastAlert.on, false); assert.ok(g.serviceStatus().bytes >= 0); assert.equal(typeof g.serviceStatus().worldBoss, 'string');
+});
