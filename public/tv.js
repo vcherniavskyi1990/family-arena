@@ -29,6 +29,7 @@
     if (phase === 'battle' || phase === 'replay') renderBattle(); else if (phase === 'lobby') renderLobby(); else if (phase === 'results') renderResults(); else renderIdle();
     if (state.announce && (!prev || !prev.announce || prev.announce.at !== state.announce.at)) showAnnounce(state.announce);
     var cl = document.getElementById('closing'); if (state.closing) { if (!cl) { cl = document.createElement('div'); cl.id = 'closing'; document.body.appendChild(cl); } cl.textContent = state.closing.text; } else if (cl) cl.remove();
+    if (state.ceremony && (!prev || !prev.ceremony || prev.ceremony.at !== state.ceremony.at)) showCeremony(state.ceremony);
     if (state.paused) { overlay.className = 'on'; overlay.innerHTML = '<div class="banner pause"><div class="big">⏸ ПАУЗА</div><div class="sub">' + (state.pauseReason === 'alert' ? 'Тривога. Усі в укриття, бій зачекає.' : 'Батьки поставили гру на паузу') + '</div></div>'; }
     else if (phase !== 'results' && Date.now() > introUntil) overlay.className = '';
   }
@@ -54,6 +55,20 @@
     stage.innerHTML = h; ticker.innerHTML = '';
     var cards = stage.querySelectorAll('[data-hero]'); for (var i = 0; i < cards.length; i++) cards[i].onclick = function () { showHero(this.getAttribute('data-hero')); };
     var rb = document.getElementById('tv-replay'); if (rb) rb.onclick = function () { fetch('/api/tv/replay', { method: 'POST' }).catch(function () { }); };
+  }
+  // ---------- церемонія закриття сезону ----------
+  var ceremonyTimer = null;
+  function showCeremony(c) {
+    var pod = c.podium || [], order = [1, 0, 2];
+    var h = '<div class="banner ceremony"><div class="big">🏁 «' + esc(c.name) + '» закрито</div>' +
+      (c.winner ? '<div class="sub">👑 Чемпіон сезону: <b>' + esc(c.winner) + '</b> · титул і +100 🪙</div>' : '<div class="sub">Без чемпіона: ніхто не набрав очок</div>') +
+      '<div class="podium">' + order.map(function (i) { var p = pod[i]; if (!p) return '<div class="step s' + i + '"></div>'; return '<div class="step s' + i + '">' + av(p, 'avbig') + '<div class="pn">' + esc(p.name) + '</div><div class="pp">' + p.points + ' очок</div><div class="pb">' + ['🥇', '🥈', '🥉'][i] + '</div></div>'; }).join('') + '</div>' +
+      '<div class="confetti">' + ['🎉', '🎊', '✨', '🎉', '🎊', '✨', '🎉', '🎊', '✨', '🎉'].map(function (x, i) { return '<span style="left:' + (5 + i * 9) + '%;animation-delay:' + (i * 0.17) + 's">' + x + '</span>'; }).join('') + '</div>' +
+      '<div class="cnt">Новий сезон уже почався. Очки з нуля!</div></div>';
+    overlay.innerHTML = h; overlay.className = 'on'; introUntil = Date.now() + 30000;
+    beep(523, 150, 'triangle', 0.08); setTimeout(function () { beep(659, 150, 'triangle', 0.08); }, 180); setTimeout(function () { beep(784, 150, 'triangle', 0.08); }, 360); setTimeout(function () { beep(1047, 400, 'triangle', 0.1); }, 540);
+    clearTimeout(ceremonyTimer); ceremonyTimer = setTimeout(function () { if (!state.paused) overlay.className = ''; }, 30000);
+    overlay.onclick = function () { clearTimeout(ceremonyTimer); introUntil = 0; overlay.className = ''; overlay.onclick = null; };
   }
   // ---------- профіль героя на ТБ (клік Magic Remote) ----------
   var heroTimer = null;

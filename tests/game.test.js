@@ -786,3 +786,14 @@ test('авто-колода: валідна, рідкісні лише зі зн
   const d0 = g.autoDeck(pb); assert.ok(!d0.includes('lightning'), 'рідкісна без колекції не береться');
   pb.collection.push('lightning'); const d1 = g.autoDeck(pb); assert.ok(d1.includes('lightning'), 'знайдена рідкісна береться');
 });
+
+test('церемонія закриття сезону на ТБ: подіум і зникає за 40 с', () => {
+  const g = makeGame();
+  const dad = g.createPlayer({ name: 'Тато', classId: 'warrior', age: 40, pin: '1234', role: 'admin' });
+  const a = g.createPlayer({ name: 'A', classId: 'mage', age: 10, pin: '1111' }); const b = g.createPlayer({ name: 'B', classId: 'healer', age: 7, pin: '2222' });
+  g.addSeasonPoints(a.id, 7); g.addSeasonPoints(b.id, 3);
+  assert.equal(g.tvState().ceremony, null);
+  g.endSeason(g.players[dad.id], 'Зима');
+  const c = g.tvState().ceremony; assert.ok(c); assert.equal(c.winner, 'A'); assert.equal(c.podium.length, 2); assert.equal(c.podium[0].name, 'A'); assert.equal(c.podium[0].points, 7);
+  g.advance(41 * 1000); assert.equal(g.tvState().ceremony, null);
+});
