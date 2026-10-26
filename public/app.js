@@ -115,6 +115,7 @@
   // ---------- арена ----------
   function renderArena() {
     var me = state.me, h = head();
+    if (!state.tvOnline) h += '<div class="card warn">📵 ТБ не підключений: режим блекауту, увесь бій показуємо тут</div>';
     if (state.paused) h += '<div class="card warn">⏸ Пауза: ' + (state.pauseReason === 'alert' ? 'тривога, усі в укриття' : 'батьки поставили паузу') + '</div>';
     if (state.results) return h + renderResults();
     if (state.battle && !state.battle.replay) return h + '<div class="card">Бій уже йде без тебе. Зачекай, поки закінчиться.</div>' + battleSpectator();
@@ -148,8 +149,8 @@
     var r = state.results;
     var h = '<div class="card ' + (r.mode === 'duel' || r.won ? 'ok' : 'warn') + '"><div class="big">' + (r.mode === 'duel' ? '⚔️ Дуель виграв: ' + esc(r.winners.join(', ')) : (r.won ? (r.raid ? '🗿 Рейд пройдено! ' : '🏆 ') + '«' + esc(r.dungeon) + '»' + (r.raid ? '' : ' пройдено!') : '💀 «' + esc(r.dungeon) + '» виявилось сильнішим')) + '</div>' +
       (r.mode === 'dungeon' ? '<div class="muted">Вбито ' + r.kills + ' · кожному +' + r.xp + ' досвіду, +' + r.gold + ' золота</div>' : '') + '</div>';
-    var myLoot = (r.loot || []).filter(function (l) { return l.name === state.me.name; });
-    if (myLoot.length) h += '<div class="card"><h3>Твій лут</h3>' + myLoot.map(function (l) { return l.item ? itemHtml(l.item) : '<div class="item b-rare"><b class="r-rare">🃏 Нова карта: ' + esc(l.cardName) + '</b></div>'; }).join('') + '</div>';
+    var myLoot = (r.loot || []).filter(function (l) { return state.tvOnline ? l.name === state.me.name : true; });
+    if (myLoot.length) h += '<div class="card"><h3>' + (state.tvOnline ? 'Твій лут' : 'Лут усім') + '</h3>' + myLoot.map(function (l) { return (state.tvOnline ? '' : '<div class="small muted">' + esc(l.name) + ':</div>') + (l.item ? itemHtml(l.item) : '<div class="item b-rare"><b class="r-rare">🃏 Нова карта: ' + esc(l.cardName) + '</b></div>'); }).join('') + '</div>';
     var ev = (r.events || []).filter(function (e) { return e.who === state.me.id; });
     if (ev.length) h += '<div class="card ok">' + ev.map(function (e) { return e.t === 'levelup' ? '<div>⬆️ Новий рівень: ' + e.level + '!</div>' : '<div>' + esc(e.icon) + ' Досягнення: ' + esc(e.name) + ' (титул «' + esc(e.title) + '»)</div>'; }).join('') + '</div>';
     return h + '<button class="btn-primary btn-block" id="join">Ще раз у лобі</button>';
@@ -162,7 +163,9 @@
     if (!m.target || !enemies.some(function (e) { return e.id === m.target && e.alive; })) { var al = enemies.filter(function (e) { return e.alive; }); m.target = al.length ? al[0].id : null; }
     var left = b.roundEnds ? Math.max(0, Math.round((b.roundEnds - Date.now()) / 1000)) : null;
     var h = '<div class="row"><div class="grow"><b>' + (b.mode === 'duel' ? 'Дуель' : (b.meta.boss ? '👑 БОС' : 'Кімната ' + b.meta.room + ' з ' + b.meta.rooms)) + '</b> · раунд ' + (b.round + 1) + '</div><div class="timer ' + (left !== null && left <= 10 ? 'low' : '') + '" id="timer">' + (b.paused ? '⏸' : left === null ? '…' : left) + '</div></div>';
-    if (b.lastRound && b.lastRound.events) h += '<div class="card log">' + b.lastRound.events.map(describeEvent).filter(Boolean).slice(0, 12).map(function (t) { return '<div>' + t + '</div>'; }).join('') + '</div>';
+    if (b.paused) h += '<div class="card warn">⏸ ' + (b.pauseReason === 'alert' ? 'Тривога! Усі в укриття, гра зачекає' : 'Батьки поставили паузу') + '</div>';
+    if (!state.tvOnline) h += '<div class="small muted">📵 ТБ не підключений: раунди тут, без анімацій на ТБ</div>';
+    if (b.lastRound && b.lastRound.events) h += '<div class="card log">' + b.lastRound.events.map(describeEvent).filter(Boolean).slice(0, state.tvOnline ? 12 : 40).map(function (t) { return '<div>' + t + '</div>'; }).join('') + '</div>';
     h += '<h3>Вороги · тисни, щоб обрати ціль</h3>' + enemies.map(function (f) { return fighterRow(f, f.id === m.target, true); }).join('');
     if (allies.length > 1) h += '<h3>Команда</h3>' + allies.map(function (f) { return fighterRow(f, false, false); }).join('');
     if (!me.alive) return h + '<div class="card warn">💀 Ти повалений. Команда б’ється далі, тримай кулаки!</div>';
@@ -171,7 +174,7 @@
     h += '<h3>⚔️ Удар (одна зона)</h3><div class="zones">' + content.zones.map(function (z) { return '<button data-att="' + z + '" class="' + (m.attack === z ? 'sel' : '') + '">' + esc(content.zoneNames[z]) + '</button>'; }).join('') + '</div>';
     h += '<h3>🛡 Блок (дві зони)</h3><div class="zones">' + content.zones.map(function (z) { return '<button data-blk="' + z + '" class="' + (m.blocks.indexOf(z) >= 0 ? 'selb' : '') + '">' + esc(content.zoneNames[z]) + '</button>'; }).join('') + '</div>';
     var spent = m.cards.reduce(function (s, id) { return s + cardOf(id).cost; }, 0);
-    h += '<h3>🃏 Карти (мана ' + (me.mana - spent) + ', до 3 за хід)</h3><div class="hand">' + me.hand.map(function (c, i) { var key = c.id + '#' + i; var sel = m.cards.indexOf(key) >= 0; var can = sel || (c.cost <= me.mana - spent && m.cards.length < 3); return '<div class="hcard ' + (sel ? 'sel' : '') + (can ? '' : ' off') + '" data-card="' + key + '"><div class="cost">' + c.cost + '</div><div class="ico">' + esc(c.icon) + '</div><div class="nm r-' + c.rarity + '">' + esc(c.name) + '</div><div class="muted">' + esc(c.text) + '</div></div>'; }).join('') + '</div>';
+    h += '<h3>🃏 Карти (мана ' + (me.mana - spent) + ', до 3 за хід)</h3><div class="hand">' + me.hand.map(function (c, i) { var key = c.id + '#' + i; var sel = m.cards.indexOf(key) >= 0; var can = sel || (c.cost <= me.mana - spent && m.cards.length < 3); return '<div class="hcard ' + (sel ? 'sel' : '') + (can ? '' : ' off') + '" data-card="' + key + '"><div class="cost">' + c.cost + '</div><div class="ico">' + (c.image ? '<img src="' + esc(c.image) + '" alt="">' : esc(c.icon)) + '</div><div class="nm r-' + c.rarity + '">' + esc(c.name) + '</div><div class="muted">' + esc(c.text) + '</div></div>'; }).join('') + '</div>';
     if (me.quiz) h += '<div class="card quiz"><h3>🧠 Розумна карта: ' + (me.quiz.kind === 'english' ? 'англійська' : 'математика') + '</h3><div class="big">' + esc(me.quiz.q) + '</div><div class="row">' + me.quiz.choices.map(function (c) { return '<button class="btn-sm grow ' + (String(m.quiz) === String(c) ? 'btn-blue' : '') + '" data-quiz="' + esc(c) + '">' + esc(c) + '</button>'; }).join('') + '</div><div class="small muted">Правильна відповідь: удар у півтора раза сильніший. Можна пропустити.</div></div>';
     var ok = m.attack && m.blocks.length === 2;
     h += '<button class="btn-primary btn-block" id="go" ' + (ok ? '' : 'disabled') + '>' + (ok ? '⚡ Зробити хід' : 'Обери удар і 2 блоки') + '</button>';
@@ -240,14 +243,23 @@
     if (!ui.allowed) { api('/me/cards').then(function (r) { ui.allowed = r.cards; render(); }); return head() + '<div class="muted">Завантажую карти…</div>'; }
     var count = {}; ui.deck.forEach(function (id) { count[id] = (count[id] || 0) + 1; });
     var h = head() + '<div class="row"><b>Колода: ' + ui.deck.length + '/20</b><button class="btn-sm btn-primary right" id="savedeck" ' + (ui.deck.length === 20 ? '' : 'disabled') + '>Зберегти</button><button class="btn-sm" id="resetdeck">Скинути</button></div><div class="small muted">Тисни на карту: + в колоду, до 2 однакових. Рідкісні карти відкриваються з босів.</div>';
-    h += '<div class="deckgrid">' + ui.allowed.map(function (c) { var n = count[c.id] || 0; return '<div class="dcard ' + (n ? 'in' : '') + '" data-dc="' + c.id + '"><div>' + esc(c.icon) + ' <b class="r-' + c.rarity + '">' + esc(c.name) + '</b> <span class="muted">(' + c.cost + ')</span></div><div class="muted">' + esc(c.text) + '</div><div>' + (n ? '✅ ×' + n : '') + '</div></div>'; }).join('') + '</div>';
+    h += '<div class="deckgrid">' + ui.allowed.map(function (c) { var n = count[c.id] || 0; return '<div class="dcard ' + (n ? 'in' : '') + '" data-dc="' + c.id + '"><div>' + (c.image ? '<img class="cimg" src="' + esc(c.image) + '" alt="">' : esc(c.icon)) + ' <b class="r-' + c.rarity + '">' + esc(c.name) + '</b> <span class="muted">(' + c.cost + ')</span></div><div class="muted">' + esc(c.text) + '</div><div>' + (n ? '✅ ×' + n : '') + '</div></div>'; }).join('') + '</div>';
+    h += customCardsHtml();
     return h;
+  }
+  function customCardsHtml() {
+    var me = state.me, mine = state.customCards || [], t = state.cardTemplates || {};
+    var h = '<div class="card"><h3>🖍️ Свої карти (' + mine.length + '/3)</h3><div class="small muted">Намалюй карту на папері, сфотографуй, дай назву й обери, що вона робить. Батьки підтвердять, і карта з’явиться в колоді (рідкісна, до 2 у колоді).</div>';
+    h += mine.map(function (c) { return '<div class="row small" style="padding:4px 0">' + (c.image ? '<img class="cimg" src="' + esc(c.image) + '" alt="">' : '<span>🖍️</span>') + '<div class="grow"><b>' + esc(c.name) + '</b> <span class="muted">(' + c.cost + ') ' + esc(c.text) + '</span></div><span>' + (c.approved ? '✅' : '⏳') + '</span></div>'; }).join('');
+    if (mine.length < 3) h += '<input id="cc-name" placeholder="Назва карти" maxlength="24"><select id="cc-tpl">' + Object.keys(t).map(function (k) { return '<option value="' + k + '">' + esc(t[k].name) + ': ' + esc(t[k].text) + ' (мана ' + t[k].cost + ')</option>'; }).join('') + '</select><input type="file" id="cc-file" accept="image/*" class="file"><button class="btn-primary btn-block" id="cc-go">🖍️ Створити карту</button>';
+    return h + '</div>';
   }
 
   // ---------- квести ----------
   function renderQuests() {
     var me = state.me, h = head();
     if (me.isParent && state.pendingQuests.length) h += '<div class="card warn"><h3>Чекають підтвердження</h3>' + state.pendingQuests.map(function (q) { return '<div class="q"><span class="ic">' + esc(q.quest.icon) + '</span><div class="grow"><b>' + esc(q.name) + '</b>: ' + esc(q.quest.name) + '</div><button class="btn-sm btn-green" data-approve="' + q.pid + '|' + q.quest.id + '">✅</button><button class="btn-sm" data-reject="' + q.pid + '|' + q.quest.id + '">✕</button></div>'; }).join('') + '</div>';
+    if (me.isParent && state.pendingCards && state.pendingCards.length) h += '<div class="card warn"><h3>🖍️ Нові карти дітей</h3>' + state.pendingCards.map(function (c) { return '<div class="q">' + (c.image ? '<img class="cimg" src="' + esc(c.image) + '" alt="">' : '<span class="ic">🖍️</span>') + '<div class="grow"><b>' + esc(c.author) + '</b>: «' + esc(c.name) + '» <span class="small muted">' + esc(c.text) + '</span></div><button class="btn-sm btn-green" data-cardok="' + c.id + '">✅</button><button class="btn-sm" data-cardno="' + c.id + '">✕</button></div>'; }).join('') + '</div>';
     h += '<h3>Справи на сьогодні</h3><div class="small muted">Зробив, тисни «Зробив». Батьки підтвердять, і впаде скриня + 10 хвилин гри.</div>';
     h += state.quests.map(function (q) { return '<div class="q ' + (q.state === 'approved' ? 'done' : '') + '"><span class="ic">' + esc(q.icon) + '</span><div class="grow"><b>' + esc(q.name) + '</b><div class="small muted">+' + q.gold + ' 🪙, +' + q.xp + ' досвіду, скриня: ' + esc(RAR[q.chest]) + '</div></div>' + (q.state === 'open' ? '<button class="btn-sm btn-primary" data-done="' + q.id + '">Зробив</button>' : q.state === 'pending' ? '<span class="small">⏳ чекає</span>' : '<span>✅</span>') + '</div>'; }).join('');
     return h;
@@ -317,6 +329,14 @@
     on('[data-dc]', function (el) { var id = el.dataset.dc, n = ui.deck.filter(function (x) { return x === id; }).length; if (n >= 2) ui.deck = ui.deck.filter(function (x) { return x !== id; }); else if (ui.deck.length < 20) ui.deck.push(id); else toast('Уже 20 карт, прибери якусь'); render(); });
     on('#savedeck', function () { act('/me/deck', { deck: ui.deck }, 'Колоду збережено').catch(function () { }); });
     on('#resetdeck', function () { ui.deck = state.me.deck.slice(); render(); });
+    on('[data-cardok]', function (el) { act('/admin/card/approve', { id: el.dataset.cardok, approve: true }, 'Карта в грі!'); });
+    on('[data-cardno]', function (el) { act('/admin/card/approve', { id: el.dataset.cardno, approve: false }, 'Відхилено'); });
+    on('#cc-go', function (el) {
+      var name = $('#cc-name').value, tpl = $('#cc-tpl').value, f = $('#cc-file').files[0];
+      el.disabled = true;
+      var go = function (image, mime) { act('/me/card', { name: name, template: tpl, image: image, mime: mime }, state.me.isParent ? 'Карта в грі' : 'Надіслано батькам').then(function () { ui.allowed = null; render(); }).catch(function () { el.disabled = false; }); };
+      if (f) shrink(f, function (b64, mime) { go(b64, mime); }, 512); else go(null, null);
+    });
     on('[data-done]', function (el) { act('/quests/done', { questId: el.dataset.done }, 'Надіслано батькам'); });
     on('[data-approve]', function (el) { var a = el.dataset.approve.split('|'); act('/quests/approve', { playerId: a[0], questId: a[1] }).then(function (r) { toast('Зараховано: ' + r.reward.item.name, 3000); }); });
     on('[data-reject]', function (el) { var a = el.dataset.reject.split('|'); act('/quests/approve', { playerId: a[0], questId: a[1], approve: false }); });
@@ -333,9 +353,9 @@
     clearInterval(ui.timerId);
     if (state.battle && state.battle.roundEnds) ui.timerId = setInterval(function () { var t = $('#timer'); if (!t) return; var left = Math.max(0, Math.round((state.battle.roundEnds - Date.now()) / 1000)); t.textContent = left; t.classList.toggle('low', left <= 10); }, 500);
   }
-  function shrink(file, cb) {
+  function shrink(file, cb, max) {
     var img = new Image(); var url = URL.createObjectURL(file);
-    img.onload = function () { var s = Math.min(1, 1024 / Math.max(img.width, img.height)); var c = document.createElement('canvas'); c.width = img.width * s; c.height = img.height * s; c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); var d = c.toDataURL('image/jpeg', 0.85); URL.revokeObjectURL(url); cb(d.split(',')[1], 'image/jpeg'); };
+    img.onload = function () { var s = Math.min(1, (max || 1024) / Math.max(img.width, img.height)); var c = document.createElement('canvas'); c.width = img.width * s; c.height = img.height * s; c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); var d = c.toDataURL('image/jpeg', 0.85); URL.revokeObjectURL(url); cb(d.split(',')[1], 'image/jpeg'); };
     img.src = url;
   }
   boot();
