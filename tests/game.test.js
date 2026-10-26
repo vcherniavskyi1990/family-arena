@@ -968,3 +968,28 @@ test('міні-гра «Пам’ять»: послідовність з ТБ, �
   assert.throws(() => g.pressMini(a, 1), /не йде/);
   g.fire('mini-clear'); g.startMini(b, 'memory'); g.fire('mini-go'); g.fire('mini-end'); assert.equal(g.miniView().ranking.length, 0);
 });
+
+test('вечір ігор: три міні-гри поспіль, очки за місця, чемпіон', () => {
+  const g = makeGame();
+  const a = g.createPlayer({ name: 'A', classId: 'rogue', age: 10, pin: '1111' }); const b = g.createPlayer({ name: 'B', classId: 'mage', age: 7, pin: '2222' });
+  const v = g.startParty(a); assert.equal(v.i, 0); assert.equal(v.of, 3); assert.equal(g.miniView().kind, 'reaction');
+  assert.throws(() => g.startParty(b), /уже йде/);
+  // 1. реакція: B швидший
+  g.fire('mini-go'); g.advance(100); g.tapMini(b); g.advance(100); g.tapMini(a); g.fire('mini-end');
+  assert.equal(g.partyView().standings[0].name, 'B'); assert.equal(g.partyView().standings[0].points, 3); assert.equal(g.partyView().i, 1);
+  g.fire('mini-clear'); assert.equal(g.miniView().kind, 'memory', 'друга гра стартує сама');
+  // 2. пам'ять: лише A
+  g.fire('mini-go'); for (const c of g.mini.seq) g.pressMini(a, c); g.fire('mini-end');
+  assert.deepEqual(g.partyView().standings.map(s => s.name + s.points), ['A5', 'B3'], '2 за друге місце в реакції + 3 за пам\'ять');
+  g.fire('mini-clear'); assert.equal(g.miniView().kind, 'quiz');
+  // 3. бліц: A 5/5, B 0
+  for (let i = 0; i < 5; i++) g.answerMini(a, g.mini.qs[a.id][i].a); for (let i = 0; i < 5; i++) g.answerMini(b, 'xx'); g.fire('mini-end');
+  const gold = g.players[a.id].gold; const pts = g.seasonView().top.find(x => x.name === 'A').points;
+  assert.equal(g.partyView().phase, 'run'); assert.equal(g.partyView().ranking[0].name, 'A'); assert.equal(g.partyView().ranking[0].points, 8);
+  assert.ok(g.players[a.id].achievements.includes('party_1')); assert.equal(g.players[a.id].stats.parties, 1);
+  g.fire('mini-clear'); assert.equal(g.miniView(), null); assert.equal(g.partyView().phase, 'done'); assert.equal(g.partyView().champion, 'A');
+  assert.ok(g.tvState().party.phase === 'done' && g.playerState(b).party.champion === 'A');
+  g.fire('party-clear'); assert.equal(g.partyView(), null);
+  // чемпіон отримав золото й очки сезону один раз
+  assert.ok(g.players[a.id].gold >= gold); assert.equal(g.seasonView().top.find(x => x.name === 'A').points, pts);
+});
