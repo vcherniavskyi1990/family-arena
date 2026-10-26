@@ -832,3 +832,28 @@ test('сьогодні зроблено (ТБ) і тиждень справ (т�
   // відновлення старого бекапу без questLog не падає
   const b = g.backup(); delete b.history.questLog; g.restore(dad, b); assert.ok(Array.isArray(g.history.questLog));
 });
+
+test('виклик на дуель: телефон → телефон, прийняття ставить обох у лобі', () => {
+  const g = makeGame();
+  const dad = g.createPlayer({ name: 'Тато', classId: 'warrior', age: 40, pin: '1234', role: 'admin' });
+  const a = g.createPlayer({ name: 'A', classId: 'rogue', age: 10, pin: '1111' }); const b = g.createPlayer({ name: 'B', classId: 'mage', age: 7, pin: '2222' });
+  assert.throws(() => g.challenge(a, a.id), /сам/);
+  const c = g.challenge(a, b.id);
+  assert.throws(() => g.challenge(a, b.id), /уже/);
+  assert.equal(g.challengesView(b).incoming[0].from.name, 'A'); assert.equal(g.challengesView(a).outgoing[0].to.name, 'B');
+  assert.equal(g.challengesView(a).targets.length, 2, 'тато і брат');
+  assert.match(g.announce.text, /виклик/);
+  assert.throws(() => g.challengeAnswer(dad, c.id, true), /не твій/);
+  assert.equal(g.challengeAnswer(b, c.id, false).accepted, false);
+  assert.equal(g.challengesView(b).incoming.length, 0);
+  const c2 = g.challenge(a, b.id); g.lobby.mode = 'dungeon';
+  assert.equal(g.challengeAnswer(b, c2.id, true).accepted, true);
+  assert.equal(g.lobby.mode, 'duel'); assert.ok(g.lobby.players[a.id] && g.lobby.players[b.id]);
+  assert.notEqual(g.lobby.players[a.id].team, g.lobby.players[b.id].team);
+  assert.throws(() => g.challengeAnswer(b, c2.id, true), /згорів/);
+  // згорає за 2 хв
+  g.leave(a); g.leave(b); const c3 = g.challenge(a, b.id); g.advance(121000); g.tick();
+  assert.equal(g.challengesView(b).incoming.length, 0); assert.throws(() => g.challengeAnswer(b, c3.id, true), /згорів/);
+  // заблокованому (ліміт) не кинеш і він не ціль
+  g.addMinutes(b, 500); assert.throws(() => g.challenge(a, b.id), /B:/); assert.equal(g.challengesView(a).targets.length, 1);
+});

@@ -48,6 +48,8 @@
     if (!b) ui.sent = false;
     if (b && !b.replay && b.lastRound && (!prev || !prev.battle || !prev.battle.lastRound || prev.battle.lastRound.n !== b.lastRound.n)) { if (navigator.vibrate) navigator.vibrate(60); beep(440, 120, 'triangle'); }
     if (state.results && (!prev || !prev.results)) { tab = 'arena'; }
+    var inc = state.challenges ? state.challenges.incoming.length : 0, pinc = prev && prev.challenges ? prev.challenges.incoming.length : 0;
+    if (inc > pinc) { if (navigator.vibrate) navigator.vibrate([120, 60, 120]); beep(660, 150, 'square'); beep(880, 200, 'square'); tab = 'arena'; toast('⚔️ Тебе кличуть на дуель!', 3000); }
   }
 
   // ---------- вхід ----------
@@ -124,6 +126,7 @@
   function renderArena() {
     var me = state.me, h = head();
     if (state.closing && !me.blocked) h += '<div class="card warn">' + esc(state.closing.text) + '</div>';
+    h += challengeInHtml();
     if (!state.tvOnline) h += '<div class="card warn">📵 ТБ не підключений: режим блекауту, увесь бій показуємо тут</div>';
     if (state.paused) h += '<div class="card warn">⏸ Пауза: ' + (state.pauseReason === 'alert' ? 'тривога, усі в укриття' : 'батьки поставили паузу') + '</div>';
     if (state.results) return h + renderResults();
@@ -142,7 +145,7 @@
       (lob.mode === 'dungeon' ? '<select id="dungeon">' + dungeons + '</select><div class="small muted">' + esc(lob.dungeon.text) + ' · кімнат: ' + lob.dungeon.rooms.length + ' + бос</div>' + (lob.mutator && !(lob.raid && lob.raid.raid) ? '<div class="card mut">' + esc(lob.mutator.icon) + ' <b>Мутатор дня: ' + esc(lob.mutator.name) + '</b><div class="small">' + esc(lob.mutator.text) + '</div></div>' : '') + (lob.raid && lob.raid.raid ? '<div class="card warn" style="margin:8px 0 0">🗿 Рейд: мінімум ' + (lob.raid.minPlayers || 2) + ' гравці, бос сильнішає з кожним. Раз на тиждень.' + (lob.raid.available ? '' : ' ' + esc(lob.raid.reason)) + '</div>' : '') : lob.mode === 'campaign' || lob.mode === 'tournament' || lob.mode === 'practice' ? '' : '<div class="small muted">Дві команди. Перемикай команду кнопкою нижче.</div>') + '</div>';
     h += '<div class="card"><h3>Лобі (' + lob.players.length + ')</h3>' + (lob.players.length ? lob.players.map(function (p) { return '<div class="row" style="padding:4px 0">' + avatarHtml(p) + '<div class="grow"><b>' + esc(p.name) + '</b> <span class="small muted">' + p.level + ' рів.' + (lob.mode === 'duel' ? ' · команда ' + (p.team ? '🔴' : '🔵') : '') + '</span></div><div>' + (p.ready ? '✅' : '⏳') + '</div></div>'; }).join('') : '<div class="muted">Ще нікого. Подивись на ТБ!</div>') + '</div>';
     if (me.blocked) h += '<div class="card warn">🔒 ' + esc(me.blocked) + '</div>';
-    else if (!mine) h += '<button class="btn-primary btn-block" id="join">Зайти в лобі</button>';
+    else if (!mine) h += '<button class="btn-primary btn-block" id="join">Зайти в лобі</button>' + challengeOutHtml();
     else h += (lob.mode === 'duel' ? '<button class="btn-block" id="team">Команда: ' + (mine.team ? '🔴 червона' : '🔵 синя') + ' (змінити)</button>' : '') +
       (mine.ready ? '<button class="btn-block" id="unready">⏳ Готовий, чекаємо інших…</button>' : '<button class="btn-green btn-block" id="ready">✅ Готовий!</button>') + '<button class="btn-block btn-sm" id="leave">Вийти з лобі</button>';
     if (!me.isParent) h += '<div class="small muted">Сьогодні зіграно ' + me.minutesToday + ' з ' + me.limit + ' хв. Справи повертають час.</div>';
@@ -168,6 +171,16 @@
     return '<div class="camp"><div class="small muted">Розділ ' + c.n + ' з ' + c.of + (c.runs ? ' · пройдено ' + c.runs + ' раз' : '') + '</div><b>' + esc(c.icon) + ' ' + esc(c.title) + '</b> <span class="small muted">' + esc(c.dungeon) + ', рівень ' + c.level + '</span>' +
       '<div class="story">' + esc(c.intro) + '</div><div class="chap">' + c.chapters.map(function (x) { return '<span class="' + (x.done ? 'done' : x.n === c.n ? 'cur' : '') + '" title="' + esc(x.title) + '">' + x.n + '</span>'; }).join('') + '</div>' +
       (state.me.isParent ? '<button class="btn-sm" id="camp-reset">Почати кампанію заново</button>' : '') + '</div>';
+  }
+  function challengeInHtml() {
+    var c = state.challenges; if (!c || !c.incoming.length) return '';
+    return c.incoming.map(function (x) { return '<div class="card warn chal"><div class="row">' + avatarHtml(x.from) + '<div class="grow"><b>' + esc(x.from.name) + '</b> кличе тебе на дуель!<div class="small muted">ще ' + x.left + ' с</div></div></div><div class="row"><button class="btn-green grow" data-chal="' + esc(x.id) + '" data-ok="1">🔥 Приймаю</button><button class="btn-sm grow" data-chal="' + esc(x.id) + '">Не зараз</button></div></div>'; }).join('');
+  }
+  function challengeOutHtml() {
+    var c = state.challenges; if (!c || state.me.blocked) return '';
+    if (c.outgoing.length) return c.outgoing.map(function (x) { return '<div class="card chal"><div class="row"><div class="grow">⏳ Чекаємо, чи <b>' + esc(x.to.name) + '</b> прийме виклик <span class="small muted">(ще ' + x.left + ' с)</span></div><button class="btn-sm" data-chal="' + esc(x.id) + '">Забрати</button></div></div>'; }).join('');
+    if (!c.targets.length) return '';
+    return '<div class="card chal"><h3>⚔️ Кинути виклик</h3><div class="small muted">Телефон суперника задзижчить, ТБ оголосить. Прийняв — обоє вже в лобі дуелі.</div><div class="row wrap">' + c.targets.map(function (t) { return '<button class="btn-sm" data-to="' + esc(t.id) + '">' + esc(t.icon) + ' ' + esc(t.name) + '</button>'; }).join('') + '</div></div>';
   }
   function giftHtml() {
     var me = state.me, s = me.streak || { days: 0 }, g = me.gift || {};
@@ -422,6 +435,8 @@
     on('#go', function () { var m = ui.move; ui.sent = true; render(); act('/battle/move', { target: m.target, attack: m.attack, blocks: m.blocks, cards: m.cards.map(function (k) { return k.split('#')[0]; }), quiz: m.quiz }).catch(function () { ui.sent = false; render(); }); });
     on('#backup', function () { api('/admin/backup').then(function (d) { var blob = new Blob([JSON.stringify(d)], { type: 'application/json' }); var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'arena-' + new Date().toISOString().slice(0, 10) + '.json'; document.body.appendChild(a); a.click(); a.remove(); toast('💾 Копію завантажено'); }).catch(function (e) { toast(e.message, 3000); }); });
     var rs = $('#restore'); if (rs) rs.onchange = function (ev) { var f = ev.target.files[0]; if (!f) return; var pin = prompt('PIN батьків, щоб відновити дані з «' + f.name + '». Поточні дані буде замінено.'); if (!pin) return; var rd = new FileReader(); rd.onload = function () { var data; try { data = JSON.parse(rd.result); } catch (e) { toast('Це не JSON-файл', 3000); return; } act('/admin/restore', { pin: pin, data: data }, '💾 Відновлено, увійди знову'); }; rd.readAsText(f); };
+    on('[data-to]', function (el) { act('/me/challenge', { to: el.dataset.to }, '⚔️ Виклик надіслано!'); });
+    on('[data-chal]', function (el) { act('/me/challenge/answer', { id: el.dataset.chal, accept: !!el.dataset.ok }).then(function (r) { if (r.accepted) { toast('🔥 Дуель! Тисни «Готовий»'); tab = 'arena'; } }); });
     on('[data-coupon]', function (el) { act('/me/coupon/buy', { couponId: el.dataset.coupon }).then(function (r) { toast('🎟 Куплено: ' + r.order.title + '. Скажи батькам!', 3000); }); });
     on('[data-cdone]', function (el) { act('/admin/coupon/done', { orderId: el.dataset.cdone }, '✅ Виконано'); });
     on('[data-crefund]', function (el) { act('/admin/coupon/done', { orderId: el.dataset.crefund, refund: true }, '↩️ Золото повернуто'); });

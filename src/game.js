@@ -36,6 +36,7 @@ const DEFAULT_COUPONS = [
   { id: 'icecream', name: 'Морозиво', icon: '🍦', price: 100 },
 ];
 const CLOSING_WARN_MIN = 10;
+const CHALLENGE_MS = 120000;   // виклик на дуель живе 2 хв
 const CEREMONY_MS = 40000;   // церемонія закриття сезону на ТБ
 const GIFT = { base: 10, perDay: 5, maxDays: 7, itemEvery: 7 };
 const PET_DROP = 0.35;   // шанс вихованця за пройдене підземелля
@@ -73,6 +74,7 @@ export class Game {
     if (!this.history.campaign) this.history.campaign = { chapter: 0, runs: 0, done: [] };   // сюжетна кампанія: chapter = індекс наступного розділу   // журнал по днях для звіту тижня: {день: {гравець: {minutes, battles, wins, quests, smart, kills}}}
     for (const c of this.history.customCards) if (c.approved) this.registerCard(c);
     this.announce = null;
+    this.challenges = [];   // виклики на дуель (лише в пам'яті): {id, from, to, at}
     this.replay = null;
     this.lobby = { players: {}, mode: 'dungeon', dungeonId: DUNGEONS[0].id };
     this.tournament = null;   // турнір: {players, matches: [{a, b, winner}], current, champion}
@@ -251,6 +253,45 @@ export class Game {
     if (dungeonId) { if (!dungeonById[dungeonId]) throw err('підземелля'); const rs = this.raidStatus(dungeonId); if (!rs.available) throw err(rs.reason); this.lobby.dungeonId = dungeonId; }
     for (const l of Object.values(this.lobby.players)) l.ready = false;
     this.emit();
+  }
+  // ---------- виклик на дуель: з телефона братові, той приймає на своєму ----------
+  challenge(p, toId) {
+    if (this.battle) throw err('бій уже йде, зачекай');
+    const to = this.players[toId]; if (!to) throw err('немає гравця'); if (to.id === p.id) throw err('сам собі?');
+    const why = this.blockedReason(p); if (why) throw err(why);
+    const why2 = this.blockedReason(to); if (why2) throw err(`${to.name}: ${why2}`);
+    this.expireChallenges();
+    if (this.challenges.some(c => c.from === p.id && c.to === to.id)) throw err('виклик уже надіслано, чекай');
+    const c = { id: 'ch' + this.rng.int(0, 999999), from: p.id, to: to.id, at: this.now() }; this.challenges.push(c);
+    this.announce = { text: `⚔️ ${p.name} кидає виклик: ${to.name}, на дуель!`, by: 'Арена', at: this.now() };
+    this.feed(`⚔️ ${p.name} викликає ${to.name} на дуель`); this.emit();
+    return c;
+  }
+  challengeAnswer(p, id, accept) {
+    this.expireChallenges();
+    const c = this.challenges.find(x => x.id === id); if (!c) throw err('виклик уже згорів');
+    if (c.to !== p.id && c.from !== p.id) throw err('не твій виклик');
+    this.challenges = this.challenges.filter(x => x.id !== id);
+    const from = this.players[c.from], to = this.players[c.to];
+    if (!accept || c.from === p.id) { this.feed(c.from === p.id ? `😶 ${from.name} забрав виклик` : `😅 ${to.name} відмовився від дуелі з ${from.name}`); this.emit(); return { accepted: false }; }
+    if (this.battle) throw err('бій уже йде, зачекай');
+    if (!['duel'].includes(this.lobby.mode)) this.setMode(from, { mode: 'duel' });
+    this.join(from); this.join(to); this.lobby.players[from.id].team = 0; this.lobby.players[to.id].team = 1;
+    this.announce = { text: `🔥 ${to.name} приймає виклик ${from.name}! Дуель у лобі`, by: 'Арена', at: this.now() };
+    this.feed(`🔥 ${to.name} прийняв виклик ${from.name}`); this.emit();
+    return { accepted: true };
+  }
+  expireChallenges() {
+    const n = this.challenges.length; this.challenges = this.challenges.filter(c => this.now() - c.at < CHALLENGE_MS);
+    if (this.challenges.length !== n) this.emit();
+  }
+  challengesView(p) {
+    const pub = id => { const x = this.players[id]; return x ? { id: x.id, name: x.name, icon: x.icon || classById[x.class].icon, avatar: x.avatar } : null; };
+    const left = c => Math.max(0, Math.ceil((CHALLENGE_MS - (this.now() - c.at)) / 1000));
+    const live = this.challenges.filter(c => this.now() - c.at < CHALLENGE_MS);
+    return { incoming: live.filter(c => c.to === p.id).map(c => ({ id: c.id, from: pub(c.from), left: left(c) })),
+      outgoing: live.filter(c => c.from === p.id).map(c => ({ id: c.id, to: pub(c.to), left: left(c) })),
+      targets: this.playerList.filter(x => x.id !== p.id && !this.blockedReason(x)).map(x => pub(x.id)) };
   }
   setTeam(p, team) { const l = this.lobby.players[p.id]; if (!l) throw err('ти не в лобі'); l.team = team ? 1 : 0; l.ready = false; this.emit(); }
   maybeStart() {
@@ -576,6 +617,7 @@ export class Game {
   }
   /** Раз на 30 с: оголошення на ТБ за 10 хв до сну (раз на день). */
   tick() {
+    this.expireChallenges();
     const bed = this.minutesToBedtime(); const day = this.kyiv().day;
     if (bed > 0 && bed <= CLOSING_WARN_MIN && this.closingWarnedDay !== day && this.playerList.some(x => !this.isParent(x))) {
       this.closingWarnedDay = day;
@@ -1035,7 +1077,7 @@ export class Game {
       dm: this.isParent(p) && b && b.mode === 'dungeon' && !b.over ? { mobs: this.dmMobs(), players: this.run.players.map(id => this.publicPlayer(this.players[id])) } : null,
       replay: this.replay ? { mode: this.replay.mode, names: this.replay.names } : null, hasReplay: !!(this.history.lastReplay && this.history.lastReplay.frames.length),
       battle: b ? { ...this.battleView(), me: f ? { hand: f.hand.map(id => cardById[id]), mana: f.mana, maxMana: f.maxMana, hp: f.hp, maxHp: f.maxHp, alive: f.alive, move: f.move, shield: f.shield, quiz: f.quiz && !f.move ? { kind: f.quiz.kind, q: f.quiz.q, choices: f.quiz.choices } : null, hint: p.simple && !f.move ? this.hintFor(f) : null } : null } : null,
-      closing: this.closingView(p), done: this.doneView(p), quests: this.settings.questsEnabled ? this.questsFor(p) : [], pendingQuests: this.isParent(p) ? this.pendingQuests() : [], pendingCoupons: this.isParent(p) ? this.pendingCoupons() : [],
+      closing: this.closingView(p), done: this.doneView(p), challenges: this.challengesView(p), quests: this.settings.questsEnabled ? this.questsFor(p) : [], pendingQuests: this.isParent(p) ? this.pendingQuests() : [], pendingCoupons: this.isParent(p) ? this.pendingCoupons() : [],
       daily: this.dailyFor(p), tournament: this.tournamentView(), worldBoss: { ...this.worldBossView(), mine: (this.worldBoss().dmg[p.id] || 0) }, family: this.familyView(),
       customCards: this.customCardsOf(p), pendingCards: this.isParent(p) ? this.pendingCards() : [], cardTemplates: CARD_TEMPLATES, tvOnline: this.tvOnline(),
     };
