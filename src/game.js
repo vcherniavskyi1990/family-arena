@@ -826,6 +826,8 @@ export class Game {
     const wb = this.worldBossView(); lines.push(wb.killed ? `${wb.icon} Бос тижня «${wb.name}» повалений!` : `${wb.icon} Бос тижня «${wb.name}»: ${wb.pct} % здоров’я, ${wb.daysLeft} дн. до нового.`);
     const quests = feed.filter(f => f.text.startsWith('✅')).length; if (quests) lines.push(`Справ по дому зараховано: ${quests}.`);
     const pend = this.pendingQuests().length + this.pendingCards().length; if (pend) lines.push(`⏳ Чекають підтвердження батьків: ${pend}.`);
+    const pc = this.pendingCoupons(); if (pc.length) lines.push(`🎟 Куплені бажання чекають: ${pc.map(o => `${o.name}: ${o.icon} ${o.title}`).join('; ')}.`);
+    const streaks = this.playerList.filter(p => !this.isParent(p) && this.streakView(p).days >= 2).map(p => `${p.name} ${this.streakView(p).days}`); if (streaks.length) lines.push(`🔥 Серії днів: ${streaks.join(', ')}.`);
     if (sv.top.some(p => p.points > 0)) lines.push(`🏆 ${sv.name}: ${sv.top.slice(0, 3).map((p, i) => `${['🥇', '🥈', '🥉'][i]} ${p.name} ${p.points}`).join(', ')}.`);
     for (const p of this.playerList) if (!this.isParent(p)) { const m = this.minutesToday(p); if (m) lines.push(`⏱ ${p.name}: ${m} хв з ${this.limitFor(p)}.`); }
     return { day, text: lines.join('\n'), battles: todayBattles.length, season: { name: sv.name, top: sv.top.slice(0, 3).map(p => ({ name: p.name, points: p.points })) }, pending: pend,
