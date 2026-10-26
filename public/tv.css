@@ -15,6 +15,8 @@ html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; backgro
 .hero .n { font-size: 28px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .hero .c { font-size: 20px; color: #9fb0c3; } .hero .st { font-size: 18px; color: #c9d4e0; margin-top: 6px; }
 .hero { position: relative; } .hero .flame { position: absolute; top: 10px; left: 12px; font-size: 20px; color: #ffb74d; font-weight: 700; }
 .feed { position: absolute; left: 100px; top: 700px; width: 980px; } .feed div { font-size: 26px; padding: 6px 0; border-bottom: 1px dotted #33445a; color: #c9d4e0; } .feed .h { font-size: 22px; color: #9fb0c3; text-transform: uppercase; letter-spacing: .08em; border: 0; }
+.today { position: absolute; left: 100px; top: 700px; width: 980px; } .today .h { font-size: 22px; color: #9fb0c3; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 6px; } .today span { display: inline-block; font-size: 24px; color: #eef2f6; background: #1b2430; border: 2px solid #2ecc71; border-radius: 12px; padding: 4px 14px; margin: 0 10px 6px 0; } .today b { color: #2ecc71; }
+.feed.short { top: 850px; }
 .legend { position: absolute; left: 1120px; top: 700px; width: 740px; } .legend div { font-size: 24px; padding: 6px 0; } .legend .h { font-size: 22px; color: #9fb0c3; text-transform: uppercase; letter-spacing: .08em; }
 .r-common { color: #c8c8c8 } .r-uncommon { color: #1eff00 } .r-rare { color: #4aa3ff } .r-epic { color: #c77dff } .r-legendary { color: #ff8000; text-shadow: 0 0 16px #ff8000aa }
 /* лобі */

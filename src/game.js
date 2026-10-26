@@ -67,6 +67,7 @@ export class Game {
     if (!this.history.family) this.history.family = { achievements: [] };
     if (!this.history.worldBoss) this.history.worldBoss = null;
     if (!this.history.days) this.history.days = {};
+    if (!this.history.questLog) this.history.questLog = [];   // зараховані справи: {day, pid, qid, at} (тиждень на телефоні, «сьогодні» на ТБ)
     if (!this.history.coupons) this.history.coupons = [];   // замовлення купонів: {id, pid, couponId, name, icon, price, at, status: pending|done|refunded}
     if (!this.settings.coupons) { this.settings.coupons = DEFAULT_COUPONS.map(c => ({ ...c })); this.store.set('settings', this.settings); }
     if (!this.history.campaign) this.history.campaign = { chapter: 0, runs: 0, done: [] };   // сюжетна кампанія: chapter = індекс наступного розділу   // журнал по днях для звіту тижня: {день: {гравець: {minutes, battles, wins, quests, smart, kills}}}
@@ -193,6 +194,28 @@ export class Game {
     for (const k of Object.keys(patch)) r[k] = (r[k] || 0) + patch[k];
     const keys = Object.keys(this.history.days).sort(); if (keys.length > 60) for (const k of keys.slice(0, keys.length - 60)) delete this.history.days[k];
     this.store.save('history');
+  }
+  /** «Сьогодні зроблено» для ТБ: лише діти з активністю за день (бої, перемоги, справи з назвами, розумні відповіді, хвилини). null, якщо день порожній. */
+  todayView() {
+    const day = this.kyiv().day; const d = this.history.days[day] || {};
+    const kids = this.playerList.filter(p => !this.isParent(p)).map(p => {
+      const r = d[p.id] || {}; const quests = this.history.questLog.filter(l => l.day === day && l.pid === p.id).map(l => questById[l.qid]).filter(Boolean);
+      return { id: p.id, name: p.name, battles: r.battles || 0, wins: r.wins || 0, smart: r.smart || 0, minutes: r.minutes || 0, quests: quests.map(q => ({ icon: q.icon, name: q.name })) };
+    }).filter(k => k.battles || k.smart || k.minutes || k.quests.length);
+    return kids.length ? { day, kids } : null;
+  }
+  /** Зроблені справи за 7 днів для телефона: дитина бачить свої, батьки всіх. Дні з новішого, порожні пропущено. */
+  doneView(p) {
+    const parent = this.isParent(p); const names = ['Нд', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+    const days = []; for (let i = 0; i < 7; i++) { const d = new Date(this.kyiv(this.now() - i * 86400000).day + 'T12:00:00Z'); days.push({ day: d.toISOString().slice(0, 10), name: names[d.getUTCDay()], today: i === 0 }); }
+    const out = [];
+    for (const d of days) {
+      const items = this.history.questLog.filter(l => l.day === d.day && (parent ? this.players[l.pid] && !this.isParent(this.players[l.pid]) : l.pid === p.id)).map(l => { const q = questById[l.qid]; return q ? { icon: q.icon, name: q.name, who: this.players[l.pid] ? this.players[l.pid].name : '?' } : null; }).filter(Boolean);
+      const stat = Object.entries(this.history.days[d.day] || {}).filter(([pid]) => parent ? this.players[pid] && !this.isParent(this.players[pid]) : pid === p.id).reduce((s, [, r]) => ({ battles: s.battles + (r.battles || 0), wins: s.wins + (r.wins || 0), minutes: s.minutes + (r.minutes || 0) }), { battles: 0, wins: 0, minutes: 0 });
+      if (items.length || stat.battles || stat.minutes) out.push({ ...d, items, ...stat });
+    }
+    const total = out.reduce((s, d) => s + d.items.length, 0);
+    return { days: out, total };
   }
   /** Звіт тижня для батьків: по днях і по дітях (хвилини, бої, перемоги, справи, розумні відповіді). weeks назад: 0 = поточний. */
   weekReport(back = 0) {
@@ -711,6 +734,7 @@ export class Game {
     if (!approve) { p.quests.state[qid] = 'open'; this.questPhotoDrop(p, qid); this.store.save('players'); this.emit(); return null; }
     p.quests.state[qid] = 'approved';
     p.gold += q.gold; const ev = addXp(p, q.xp); p.stats.quests += 1; this.addSeasonPoints(pid, SEASON_POINTS.quest); this.logDay(pid, { quests: 1 }); this.touchStreak(p, ev);
+    this.history.questLog.unshift({ day: this.kyiv().day, pid, qid, at: this.now() }); this.history.questLog = this.history.questLog.slice(0, 300);
     const it = genItem(this.rng, p.level, null, q.chest); p.inventory.push(it);
     if (it.rarity === 'legendary') { p.stats.legendaries += 1; this.feed(`🟠 ${p.name} отримав легендарку за справу: ${it.name}!`); }
     p.playedToday.minutes = Math.max(0, this.minutesToday(p) - 10); // кожна справа повертає 10 хв гри
@@ -958,6 +982,7 @@ export class Game {
     for (const k of ['season', 'pastSeasons', 'raids', 'customCards', 'family', 'days', 'campaign']) if (this.history[k] === undefined) this.history[k] = k === 'season' ? { n: 1, startedAt: this.now(), points: {} } : k === 'family' ? { achievements: [] } : k === 'days' ? {} : k === 'campaign' ? { chapter: 0, runs: 0, done: [] } : [];
     if (this.history.worldBoss === undefined) this.history.worldBoss = null;
     if (!Array.isArray(this.history.coupons)) this.history.coupons = [];
+    if (!Array.isArray(this.history.questLog)) this.history.questLog = [];
     for (const c of this.history.customCards) if (c.approved) this.registerCard(c);
     if (data.settings) { this.settings = { ...DEFAULT_SETTINGS, ...data.settings }; }
     if (!Array.isArray(this.settings.coupons)) this.settings.coupons = DEFAULT_COUPONS.map(c => ({ ...c }));
@@ -996,7 +1021,7 @@ export class Game {
     return { phase, closing: this.closingView(), ceremony: this.ceremony && this.now() - this.ceremony.at < CEREMONY_MS ? this.ceremony : null, season: this.settings.season, seasonN: sv.n, seasonTop: sv.top.slice(0, 5), pastSeasons: sv.past.slice(0, 3), quiet, now: this.now(), announce: this.announce, lobby: this.lobbyView(), battle: this.battle ? this.battleView() : this.replayView(), results: this.results, paused: this.paused, pauseReason: this.pauseReason,
       heroes: this.playerList.map(p => ({ ...this.publicPlayer(p), pet: activePetIcon(p), streak: this.streakView(p).days, xp: p.xp, xpNext: xpForLevel(p.level), kills: p.stats.kills, duelWins: p.stats.duelWins, dungeons: p.stats.dungeons, legendaries: p.stats.legendaries, achievements: p.achievements.length })),
       legendaries: this.history.legendaries.slice(0, 5), feed: this.history.feed.slice(0, 8), pendingQuests: this.pendingQuests().length,
-      family: this.familyView(), worldBoss: this.worldBossView(), campaign: this.campaignView(), tournament: this.tournamentView() };
+      family: this.familyView(), worldBoss: this.worldBossView(), campaign: this.campaignView(), tournament: this.tournamentView(), today: this.todayView() };
   }
   playerState(p) {
     const b = this.battle; const f = b && b.fighters.find(x => x.id === p.id);
@@ -1010,7 +1035,7 @@ export class Game {
       dm: this.isParent(p) && b && b.mode === 'dungeon' && !b.over ? { mobs: this.dmMobs(), players: this.run.players.map(id => this.publicPlayer(this.players[id])) } : null,
       replay: this.replay ? { mode: this.replay.mode, names: this.replay.names } : null, hasReplay: !!(this.history.lastReplay && this.history.lastReplay.frames.length),
       battle: b ? { ...this.battleView(), me: f ? { hand: f.hand.map(id => cardById[id]), mana: f.mana, maxMana: f.maxMana, hp: f.hp, maxHp: f.maxHp, alive: f.alive, move: f.move, shield: f.shield, quiz: f.quiz && !f.move ? { kind: f.quiz.kind, q: f.quiz.q, choices: f.quiz.choices } : null, hint: p.simple && !f.move ? this.hintFor(f) : null } : null } : null,
-      closing: this.closingView(p), quests: this.settings.questsEnabled ? this.questsFor(p) : [], pendingQuests: this.isParent(p) ? this.pendingQuests() : [], pendingCoupons: this.isParent(p) ? this.pendingCoupons() : [],
+      closing: this.closingView(p), done: this.doneView(p), quests: this.settings.questsEnabled ? this.questsFor(p) : [], pendingQuests: this.isParent(p) ? this.pendingQuests() : [], pendingCoupons: this.isParent(p) ? this.pendingCoupons() : [],
       daily: this.dailyFor(p), tournament: this.tournamentView(), worldBoss: { ...this.worldBossView(), mine: (this.worldBoss().dmg[p.id] || 0) }, family: this.familyView(),
       customCards: this.customCardsOf(p), pendingCards: this.isParent(p) ? this.pendingCards() : [], cardTemplates: CARD_TEMPLATES, tvOnline: this.tvOnline(),
     };
