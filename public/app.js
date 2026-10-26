@@ -175,8 +175,13 @@
     return '<div class="card"><h3>🏆 Турнір' + (t.champion ? ': чемпіон ' + esc(t.champion) : ' · бій ' + Math.min(t.current + 1, t.of) + ' з ' + t.of) + '</h3>' +
       t.matches.map(function (m, i) { return '<div class="row small" style="padding:3px 0"><span>' + (m.final ? '🏁' : (i + 1) + '.') + '</span><div class="grow">' + (m.a ? esc(m.a.name) : '?') + ' <span class="muted">проти</span> ' + (m.b ? esc(m.b.name) : '?') + '</div><b>' + (m.winner ? '✅ ' + esc(m.winner) : m.live ? '⚔️ зараз' : '…') + '</b></div>'; }).join('') + '</div>';
   }
+  function choiceHtml(ch) {
+    return '<div class="card warn choice"><b>📖 Розвилка: ' + esc(ch.text) + '</b><div class="small muted">Обирає будь-хто з походу, нагорода всім</div>' + ch.options.map(function (o) { return '<button class="btn-block btn-primary" data-choice="' + esc(o.id) + '" style="margin-top:6px">' + esc(o.label) + '<div class="small">' + esc(o.rewardText) + '</div></button>'; }).join('') + '</div>';
+  }
   function campaignHtml(c) {
-    return '<div class="camp"><div class="small muted">Розділ ' + c.n + ' з ' + c.of + (c.runs ? ' · пройдено ' + c.runs + ' раз' : '') + '</div><b>' + esc(c.icon) + ' ' + esc(c.title) + '</b> <span class="small muted">' + esc(c.dungeon) + ', рівень ' + c.level + '</span>' +
+    var books = c.books ? '<div class="row wrap" style="margin-bottom:6px">' + c.books.map(function (b) { return '<button class="btn-sm ' + (c.book === b.n ? 'btn-blue' : '') + '" data-book="' + b.n + '" ' + (b.locked ? 'disabled' : '') + '>' + esc(b.title) + (b.locked ? ' 🔒' : b.runs ? ' ✓' + b.runs : '') + '</button>'; }).join('') + '</div>' : '';
+    if (c.pending) return '<div class="camp">' + books + choiceHtml(c.pending) + '</div>';
+    return '<div class="camp">' + books + '<div class="small muted">Розділ ' + c.n + ' з ' + c.of + (c.runs ? ' · пройдено ' + c.runs + ' раз' : '') + '</div><b>' + esc(c.icon) + ' ' + esc(c.title) + '</b> <span class="small muted">' + esc(c.dungeon) + ', рівень ' + c.level + (c.mutator ? ' · ' + esc(c.mutator) : '') + '</span>' +
       '<div class="story">' + esc(c.intro) + '</div><div class="chap">' + c.chapters.map(function (x) { return '<span class="' + (x.done ? 'done' : x.n === c.n ? 'cur' : '') + '" title="' + esc(x.title) + '">' + x.n + '</span>'; }).join('') + '</div>' +
       (state.me.isParent ? '<button class="btn-sm" id="camp-reset">Почати кампанію заново</button>' : '') + '</div>';
   }
@@ -251,7 +256,7 @@
     if (myLoot.length) h += '<div class="card"><h3>' + (state.tvOnline ? 'Твій лут' : 'Лут усім') + '</h3>' + myLoot.map(function (l) { return (state.tvOnline ? '' : '<div class="small muted">' + esc(l.name) + ':</div>') + (l.item ? itemHtml(l.item) : l.pet ? '<div class="item b-rare"><b>🐾 Вихованець: ' + esc(l.petIcon) + ' ' + esc(l.petName) + '</b></div>' : '<div class="item b-rare"><b class="r-rare">🃏 Нова карта: ' + esc(l.cardName) + '</b></div>'); }).join('') + '</div>';
     if (r.tournament) h += tournamentHtml(r.tournament) + (r.tournament.done ? '' : '<div class="small muted">Наступна дуель почнеться сама за пів хвилини.</div>');
     if (r.mutator) h += '<div class="small muted">' + esc(r.mutator.icon) + ' Мутатор дня: ' + esc(r.mutator.name) + '</div>';
-    if (r.campaign) h += '<div class="card ' + (r.campaign.outro ? 'ok' : 'warn') + '"><b>📖 Розділ ' + r.campaign.n + ': ' + esc(r.campaign.title) + '</b><div class="story">' + (r.campaign.outro ? esc(r.campaign.outro) : 'Розділ не пройдено. Спробуйте ще раз або прокачайтесь у підземеллях.') + '</div>' + (r.campaign.finished ? '<div class="ok-text">🎉 Кампанію пройдено, дім урятовано!</div>' : '') + '</div>';
+    if (r.campaign) h += '<div class="card ' + (r.campaign.outro ? 'ok' : 'warn') + '"><b>📖 Розділ ' + r.campaign.n + ': ' + esc(r.campaign.title) + '</b><div class="story">' + (r.campaign.outro ? esc(r.campaign.outro) : 'Розділ не пройдено. Спробуйте ще раз або прокачайтесь у підземеллях.') + '</div>' + (r.campaign.finished ? '<div class="ok-text">🎉 ' + (r.campaign.book === 2 ? 'Другу книгу пройдено, портал зачинено!' : 'Кампанію пройдено, дім урятовано!') + '</div>' : '') + (r.campaign.choice && state.lobby && state.lobby.campaign && state.lobby.campaign.pending ? choiceHtml(state.lobby.campaign.pending) : '') + '</div>';
     if (r.worldBoss && r.worldBoss.hit) h += '<div class="card">' + esc(r.worldBoss.icon) + ' Босу тижня «' + esc(r.worldBoss.name) + '» −' + r.worldBoss.hit + (r.worldBoss.killed ? ' · <b>повалений!</b>' : ' (лишилось ' + r.worldBoss.hp + ')') + '</div>';
     var ev = (r.events || []).filter(function (e) { return e.who === state.me.id || e.t === 'family' || e.t === 'worldboss'; });
     if (ev.length) h += '<div class="card ok">' + ev.map(function (e) { return e.t === 'pet' ? '<div>🐾 ' + esc(e.icon) + ' ' + esc(e.name) + (e.isNew ? ' приручено!' : e.levelUp ? ': рівень ' + e.level + '!' : ': +досвід') + '</div>' : e.t === 'worldboss' ? '<div>' + esc(e.icon) + ' Бос тижня «' + esc(e.name) + '» повалений: +' + e.gold + ' золота всім!</div>' : e.t === 'levelup' ? '<div>⬆️ Новий рівень: ' + e.level + '!</div>' : e.t === 'daily' ? '<div>📅 Завдання дня «' + esc(e.name) + '»: +' + e.gold + ' 🪙</div>' : e.t === 'family' ? '<div>👨‍👩‍👦 Сімейне досягнення «' + esc(e.name) + '»: усім +' + e.gold + ' 🪙</div>' : e.t === 'envelope' ? '<div>' + esc(e.icon) + ' Конверт «' + esc(e.name) + '» відкрито! ' + esc(e.text) + '</div>' : '<div>' + esc(e.icon) + ' Досягнення: ' + esc(e.name) + ' (титул «' + esc(e.title) + '»)</div>'; }).join('') + '</div>';
@@ -499,6 +504,8 @@
     on('#unready', function () { act('/lobby/ready', { ready: false }); });
     on('#team', function () { var mine = state.lobby.players.filter(function (p) { return p.id === state.me.id; })[0]; act('/lobby/team', { team: mine && mine.team ? 0 : 1 }); });
     on('[data-mode]', function (el) { act('/lobby/mode', { mode: el.dataset.mode }); });
+    on('[data-book]', function (el) { act('/lobby/mode', { mode: 'campaign', book: +el.dataset.book }); });
+    on('[data-choice]', function (el) { act('/campaign/choose', { option: el.dataset.choice }).then(function (r) { toast('📖 ' + r.rewardText + '. Далі: ' + r.next, 4000); }); });
     on('#camp-reset', function () { if (confirm('Почати кампанію з першого розділу?')) act('/admin/campaign/reset', {}, '📖 Кампанія з початку'); });
     var d = $('#dungeon'); if (d) d.onchange = function () { act('/lobby/mode', { dungeonId: d.value }); };
     on('[data-target]', function (el) { ui.move.target = el.dataset.target; render(); });

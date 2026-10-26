@@ -10,7 +10,7 @@ import { Store } from './store.js';
 import { Game, err } from './game.js';
 import { Avatars } from './avatar.js';
 
-export const VERSION = '0.47.0';
+export const VERSION = '0.48.0';
 const PUBLIC = new URL('../public/', import.meta.url);
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.ico': 'image/x-icon', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' };
 
@@ -203,6 +203,7 @@ export function createApp({ dataDir, avatars: avatarsOpt, baseUrl, alertToken = 
     if (path === '/lobby/leave' && req.method === 'POST') { game.leave(need()); return ok(); }
     if (path === '/lobby/ready' && req.method === 'POST') { game.ready(need(), body.ready !== false); return ok(); }
     if (path === '/lobby/mode' && req.method === 'POST') { game.setMode(need(), body); return ok(); }
+    if (path === '/campaign/choose' && req.method === 'POST') { return ok(game.chooseCampaign(need(), body.option)); }
     if (path === '/lobby/team' && req.method === 'POST') { game.setTeam(need(), body.team); return ok(); }
     if (path === '/battle/move' && req.method === 'POST') { game.move(need(), body); return ok(); }
     if (path === '/season') { need(); return send(200, game.seasonView()); }

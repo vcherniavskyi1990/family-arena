@@ -15,6 +15,8 @@ export const FAMILY = load('family');
 export const WORLDBOSS = load('worldboss');
 export const PETS = load('pets');
 export const CAMPAIGN = load('campaign');
+export const CAMPAIGN2 = load('campaign2');
+export const camp2ById = Object.fromEntries(CAMPAIGN2.map(c => [c.id, c]));
 export const COSMETICS = load('cosmetics');
 export const MUTATORS = load('mutators');
 export const EVENTS = load('events');

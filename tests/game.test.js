@@ -402,6 +402,37 @@ test('автобій: хід робиться сам, раунд закрива�
   assert.ok(g.history.battles.length === 1);
 });
 
+test('кампанія 2: відкривається після першої, розвилка після розділу, вибір дає нагороду і шлях', () => {
+  const g = makeGame();
+  const dad = g.createPlayer({ name: 'Тато', classId: 'warrior', role: 'parent', pin: '0000' });
+  const a = g.createPlayer({ name: 'Віктор', classId: 'archer', age: 10, pin: '1111' });
+  const b = g.createPlayer({ name: 'Сашко', classId: 'mage', age: 7, pin: '2222' });
+  assert.throws(() => g.setMode(dad, { mode: 'campaign', book: 2 }), /після першої/);
+  g.history.campaign.runs = 1;
+  g.setMode(dad, { mode: 'campaign', book: 2 });
+  const cv = g.campaignView(); assert.equal(cv.book, 2); assert.equal(cv.of, 8); assert.equal(cv.title, 'Портал у гардеробній'); assert.ok(!cv.books[1].locked);
+  for (const p of [dad, a]) { p.level = 9; p.equipment = {}; }
+  let guard = 0, won = false;
+  while (!won && guard++ < 5) {
+    g.join(dad); g.join(a); g.ready(dad, true); g.ready(a, true);
+    let r = 0; while (g.battle && r++ < 400) g.fire('round');
+    won = !!(g.results && g.results.won); g.results = null;
+  }
+  assert.ok(won, 'розділ 1 пройдено');
+  const c = g.history.campaign;
+  assert.ok(c.pending && c.pending.options.length === 2, 'розвилка чекає');
+  assert.ok(g.tvState().campaign.pending, 'ТБ бачить розвилку');
+  g.join(dad); g.join(a); g.ready(dad, true); g.ready(a, true); assert.ok(!g.battle, 'без вибору похід не стартує');
+  assert.throws(() => g.chooseCampaign(b, 'a'), /хто пройшов/);
+  const gold = a.gold; const res = g.chooseCampaign(a, 'a');
+  assert.equal(a.gold, gold + 30); assert.equal(c.node, 'c2_2a'); assert.ok(!c.pending); assert.match(res.next, /Ведмідь/);
+  assert.equal(g.campaignView().chapters[0].done, true);
+  assert.ok(g.history.book.moments.some(m => m.text.includes('Розвилка')));
+  // скидання книги 2 не чіпає першу
+  g.resetCampaign(dad); assert.equal(g.history.campaign.node, 'c2_1'); assert.equal(g.history.campaign.runs, 1);
+  g.setMode(dad, { mode: 'campaign', book: 1 }); assert.equal(g.campaignView().of, 8); assert.equal(g.campaignView().book, 1);
+});
+
 test('тривога з дому: пауза і відбій', () => {
   const g = makeGame();
   const a = g.createPlayer({ name: 'Віктор', classId: 'archer', age: 10, pin: '1111' });
