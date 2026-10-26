@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store } from '../src/store.js';
 import { Game } from '../src/game.js';
+import { cardById } from '../src/engine/content.js';
 globalThis.__storeMod = { Store };
 
 function makeGame(ts = Date.UTC(2026, 9, 26, 15, 0)) { // 18:00 Київ, понеділок
@@ -772,4 +773,16 @@ test('арена зачиняється: попередження за 10 хв �
   assert.equal(g.playerState(k).closing.why, 'limit'); assert.equal(g.playerState(k).closing.min, 4);
   assert.equal(g.playerState(g.players[dad.id]).closing, null, 'батькам ліміт не світить');
   g.addMinutes(k, 10); assert.equal(g.playerState(k).closing, null, 'уже заблоковано: показується blocked');
+});
+
+test('авто-колода: валідна, рідкісні лише зі знайдених, розумна крива мани', () => {
+  const g = makeGame();
+  for (const cls of ['warrior', 'mage', 'healer', 'archer', 'rogue', 'paladin', 'engineer']) {
+    const a = g.createPlayer({ name: 'P' + cls, classId: cls, age: 10, pin: '1111' }); const p = g.players[a.id];
+    const d = g.autoDeck(p); assert.equal(d.length, 20); assert.deepEqual(p.deck, d);
+    const costs = d.map(id => cardById[id].cost); assert.ok(costs.filter(c => c >= 5).length <= 5, cls + ': дорогих ≤5'); assert.ok(costs.filter(c => c <= 2).length >= 6, cls + ': дешевих ≥6');
+  }
+  const b = g.createPlayer({ name: 'B', classId: 'mage', age: 10, pin: '1111' }); const pb = g.players[b.id];
+  const d0 = g.autoDeck(pb); assert.ok(!d0.includes('lightning'), 'рідкісна без колекції не береться');
+  pb.collection.push('lightning'); const d1 = g.autoDeck(pb); assert.ok(d1.includes('lightning'), 'знайдена рідкісна береться');
 });
