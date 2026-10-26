@@ -739,3 +739,11 @@ test('дайджест згадує куплені бажання й серії'
   g.buyCoupon(k, 'icecream'); k.streak = { days: 3, last: g.kyiv().day };
   const t = g.digest().text; assert.match(t, /Малий: 🍦 Морозиво/); assert.match(t, /Серії днів: Малий 3/);
 });
+
+test('профіль героя на ТБ: вихованці, серія, бос тижня, купони', () => {
+  const g = makeGame();
+  const a = g.createPlayer({ name: 'A', classId: 'warrior', age: 10, pin: '1111' }); const p = g.players[a.id]; p.gold = 500;
+  g.buyCoupon(p, 'icecream'); p.streak = { days: 4, last: g.kyiv().day }; p.stats.streakBest = 6; g.worldBoss().dmg[a.id] = 77;
+  const h = g.heroProfile(a.id);
+  assert.equal(h.coupons.length, 1); assert.equal(h.streak.days, 4); assert.equal(h.streak.best, 6); assert.equal(h.worldBossDmg, 77); assert.deepEqual(h.pets, []);
+});
