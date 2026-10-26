@@ -339,3 +339,19 @@ test('сімейні досягнення: спільна статистика, 
   assert.ok(v.achievements.find(x => x.id === 'fam_kills_100').got);
   assert.ok(g.tvState().family.achievements.length > 5);
 });
+
+test('дайджест дня: текст для бота і профіль героя для ТБ', () => {
+  const g = makeGame();
+  const dad = g.createPlayer({ name: 'Тато', classId: 'warrior', age: 40, pin: '1234', role: 'admin' });
+  const a = g.createPlayer({ name: 'Віктор', classId: 'archer', age: 10, pin: '1111' });
+  assert.match(g.digest().text, /ніхто не бився/);
+  g.setMode(dad, { mode: 'duel' }); g.join(dad); g.join(a); g.ready(dad, true); g.ready(a, true);
+  let guard = 0; while (g.battle && guard++ < 300) g.fire('round');
+  const d = g.digest();
+  assert.equal(d.battles, 1);
+  assert.match(d.text, /Дуелей: 1/);
+  assert.match(d.text, /Віктор: \d+ хв/);
+  const h = g.heroProfile(a.id);
+  assert.equal(h.name, 'Віктор'); assert.ok(h.daily.length === 3); assert.ok(h.seasonRank >= 1);
+  assert.equal(g.heroProfile('nope'), null);
+});
