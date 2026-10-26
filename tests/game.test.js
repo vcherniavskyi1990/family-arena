@@ -731,3 +731,11 @@ test('купони бажань: купити за золото, батьки в
   assert.throws(() => g.setCoupons(g.players[dad.id], [{ name: '', price: 5 }]), /назва/);
   assert.equal(g.couponsView(k).orders.length, 5);
 });
+
+test('дайджест згадує куплені бажання й серії', () => {
+  const g = makeGame();
+  const dad = g.createPlayer({ name: 'Тато', classId: 'warrior', age: 40, pin: '1234', role: 'admin' });
+  const kid = g.createPlayer({ name: 'Малий', classId: 'mage', age: 7, pin: '2222' }); const k = g.players[kid.id]; k.gold = 500;
+  g.buyCoupon(k, 'icecream'); k.streak = { days: 3, last: g.kyiv().day };
+  const t = g.digest().text; assert.match(t, /Малий: 🍦 Морозиво/); assert.match(t, /Серії днів: Малий 3/);
+});
