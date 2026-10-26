@@ -931,3 +931,22 @@ test('міні-гра «Бліц»: свої питання за віком, р�
   g.startMini(b, 'quiz'); g.answerMini(b, g.mini.qs[b.id][0].a); g.fire('mini-end'); assert.equal(g.miniView().phase, 'done'); assert.equal(g.miniView().ranking[0].ms, null);
   assert.ok(g.tvState().mini.players.length === 1);
 });
+
+test('міні-ігри й виклики дають досягнення, завдання дня і статистику в профілі', () => {
+  const g = makeGame();
+  const dad = g.createPlayer({ name: 'Тато', classId: 'warrior', age: 40, pin: '1234', role: 'admin' });
+  const a = g.createPlayer({ name: 'A', classId: 'rogue', age: 10, pin: '1111' }); const b = g.createPlayer({ name: 'B', classId: 'mage', age: 7, pin: '2222' });
+  g.players[a.id].daily = null; g.dailyFor(g.players[a.id]); g.players[a.id].daily.tasks = [{ id: 'mini_1', base: 0, done: false }];
+  g.startMini(a, 'quiz'); for (let i = 0; i < 5; i++) g.answerMini(a, g.mini.qs[a.id][i].a); g.answerMini(b, 'xx'); g.fire('mini-end');
+  const pa = g.players[a.id], pb = g.players[b.id];
+  assert.equal(pa.stats.minis, 1); assert.equal(pb.stats.minis, 1); assert.equal(pa.stats.quizPerfect, 1); assert.equal(pb.stats.quizPerfect, 0);
+  assert.ok(pa.achievements.includes('quiz_1') && pa.achievements.includes('quiz_perfect_1')); assert.ok(['Всезнайко', 'Розумник'].includes(pa.title));
+  assert.equal(pa.daily.tasks[0].done, true, 'завдання дня «міні-гра» зараховано');
+  assert.ok(g.history.feed.some(f => f.text.includes('Всезнайко')));
+  g.fire('mini-clear'); g.startMini(b); g.fire('mini-go'); g.advance(100); g.tapMini(b); g.fire('mini-end');
+  assert.ok(pb.achievements.includes('reaction_1')); assert.equal(pb.stats.minis, 2);
+  g.fire('mini-clear');
+  for (let i = 0; i < 3; i++) { const c = g.challenge(a, b.id); g.challengeAnswer(b, c.id, true); g.leave(a); g.leave(b); }
+  assert.equal(pa.stats.challenges, 3); assert.equal(pb.stats.challenges, 3); assert.ok(pa.achievements.includes('challenge_3') && pb.achievements.includes('challenge_3'));
+  assert.match(JSON.stringify(g.heroProfile(a.id).stats), /"challenges":3/);
+});

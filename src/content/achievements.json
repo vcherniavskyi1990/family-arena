@@ -338,5 +338,65 @@
       "stat": "practice",
       "gte": 5
     }
+  },
+  {
+    "id": "reaction_1",
+    "name": "Блискавка",
+    "icon": "⚡",
+    "title": "Блискавичний",
+    "cond": {
+      "stat": "reaction",
+      "gte": 1
+    }
+  },
+  {
+    "id": "reaction_10",
+    "name": "Десять блискавок",
+    "icon": "🌩️",
+    "title": "Швидший за світло",
+    "cond": {
+      "stat": "reaction",
+      "gte": 10
+    }
+  },
+  {
+    "id": "quiz_1",
+    "name": "Переможець бліцу",
+    "icon": "🧠",
+    "title": "Розумник",
+    "cond": {
+      "stat": "quiz",
+      "gte": 1
+    }
+  },
+  {
+    "id": "quiz_perfect_1",
+    "name": "П’ять з п’яти",
+    "icon": "🎓",
+    "title": "Всезнайко",
+    "cond": {
+      "stat": "quizPerfect",
+      "gte": 1
+    }
+  },
+  {
+    "id": "minis_20",
+    "name": "Двадцять міні-ігор",
+    "icon": "🎮",
+    "title": "Гравець компанії",
+    "cond": {
+      "stat": "minis",
+      "gte": 20
+    }
+  },
+  {
+    "id": "challenge_3",
+    "name": "Три виклики",
+    "icon": "🤺",
+    "title": "Задира",
+    "cond": {
+      "stat": "challenges",
+      "gte": 3
+    }
   }
 ]
