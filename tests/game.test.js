@@ -688,3 +688,24 @@ test('стан служби для батьків', () => {
   g.setAlert(true); g.setAlert(false);
   assert.equal(g.serviceStatus().lastAlert.on, false); assert.ok(g.serviceStatus().bytes >= 0); assert.equal(typeof g.serviceStatus().worldBoss, 'string');
 });
+
+test('тренування: один гравець проти манекена, без нагород і очок', () => {
+  const g = makeGame();
+  const a = g.createPlayer({ name: 'A', classId: 'warrior', age: 7, pin: '1111' });
+  const p = g.players[a.id]; const gold0 = p.gold, xp0 = p.xp;
+  g.setMode(a, { mode: 'practice' }); g.join(a); g.ready(a, true);
+  assert.ok(g.battle, 'бій стартує з одним гравцем'); assert.equal(g.run.dungeon, 'practice'); assert.equal(g.run.mutator, null);
+  assert.ok(g.battle.fighters.some(f => f.mob === 'dummy'));
+  assert.equal(g.lobbyView().dungeon.id, 'practice');
+  let guard = 0; while (g.battle && guard++ < 200) { try { g.move(a, { attack: 'head', blocks: ['chest', 'belt'], cards: [] }); } catch (e) {} g.fire('round'); }
+  assert.ok(g.results && g.results.practice); assert.equal(g.results.xp, 0);
+  assert.equal(p.gold, gold0); assert.equal(p.xp, xp0); assert.equal(p.stats.dungeons, 0);
+  assert.equal(g.history.season.points[a.id] || 0, 0); assert.equal(g.history.battles.length, 0);
+  assert.equal(p.streak.days, 0, 'тренування не рахує серію');
+  assert.ok(p.playedToday.minutes >= 1, 'хвилини екрану рахуються');
+  // звичайне підземелля рахує серію
+  const g2 = makeGame(); const b = g2.createPlayer({ name: 'B', classId: 'warrior', age: 10, pin: '1111' }); g2.players[b.id].level = 10;
+  g2.setMode(b, { mode: 'dungeon', dungeonId: 'kitchen_caves' }); g2.join(b); g2.ready(b, true);
+  guard = 0; while (g2.battle && guard++ < 600) { try { g2.move(b, { attack: 'head', blocks: ['chest', 'belt'], cards: [] }); } catch (e) {} g2.fire('round'); }
+  assert.equal(g2.players[b.id].streak.days, 1);
+});
