@@ -485,3 +485,34 @@ test('звіт тижня для батьків: хвилини, бої, спр�
   for (let i = 0; i < 70; i++) g.logDay(a.id, { minutes: 1 }, `2026-01-${String((i % 28) + 1).padStart(2, '0')}`);
   assert.ok(Object.keys(g.history.days).length <= 60);
 });
+
+test('кампанія: розділи по черзі, фінал, з початку', () => {
+  const g = makeGame();
+  const dad = g.createPlayer({ name: 'Тато', classId: 'warrior', age: 40, pin: '1234', role: 'parent' });
+  const a = g.createPlayer({ name: 'Віктор', classId: 'warrior', age: 10, pin: '1111' });
+  g.players[a.id].level = 12; g.players[dad.id].level = 12;
+  assert.equal(g.campaignView().n, 1);
+  g.setMode(a, { mode: 'campaign' });
+  assert.equal(g.lobbyView().dungeon.id, 'kitchen_caves');
+  const playChapter = () => {
+    g.join(a); g.join(dad); g.ready(a, true); g.ready(dad, true);
+    assert.ok(g.battle); assert.equal(g.run.campaign, g.campaignView().n);
+    let guard = 0;
+    while (g.battle && guard++ < 600) { try { g.move(a, { attack: 'head', blocks: ['chest', 'belt'], cards: [] }); g.move(dad, { attack: 'chest', blocks: ['head', 'belt'], cards: [] }); } catch (e) { /* анімація */ } g.fire('round'); if (g.battle) g.fire('round'); }
+    const r = g.results; g.fire('results'); return r;
+  };
+  const r1 = playChapter();
+  assert.ok(r1.campaign && r1.campaign.n === 1);
+  if (r1.won) { assert.ok(r1.campaign.outro); assert.equal(g.campaignView().n, 2); assert.equal(g.players[a.id].stats.chapters, 1); assert.ok(g.players[a.id].achievements.includes('chapter_1')); }
+  else assert.equal(g.campaignView().n, 1);
+  // перемотуємо на останній розділ і проходимо: кампанія з початку, runs +1
+  g.history.campaign.chapter = 5; g.history.campaign.done = [1, 2, 3, 4, 5].map(n => ({ n }));
+  g.players[a.id].level = 40; g.players[dad.id].level = 40;
+  assert.equal(g.lobbyView().dungeon.id, 'balcony_citadel');
+  const r6 = playChapter();
+  if (r6.won) { assert.equal(r6.campaign.finished, true); assert.equal(g.campaignView().n, 1); assert.equal(g.campaignView().runs, 1); assert.ok(g.announce.text.includes('Кампанію пройдено')); }
+  assert.throws(() => g.resetCampaign(g.players[a.id]), /батьки/);
+  g.history.campaign.chapter = 3;
+  assert.equal(g.resetCampaign(dad).n, 1);
+  assert.equal(g.tvState().campaign.of, 6);
+});

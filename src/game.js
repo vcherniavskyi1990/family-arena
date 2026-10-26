@@ -7,7 +7,7 @@ import { makeRng } from './engine/rng.js';
 import { createBattle, fighterFromPlayer, fighterFromMob, submitMove, resolveRound, publicFighter, alive, enemiesOf, MAX_CARDS_PER_TURN } from './engine/combat.js';
 import { newPlayer, addXp, xpForLevel, equipmentBonus, genItem, genCard, equip, unequip, craft, checkAchievements, setDeck, sellPrice, genPet, grantPet, petView, petOf, activePetIcon } from './engine/progress.js';
 import { makeQuiz, checkQuiz } from './engine/quiz.js';
-import { CLASSES, CARDS, DUNGEONS, QUESTS, ACHIEVEMENTS, DAILY, FAMILY, WORLDBOSS, PETS, ITEMS, petById, ZONES, ZONE_NAMES, classById, dungeonById, mobById, questById, cardById, starterDeck, allowedCards } from './engine/content.js';
+import { CLASSES, CARDS, DUNGEONS, QUESTS, ACHIEVEMENTS, DAILY, FAMILY, WORLDBOSS, PETS, CAMPAIGN, ITEMS, petById, ZONES, ZONE_NAMES, classById, dungeonById, mobById, questById, cardById, starterDeck, allowedCards } from './engine/content.js';
 
 export const ROUND_SECONDS = 30;
 const RESULTS_SECONDS = 25;
@@ -22,7 +22,7 @@ export const CARD_TEMPLATES = {
   heal: { name: 'Зцілення', cost: 3, type: 'heal', value: 18, text: '+18 здоров’я.' },
   poison: { name: 'Отрута', cost: 2, type: 'poison', value: 5, turns: 3, text: '5 отрути на 3 ходи.' },
 };
-const SEASON_POINTS = { duelWin: 3, duelLoss: 1, dungeonLoss: 1, quest: 1, worldBoss: 5 };
+const SEASON_POINTS = { duelWin: 3, duelLoss: 1, dungeonLoss: 1, quest: 1, worldBoss: 5, chapter: 3 };
 /** Бос тижня: спільне здоров’я на всю сім’ю; кожен бій відколює шматок. Нагорода, коли впав. */
 const PET_DROP = 0.35;   // шанс вихованця за пройдене підземелля
 const WORLD_BOSS = { duelWin: 30, duelLoss: 10, dungeonBase: 40, dungeonPerLevel: 15, dungeonPerKill: 3, dungeonLoss: 10, smartMult: 2, gold: 40 };
@@ -52,7 +52,8 @@ export class Game {
     if (!this.history.customCards) this.history.customCards = [];
     if (!this.history.family) this.history.family = { achievements: [] };
     if (!this.history.worldBoss) this.history.worldBoss = null;
-    if (!this.history.days) this.history.days = {};   // журнал по днях для звіту тижня: {день: {гравець: {minutes, battles, wins, quests, smart, kills}}}
+    if (!this.history.days) this.history.days = {};
+    if (!this.history.campaign) this.history.campaign = { chapter: 0, runs: 0, done: [] };   // сюжетна кампанія: chapter = індекс наступного розділу   // журнал по днях для звіту тижня: {день: {гравець: {minutes, battles, wins, quests, smart, kills}}}
     for (const c of this.history.customCards) if (c.approved) this.registerCard(c);
     this.announce = null;
     this.replay = null;
@@ -203,7 +204,7 @@ export class Game {
   ready(p, on) { const l = this.lobby.players[p.id]; if (!l) throw err('ти не в лобі'); l.ready = !!on; this.emit(); this.maybeStart(); }
   setMode(p, { mode, dungeonId }) {
     if (this.battle) throw err('бій уже йде');
-    if (mode && !['dungeon', 'duel'].includes(mode)) throw err('режим');
+    if (mode && !['dungeon', 'duel', 'campaign'].includes(mode)) throw err('режим');
     if (mode) this.lobby.mode = mode;
     if (dungeonId) { if (!dungeonById[dungeonId]) throw err('підземелля'); const rs = this.raidStatus(dungeonId); if (!rs.available) throw err(rs.reason); this.lobby.dungeonId = dungeonId; }
     for (const l of Object.values(this.lobby.players)) l.ready = false;
@@ -216,7 +217,7 @@ export class Game {
     if (this.lobby.mode === 'duel') {
       const t0 = ids.filter(id => this.lobby.players[id].team === 0), t1 = ids.filter(id => this.lobby.players[id].team === 1);
       if (!t0.length || !t1.length) return;
-    } else {
+    } else if (this.lobby.mode !== 'campaign') {
       const rs = this.raidStatus(this.lobby.dungeonId);
       if (rs.raid && (!rs.available || ids.length < rs.minPlayers)) return;
     }
@@ -234,8 +235,9 @@ export class Game {
       this.roundEvents = [];
       this.recordFrame();
     } else {
-      const d = dungeonById[this.lobby.dungeonId];
-      this.run = { mode: 'dungeon', dungeon: d.id, players: ids, room: 0, rooms: [...d.rooms, [d.boss]], team: fighters(ids), loot: [], xp: 0, gold: 0, kills: [], startedAt: this.now(), frames: [] };
+      const ch = this.lobby.mode === 'campaign' ? this.campaignChapter() : null;
+      const d = dungeonById[ch ? ch.dungeon : this.lobby.dungeonId];
+      this.run = { mode: 'dungeon', campaign: ch ? ch.n : undefined, dungeon: d.id, players: ids, room: 0, rooms: [...d.rooms, [d.boss]], team: fighters(ids), loot: [], xp: 0, gold: 0, kills: [], startedAt: this.now(), frames: [] };
       this.nextRoom();
     }
     this.lobby.players = {};
@@ -355,8 +357,19 @@ export class Game {
         this.addMinutes(p, minutes);
       }
       for (const a of this.checkFamily()) ev.push({ t: 'family', name: a.name, icon: a.icon, gold: a.gold });
+      let camp = null;
+      if (r.campaign) {
+        const ch = CAMPAIGN.find(c => c.n === r.campaign); const cur = this.campaignChapter();
+        camp = { n: ch.n, of: CAMPAIGN.length, title: ch.title, outro: won ? ch.outro : null, finished: false };
+        if (won && cur && cur.n === ch.n) {
+          this.history.campaign.chapter += 1; this.history.campaign.done.push({ n: ch.n, at: this.now(), players: r.players.map(id => this.players[id].name) });
+          if (this.history.campaign.chapter >= CAMPAIGN.length) { this.history.campaign.chapter = 0; this.history.campaign.runs += 1; camp.finished = true; this.feed(`📖 Кампанію пройдено! Дім урятовано (${this.history.campaign.runs}-й раз)`); this.announce = { text: '📖 Кампанію пройдено! Дім урятовано 🎉', by: 'Арена', at: this.now() }; }
+          else this.feed(`📖 Розділ ${ch.n} «${ch.title}» пройдено. Далі: «${CAMPAIGN[this.history.campaign.chapter].title}»`);
+          for (const pid of r.players) { const p = this.players[pid]; p.stats.chapters = (p.stats.chapters || 0) + 1; this.addSeasonPoints(pid, SEASON_POINTS.chapter); for (const a of checkAchievements(p)) ev.push({ t: 'achievement', who: pid, name: a.name, icon: a.icon, title: a.title }); }
+        }
+      }
       const wb = this.hitWorldBoss(r.players, won ? WORLD_BOSS.dungeonBase + WORLD_BOSS.dungeonPerLevel * d.level + WORLD_BOSS.dungeonPerKill * r.kills.length : WORLD_BOSS.dungeonLoss, ev, null, r.team);
-      this.results = { mode: 'dungeon', won, raid: !!d.raid, worldBoss: wb, dungeon: dungeonById[r.dungeon].name, xp: Math.round(r.xp / r.players.length), gold: Math.round(r.gold / r.players.length), kills: r.kills.length,
+      this.results = { mode: 'dungeon', won, raid: !!d.raid, worldBoss: wb, campaign: camp, dungeon: dungeonById[r.dungeon].name, xp: Math.round(r.xp / r.players.length), gold: Math.round(r.gold / r.players.length), kills: r.kills.length,
         loot: r.loot.map(l => ({ ...l, name: this.players[l.pid].name, cardName: l.card ? cardById[l.card].name : undefined, petName: l.pet ? petById[l.pet].name : undefined, petIcon: l.pet ? petById[l.pet].icon : undefined })), events: ev.map(e => ({ ...e, whoName: this.players[e.who] && this.players[e.who].name })), players: r.players.map(id => this.publicPlayer(this.players[id])) };
       this.feed(won ? `${d.raid ? '🗿' : '🏆'} ${r.players.map(id => this.players[id].name).join(', ')} пройшли «${dungeonById[r.dungeon].name}»` : `💀 «${dungeonById[r.dungeon].name}» виявилось сильнішим`);
     } else {
@@ -692,6 +705,15 @@ export class Game {
     if (id !== null && !petOf(p, id)) throw err('немає такого вихованця');
     p.activePet = id; this.store.save('players'); this.emit(); return petView(p);
   }
+  /** Поточний розділ кампанії (наступний непройдений). */
+  campaignChapter() { return CAMPAIGN[this.history.campaign.chapter] || CAMPAIGN[0]; }
+  campaignView() {
+    const ch = this.campaignChapter(); const d = dungeonById[ch.dungeon];
+    return { n: ch.n, of: CAMPAIGN.length, title: ch.title, intro: ch.intro, dungeon: d.name, icon: d.icon, level: d.level, runs: this.history.campaign.runs, done: this.history.campaign.done.map(x => x.n),
+      chapters: CAMPAIGN.map(c => ({ n: c.n, title: c.title, done: this.history.campaign.done.some(x => x.n === c.n) })) };
+  }
+  /** Батьки: почати кампанію заново. */
+  resetCampaign(parent) { if (!this.isParent(parent)) throw err('лише батьки', 403); this.history.campaign = { chapter: 0, runs: this.history.campaign.runs, done: [] }; this.store.save('history'); this.emit(); return this.campaignView(); }
   worldBossView() {
     const w = this.worldBoss(); const def = WORLDBOSS.find(b => b.id === w.id);
     const end = new Date(w.week + 'T12:00:00Z'); end.setUTCDate(end.getUTCDate() + 7);
@@ -706,7 +728,8 @@ export class Game {
       fighters: b.fighters.map(publicFighter), lastRound: this.lastRound && this.lastRound.n === b.round ? this.lastRound : null, roomIntro: this.roundEvents && this.roundEvents[0] && this.roundEvents[0].t === 'room' ? this.roundEvents[0] : null };
   }
   lobbyView() {
-    return { mode: this.lobby.mode, dungeonId: this.lobby.dungeonId, dungeon: dungeonById[this.lobby.dungeonId], raid: this.raidStatus(this.lobby.dungeonId),
+    const camp = this.campaignView();
+    return { mode: this.lobby.mode, dungeonId: this.lobby.dungeonId, dungeon: this.lobby.mode === 'campaign' ? dungeonById[this.campaignChapter().dungeon] : dungeonById[this.lobby.dungeonId], raid: this.raidStatus(this.lobby.dungeonId), campaign: camp,
       raids: DUNGEONS.filter(d => d.raid).map(d => ({ id: d.id, name: d.name, icon: d.icon, level: d.level, ...this.raidStatus(d.id) })),
       players: Object.entries(this.lobby.players).map(([id, l]) => ({ ...this.publicPlayer(this.players[id]), ready: l.ready, team: l.team })) };
   }
@@ -717,7 +740,7 @@ export class Game {
     return { phase, season: this.settings.season, seasonN: sv.n, seasonTop: sv.top.slice(0, 5), pastSeasons: sv.past.slice(0, 3), quiet, now: this.now(), announce: this.announce, lobby: this.lobbyView(), battle: this.battle ? this.battleView() : this.replayView(), results: this.results, paused: this.paused, pauseReason: this.pauseReason,
       heroes: this.playerList.map(p => ({ ...this.publicPlayer(p), pet: activePetIcon(p), xp: p.xp, xpNext: xpForLevel(p.level), kills: p.stats.kills, duelWins: p.stats.duelWins, dungeons: p.stats.dungeons, legendaries: p.stats.legendaries, achievements: p.achievements.length })),
       legendaries: this.history.legendaries.slice(0, 5), feed: this.history.feed.slice(0, 8), pendingQuests: this.pendingQuests().length,
-      family: this.familyView(), worldBoss: this.worldBossView() };
+      family: this.familyView(), worldBoss: this.worldBossView(), campaign: this.campaignView() };
   }
   playerState(p) {
     const b = this.battle; const f = b && b.fighters.find(x => x.id === p.id);

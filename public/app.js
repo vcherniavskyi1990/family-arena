@@ -133,8 +133,9 @@
     var raidOf = {}; (lob.raids || []).forEach(function (r) { raidOf[r.id] = r; });
     var dungeons = content.dungeons.map(function (d) { var r = raidOf[d.id]; return '<option value="' + d.id + '"' + (lob.dungeonId === d.id ? ' selected' : '') + (r && !r.available ? ' disabled' : '') + '>' + d.icon + ' ' + esc(d.name) + ' (рівень ' + d.level + ')' + (r && !r.available ? ' 🔒' : '') + '</option>'; }).join('');
     var mine = lob.players.filter(function (p) { return p.id === me.id; })[0];
-    h += '<div class="card"><h3>Режим</h3><div class="row"><button class="btn-sm ' + (lob.mode === 'dungeon' ? 'btn-blue' : '') + '" data-mode="dungeon">🏰 Підземелля</button><button class="btn-sm ' + (lob.mode === 'duel' ? 'btn-blue' : '') + '" data-mode="duel">⚔️ Дуель</button></div>' +
-      (lob.mode === 'dungeon' ? '<select id="dungeon">' + dungeons + '</select><div class="small muted">' + esc(lob.dungeon.text) + ' · кімнат: ' + lob.dungeon.rooms.length + ' + бос</div>' + (lob.raid && lob.raid.raid ? '<div class="card warn" style="margin:8px 0 0">🗿 Рейд: мінімум ' + (lob.raid.minPlayers || 2) + ' гравці, бос сильнішає з кожним. Раз на тиждень.' + (lob.raid.available ? '' : ' ' + esc(lob.raid.reason)) + '</div>' : '') : '<div class="small muted">Дві команди. Перемикай команду кнопкою нижче.</div>') + '</div>';
+    h += '<div class="card"><h3>Режим</h3><div class="row"><button class="btn-sm ' + (lob.mode === 'dungeon' ? 'btn-blue' : '') + '" data-mode="dungeon">🏰 Підземелля</button><button class="btn-sm ' + (lob.mode === 'duel' ? 'btn-blue' : '') + '" data-mode="duel">⚔️ Дуель</button><button class="btn-sm ' + (lob.mode === 'campaign' ? 'btn-blue' : '') + '" data-mode="campaign">📖 Кампанія</button></div>' +
+      (lob.mode === 'campaign' ? campaignHtml(lob.campaign) : '') +
+      (lob.mode === 'dungeon' ? '<select id="dungeon">' + dungeons + '</select><div class="small muted">' + esc(lob.dungeon.text) + ' · кімнат: ' + lob.dungeon.rooms.length + ' + бос</div>' + (lob.raid && lob.raid.raid ? '<div class="card warn" style="margin:8px 0 0">🗿 Рейд: мінімум ' + (lob.raid.minPlayers || 2) + ' гравці, бос сильнішає з кожним. Раз на тиждень.' + (lob.raid.available ? '' : ' ' + esc(lob.raid.reason)) + '</div>' : '') : lob.mode === 'campaign' ? '' : '<div class="small muted">Дві команди. Перемикай команду кнопкою нижче.</div>') + '</div>';
     h += '<div class="card"><h3>Лобі (' + lob.players.length + ')</h3>' + (lob.players.length ? lob.players.map(function (p) { return '<div class="row" style="padding:4px 0">' + avatarHtml(p) + '<div class="grow"><b>' + esc(p.name) + '</b> <span class="small muted">' + p.level + ' рів.' + (lob.mode === 'duel' ? ' · команда ' + (p.team ? '🔴' : '🔵') : '') + '</span></div><div>' + (p.ready ? '✅' : '⏳') + '</div></div>'; }).join('') : '<div class="muted">Ще нікого. Подивись на ТБ!</div>') + '</div>';
     if (me.blocked) h += '<div class="card warn">🔒 ' + esc(me.blocked) + '</div>';
     else if (!mine) h += '<button class="btn-primary btn-block" id="join">Зайти в лобі</button>';
@@ -154,6 +155,11 @@
     var b = state.battle;
     return '<div class="card">' + b.fighters.map(function (f) { return '<div class="row small"><span>' + esc(f.icon) + ' ' + esc(f.name) + '</span><div class="bar grow ' + (f.team ? 'red' : '') + '"><i style="width:' + (100 * f.hp / f.maxHp) + '%"></i></div><span>' + f.hp + '</span></div>'; }).join('') + '</div>';
   }
+  function campaignHtml(c) {
+    return '<div class="camp"><div class="small muted">Розділ ' + c.n + ' з ' + c.of + (c.runs ? ' · пройдено ' + c.runs + ' раз' : '') + '</div><b>' + esc(c.icon) + ' ' + esc(c.title) + '</b> <span class="small muted">' + esc(c.dungeon) + ', рівень ' + c.level + '</span>' +
+      '<div class="story">' + esc(c.intro) + '</div><div class="chap">' + c.chapters.map(function (x) { return '<span class="' + (x.done ? 'done' : x.n === c.n ? 'cur' : '') + '" title="' + esc(x.title) + '">' + x.n + '</span>'; }).join('') + '</div>' +
+      (state.me.isParent ? '<button class="btn-sm" id="camp-reset">Почати кампанію заново</button>' : '') + '</div>';
+  }
   function worldBossHtml() {
     var w = state.worldBoss; if (!w) return '';
     var top = w.top.map(function (t) { return esc(t.name) + ' ' + t.dmg; }).join(', ');
@@ -167,6 +173,7 @@
       (r.mode === 'dungeon' ? '<div class="muted">Вбито ' + r.kills + ' · кожному +' + r.xp + ' досвіду, +' + r.gold + ' золота</div>' : '') + '</div>';
     var myLoot = (r.loot || []).filter(function (l) { return state.tvOnline ? l.name === state.me.name : true; });
     if (myLoot.length) h += '<div class="card"><h3>' + (state.tvOnline ? 'Твій лут' : 'Лут усім') + '</h3>' + myLoot.map(function (l) { return (state.tvOnline ? '' : '<div class="small muted">' + esc(l.name) + ':</div>') + (l.item ? itemHtml(l.item) : l.pet ? '<div class="item b-rare"><b>🐾 Вихованець: ' + esc(l.petIcon) + ' ' + esc(l.petName) + '</b></div>' : '<div class="item b-rare"><b class="r-rare">🃏 Нова карта: ' + esc(l.cardName) + '</b></div>'); }).join('') + '</div>';
+    if (r.campaign) h += '<div class="card ' + (r.campaign.outro ? 'ok' : 'warn') + '"><b>📖 Розділ ' + r.campaign.n + ': ' + esc(r.campaign.title) + '</b><div class="story">' + (r.campaign.outro ? esc(r.campaign.outro) : 'Розділ не пройдено. Спробуйте ще раз або прокачайтесь у підземеллях.') + '</div>' + (r.campaign.finished ? '<div class="ok-text">🎉 Кампанію пройдено, дім урятовано!</div>' : '') + '</div>';
     if (r.worldBoss && r.worldBoss.hit) h += '<div class="card">' + esc(r.worldBoss.icon) + ' Босу тижня «' + esc(r.worldBoss.name) + '» −' + r.worldBoss.hit + (r.worldBoss.killed ? ' · <b>повалений!</b>' : ' (лишилось ' + r.worldBoss.hp + ')') + '</div>';
     var ev = (r.events || []).filter(function (e) { return e.who === state.me.id || e.t === 'family' || e.t === 'worldboss'; });
     if (ev.length) h += '<div class="card ok">' + ev.map(function (e) { return e.t === 'pet' ? '<div>🐾 ' + esc(e.icon) + ' ' + esc(e.name) + (e.isNew ? ' приручено!' : e.levelUp ? ': рівень ' + e.level + '!' : ': +досвід') + '</div>' : e.t === 'worldboss' ? '<div>' + esc(e.icon) + ' Бос тижня «' + esc(e.name) + '» повалений: +' + e.gold + ' золота всім!</div>' : e.t === 'levelup' ? '<div>⬆️ Новий рівень: ' + e.level + '!</div>' : e.t === 'daily' ? '<div>📅 Завдання дня «' + esc(e.name) + '»: +' + e.gold + ' 🪙</div>' : e.t === 'family' ? '<div>👨‍👩‍👦 Сімейне досягнення «' + esc(e.name) + '»: усім +' + e.gold + ' 🪙</div>' : '<div>' + esc(e.icon) + ' Досягнення: ' + esc(e.name) + ' (титул «' + esc(e.title) + '»)</div>'; }).join('') + '</div>';
@@ -339,6 +346,7 @@
     on('#unready', function () { act('/lobby/ready', { ready: false }); });
     on('#team', function () { var mine = state.lobby.players.filter(function (p) { return p.id === state.me.id; })[0]; act('/lobby/team', { team: mine && mine.team ? 0 : 1 }); });
     on('[data-mode]', function (el) { act('/lobby/mode', { mode: el.dataset.mode }); });
+    on('#camp-reset', function () { if (confirm('Почати кампанію з першого розділу?')) act('/admin/campaign/reset', {}, '📖 Кампанія з початку'); });
     var d = $('#dungeon'); if (d) d.onchange = function () { act('/lobby/mode', { dungeonId: d.value }); };
     on('[data-target]', function (el) { ui.move.target = el.dataset.target; render(); });
     on('[data-att]', function (el) { ui.move.attack = el.dataset.att; render(); });

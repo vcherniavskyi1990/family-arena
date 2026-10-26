@@ -41,6 +41,7 @@
   function renderIdle() {
     var h = '<div class="hdr"><div class="t">⚔️ Родинна арена</div><div class="s">' + esc(state.season) + '</div><div class="r">Скануй QR телефоном,<br>щоб зайти в лобі</div></div>';
     h += '<div class="qr big"><img src="/qr.svg"><div>' + esc(location.host) + '</div></div>';
+    if (state.campaign) h += '<div class="campline">📖 Розділ ' + state.campaign.n + '/' + state.campaign.of + ': ' + esc(state.campaign.title) + (state.campaign.runs ? ' · ' + state.campaign.runs + '-й раз' : '') + '</div>';
     var w = state.worldBoss; if (w) h += '<div class="wboss"><span class="n">' + esc(w.icon) + ' Бос тижня: ' + esc(w.name) + '</span>' + (w.killed ? '<span class="dead">ПОВАЛЕНИЙ · новий у понеділок</span>' : '<div class="bar"><i style="width:' + w.pct + '%"></i><b>' + w.hp + ' / ' + w.maxHp + ' · ' + w.daysLeft + ' дн.</b></div>') + '</div>';
     h += '<div class="heroes">' + state.heroes.slice(0, 8).map(function (p) { return '<div class="hero click" data-hero="' + esc(p.id) + '">' + av(p) + '<div class="n">' + esc(p.name) + '</div><div class="c">' + esc(p.title || p.className) + ' · ' + p.level + ' рів.</div><div class="st">⚔️ ' + p.kills + ' · 🏰 ' + p.dungeons + ' · 🥊 ' + p.duelWins + ' · 🟠 ' + p.legendaries + '</div></div>'; }).join('') + '</div>';
     if (state.family) { var fa = state.family.achievements.filter(function (a) { return a.got; }); h += '<div class="family">' + (fa.length ? fa.map(function (a) { return '<span>' + esc(a.icon) + ' ' + esc(a.name) + '</span>'; }).join('') : '<span style="color:#5c6f85">👨‍👩‍👦 Сімейні досягнення: разом ⚔️ ' + state.family.sums.kills + ' ворогів, 🏰 ' + state.family.sums.dungeons + ' підземель</span>') + '</div>'; }
@@ -76,7 +77,7 @@
   function renderLobby() {
     var l = state.lobby;
     var h = '<div class="hdr"><div class="t">Лобі</div><div class="s">' + esc(state.season) + '</div><div class="r">Скануй QR, щоб приєднатись</div></div>';
-    h += '<div class="lobby"><div class="mode">' + (l.mode === 'duel' ? '⚔️ Дуель <span>· дві команди</span>' : l.dungeon.icon + ' ' + esc(l.dungeon.name) + ' <span>· рівень ' + l.dungeon.level + ' · ' + (l.dungeon.raid ? 'РЕЙД: бос сильнішає з кожним гравцем' : l.dungeon.rooms.length + ' кімнати + бос') + '</span><div class="s" style="font-size:24px;color:#9fb0c3">' + esc(l.dungeon.text) + '</div>') + '</div>';
+    h += '<div class="lobby"><div class="mode">' + (l.mode === 'campaign' && l.campaign ? '📖 Розділ ' + l.campaign.n + ' з ' + l.campaign.of + ': ' + esc(l.campaign.title) + ' <span>· ' + esc(l.dungeon.name) + ', рівень ' + l.dungeon.level + '</span><div class="story">' + esc(l.campaign.intro) + '</div>' : l.mode === 'duel' ? '⚔️ Дуель <span>· дві команди</span>' : l.dungeon.icon + ' ' + esc(l.dungeon.name) + ' <span>· рівень ' + l.dungeon.level + ' · ' + (l.dungeon.raid ? 'РЕЙД: бос сильнішає з кожним гравцем' : l.dungeon.rooms.length + ' кімнати + бос') + '</span><div class="s" style="font-size:24px;color:#9fb0c3">' + esc(l.dungeon.text) + '</div>') + '</div>';
     h += l.players.map(function (p) { return '<div class="lp ' + (p.ready ? 'ready' : '') + '">' + (l.mode === 'duel' ? '<div class="team">' + (p.team ? '🔴' : '🔵') + '</div>' : '') + '<div class="rd">' + (p.ready ? '✅' : '⏳') + '</div>' + av(p) + '<div class="n">' + esc(p.name) + '</div><div class="c">' + esc(p.className) + ' · ' + p.level + ' рів.</div></div>'; }).join('');
     for (var i = l.players.length; i < 4; i++) h += '<div class="lp empty">вільне місце</div>';
     h += '</div><div class="hint">' + (l.players.every(function (p) { return p.ready; }) ? 'Починаємо!' : 'Натисніть «Готовий» на телефонах') + '</div><div class="qr small"><img src="/qr.svg"></div>';
@@ -165,6 +166,7 @@
     var win = r.mode === 'duel' || r.won;
     var h = '<div class="banner ' + (win ? '' : 'lose') + '"><div class="big">' + (r.mode === 'duel' ? '⚔️ Переміг: ' + esc(r.winners.join(', ')) : (r.won ? (r.raid ? '🗿 РЕЙД ПРОЙДЕНО! «' + esc(r.dungeon) + '»' : '🏆 «' + esc(r.dungeon) + '» пройдено!') : '💀 «' + esc(r.dungeon) + '» виявилось сильнішим')) + '</div>';
     if (r.mode === 'dungeon') h += '<div class="sub">Вбито ' + r.kills + ' · кожному +' + r.xp + ' досвіду, +' + r.gold + ' золота</div>';
+    if (r.campaign && r.campaign.outro) h += '<div class="sub story">📖 ' + esc(r.campaign.outro) + (r.campaign.finished ? ' 🎉' : '') + '</div>';
     var loot = (r.loot || []).slice(0, 10);
     h += '<div class="cols">';
     if (loot.length) h += '<div class="loot">' + loot.map(function (l) { return '<div>🎁 <b>' + esc(l.name) + '</b>: ' + (l.item ? '<span class="r-' + l.item.rarity + '">' + esc(l.item.name) + '</span>' : l.pet ? '🐾 вихованець ' + esc(l.petIcon) + ' <span class="r-rare">' + esc(l.petName) + '</span>' : '🃏 карта <span class="r-rare">' + esc(l.cardName) + '</span>') + '</div>'; }).join('') + '</div>';

@@ -66,6 +66,7 @@ html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; backgro
 .announce .who { font-size: 24px; color: #f1c40f; } .announce .tx { font-size: 40px; font-weight: 800; }
 .cardpop .ic img { width: 220px; height: 220px; object-fit: cover; border-radius: 16px; display: block; margin: 0 auto; }
 .family { position: absolute; left: 620px; top: 662px; width: 1240px; font-size: 22px; color: #c9d4e0; white-space: nowrap; overflow: hidden; } .family span { display: inline-block; margin-right: 24px; background: #1b2430; border: 1px solid #33445a; border-radius: 12px; padding: 4px 12px; }
+.campline { position: absolute; left: 100px; top: 662px; width: 500px; font-size: 22px; color: #9fb0c3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .lobby .story, .banner .story { font-size: 28px; font-style: italic; color: #c9d4e0; margin-top: 10px; line-height: 1.3; white-space: normal; }
 .wboss { position: absolute; left: 620px; top: 112px; right: 60px; height: 56px; } .wboss .n { font-size: 24px; font-weight: 700; color: #f1c40f; } .wboss .bar { margin-top: 2px; height: 26px; } .wboss .bar i { background: #e74c3c; } .wboss .bar b { font-size: 20px; top: 0; } .wboss .dead { margin-left: 20px; font-size: 24px; color: #2ecc71; font-weight: 800; }
 .banner .wbhit { color: #f1c40f; }
 .av, .avs, .avbig { position: relative; } .av .pet { position: absolute; right: -6px; bottom: -6px; font-size: 34px; line-height: 1; } .avs .pet { display: none; } .avbig .pet { right: 0; bottom: 0; font-size: 56px; }
