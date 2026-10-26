@@ -398,5 +398,15 @@
       "stat": "challenges",
       "gte": 3
     }
+  },
+  {
+    "id": "memory_1",
+    "name": "Пам’ять слона",
+    "icon": "🧩",
+    "title": "Пам’ятливий",
+    "cond": {
+      "stat": "memory",
+      "gte": 1
+    }
   }
 ]

@@ -950,3 +950,21 @@ test('міні-ігри й виклики дають досягнення, за�
   assert.equal(pa.stats.challenges, 3); assert.equal(pb.stats.challenges, 3); assert.ok(pa.achievements.includes('challenge_3') && pb.achievements.includes('challenge_3'));
   assert.match(JSON.stringify(g.heroProfile(a.id).stats), /"challenges":3/);
 });
+
+test('міні-гра «Пам’ять»: послідовність з ТБ, помилка, час, найуважніший +5', () => {
+  const g = makeGame();
+  const a = g.createPlayer({ name: 'A', classId: 'rogue', age: 10, pin: '1111' }); const b = g.createPlayer({ name: 'B', classId: 'mage', age: 7, pin: '2222' });
+  const v = g.startMini(a, 'memory'); assert.equal(v.phase, 'wait'); assert.equal(v.len, 4); assert.equal(v.seq, undefined, 'телефон послідовності не бачить');
+  assert.equal(g.tvState().mini.seq.length, 4, 'ТБ бачить');
+  assert.throws(() => g.pressMini(a, 0), /не йде/); assert.throws(() => g.tapMini(a), /не йде/);
+  g.fire('mini-go'); assert.equal(g.miniView().phase, 'go');
+  const seq = g.mini.seq; g.advance(500);
+  for (const c of seq) g.pressMini(a, c);
+  assert.equal(g.miniView(a).me.tapped, 500); assert.equal(g.miniView(a).me.pressed, 4);
+  g.pressMini(b, seq[0]); g.pressMini(b, (seq[1] + 1) % 4); assert.equal(g.miniView(b).me.fault, true);
+  assert.equal(g.miniView().phase, 'go', 'ще не 5 с'); g.advance(5000); g.fire('mini-min');
+  const d = g.miniView(a); assert.equal(d.phase, 'done'); assert.deepEqual(d.ranking.map(r => r.name), ['A']); assert.deepEqual(d.faults, ['B']); assert.equal(d.seq.length, 4);
+  assert.equal(g.players[a.id].stats.memory, 1); assert.ok(g.players[a.id].achievements.includes('memory_1'));
+  assert.throws(() => g.pressMini(a, 1), /не йде/);
+  g.fire('mini-clear'); g.startMini(b, 'memory'); g.fire('mini-go'); g.fire('mini-end'); assert.equal(g.miniView().ranking.length, 0);
+});
