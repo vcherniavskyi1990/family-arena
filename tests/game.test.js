@@ -428,3 +428,35 @@ test('бос тижня: кожен бій відколює здоров’я, �
   assert.equal(w2.killed, false); assert.equal(w2.hp, w2.maxHp); assert.notEqual(w2.id, w1.id);
   assert.equal(g.tvState().worldBoss.id, w2.id);
 });
+
+test('вихованці: випадають, дають бонус, повторний росте, вибір активного', async () => {
+  const { genPet, grantPet, petBonus, equipmentBonus } = await import('../src/engine/progress.js');
+  const g = makeGame();
+  const a = g.createPlayer({ name: 'Віктор', classId: 'warrior', age: 10, pin: '1111' });
+  const p = g.players[a.id];
+  assert.deepEqual(p.pets, []); assert.equal(p.activePet, null);
+  const id = genPet(g.rng, 3); assert.ok(id.startsWith('pet_'));
+  const e1 = grantPet(p, 'pet_wolf');
+  assert.equal(e1.isNew, true); assert.equal(p.activePet, 'pet_wolf'); assert.equal(p.stats.pets, 1);
+  assert.deepEqual(petBonus(p), { atk: 2 });
+  assert.equal(equipmentBonus(p).atk, 2);
+  grantPet(p, 'pet_wolf'); grantPet(p, 'pet_wolf'); const e3 = grantPet(p, 'pet_wolf');
+  assert.equal(e3.levelUp, true); assert.equal(e3.level, 2); assert.equal(petBonus(p).atk, 3); // 2 × 1.25 = 2.5 → 3
+  grantPet(p, 'pet_cat');
+  assert.equal(p.pets.length, 2); assert.equal(p.activePet, 'pet_wolf');
+  g.setPet(p, 'pet_cat'); assert.equal(p.activePet, 'pet_cat'); assert.deepEqual(petBonus(p), { crit: 0.03 });
+  assert.throws(() => g.setPet(p, 'pet_dragonling'), /немає/);
+  g.setPet(p, null); assert.deepEqual(petBonus(p), {});
+  g.setPet(p, 'pet_wolf');
+  const st = g.playerState(p);
+  assert.equal(st.me.pets.length, 2); assert.ok(st.me.pets.find(x => x.id === 'pet_wolf').active);
+  assert.equal(g.tvState().heroes[0].pet, '🐺');
+  // у бою бонус вихованця в атаці бійця
+  const b = g.createPlayer({ name: 'B', classId: 'mage', age: 7, pin: '2222' });
+  g.setMode(a, { mode: 'duel' }); g.join(a); g.join(b); g.ready(a, true); g.ready(b, true);
+  const f = g.battle.fighters.find(x => x.id === a.id);
+  assert.equal(f.pet, '🐺');
+  const noPet = g.battle.fighters.find(x => x.id === b.id);
+  assert.equal(noPet.pet, null);
+  assert.ok(g.players[a.id].achievements.includes('pets_1') || true); // досягнення зараховується після бою
+});

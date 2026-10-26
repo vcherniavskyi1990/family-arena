@@ -1,0 +1,11 @@
+[
+  { "id": "pet_cat", "name": "Кіт Мурчик", "icon": "🐱", "rarity": "common", "bonus": { "crit": 0.03 }, "text": "Муркоче, і удари частіше критичні." },
+  { "id": "pet_dog", "name": "Пес Бобик", "icon": "🐶", "rarity": "common", "bonus": { "hp": 8 }, "text": "Вірний друг: трохи більше здоров’я." },
+  { "id": "pet_bee", "name": "Бджілка Жу", "icon": "🐝", "rarity": "common", "bonus": { "atk": 1 }, "text": "Жалить разом із тобою." },
+  { "id": "pet_wolf", "name": "Вовк Сірко", "icon": "🐺", "rarity": "uncommon", "bonus": { "atk": 2 }, "text": "Приручений вовк із Minecraft: сильніші удари." },
+  { "id": "pet_llama", "name": "Лама Плюм", "icon": "🦙", "rarity": "uncommon", "bonus": { "def": 1, "hp": 6 }, "text": "Плюється у ворогів і прикриває тебе." },
+  { "id": "pet_axolotl", "name": "Аксолотль Рожевик", "icon": "🦎", "rarity": "rare", "bonus": { "hp": 14, "mana": 1 }, "text": "Рожевий і рідкісний: здоров’я й мана." },
+  { "id": "pet_parrot", "name": "Папуга Крекер", "icon": "🦜", "rarity": "rare", "bonus": { "crit": 0.06, "atk": 1 }, "text": "Повторює твій бойовий клич: крити частіше." },
+  { "id": "pet_fox", "name": "Лисичка Фенек", "icon": "🦊", "rarity": "epic", "bonus": { "atk": 3, "crit": 0.04 }, "text": "Хитра й швидка. Випадає рідко." },
+  { "id": "pet_dragonling", "name": "Дракончик Іскра", "icon": "🐲", "rarity": "legendary", "bonus": { "atk": 4, "hp": 16, "crit": 0.05 }, "text": "Малий дракон. Легенда серед вихованців." }
+]

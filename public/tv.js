@@ -5,7 +5,7 @@
   var state = null, prev = null, es = null, shownRound = 0, queue = [], playing = false, roomShown = null, audio = null, timerId = null;
   var ZONE = { head: 'голова', chest: 'груди', belt: 'пояс', legs: 'ноги' };
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
-  function av(p, cls) { return '<div class="' + (cls || 'av') + '">' + (p.avatar ? '<img src="' + esc(p.avatar) + '">' : esc(p.icon || '🙂')) + '</div>'; }
+  function av(p, cls) { return '<div class="' + (cls || 'av') + '">' + (p.avatar ? '<img src="' + esc(p.avatar) + '">' : esc(p.icon || '🙂')) + (p.pet ? '<span class="pet">' + esc(p.pet) + '</span>' : '') + '</div>'; }
   function connect() {
     if (es) es.close();
     es = new EventSource('/api/events?tv=1');
@@ -167,10 +167,10 @@
     if (r.mode === 'dungeon') h += '<div class="sub">Вбито ' + r.kills + ' · кожному +' + r.xp + ' досвіду, +' + r.gold + ' золота</div>';
     var loot = (r.loot || []).slice(0, 10);
     h += '<div class="cols">';
-    if (loot.length) h += '<div class="loot">' + loot.map(function (l) { return '<div>🎁 <b>' + esc(l.name) + '</b>: ' + (l.item ? '<span class="r-' + l.item.rarity + '">' + esc(l.item.name) + '</span>' : '🃏 карта <span class="r-rare">' + esc(l.cardName) + '</span>') + '</div>'; }).join('') + '</div>';
+    if (loot.length) h += '<div class="loot">' + loot.map(function (l) { return '<div>🎁 <b>' + esc(l.name) + '</b>: ' + (l.item ? '<span class="r-' + l.item.rarity + '">' + esc(l.item.name) + '</span>' : l.pet ? '🐾 вихованець ' + esc(l.petIcon) + ' <span class="r-rare">' + esc(l.petName) + '</span>' : '🃏 карта <span class="r-rare">' + esc(l.cardName) + '</span>') + '</div>'; }).join('') + '</div>';
     var ev = (r.events || []).slice(0, 10);
     if (r.worldBoss && r.worldBoss.hit) h += '<div class="sub wbhit">' + esc(r.worldBoss.icon) + ' Босу тижня «' + esc(r.worldBoss.name) + '» −' + r.worldBoss.hit + (r.worldBoss.killed ? ' · ПОВАЛЕНИЙ!' : '') + '</div>';
-    if (ev.length) h += '<div class="loot">' + ev.map(function (e) { return e.t === 'worldboss' ? '<div>' + esc(e.icon) + ' Бос тижня «' + esc(e.name) + '» повалений: +' + e.gold + ' золота всім!</div>' : e.t === 'levelup' ? '<div>⬆️ ' + esc(e.whoName) + ': рівень ' + e.level + '!</div>' : e.t === 'daily' ? '<div>📅 ' + esc(e.whoName) + ': завдання дня «' + esc(e.name) + '»</div>' : e.t === 'family' ? '<div>👨‍👩‍👦 <b>Сімейне досягнення «' + esc(e.name) + '»</b> усім +' + e.gold + ' 🪙</div>' : '<div>' + esc(e.icon) + ' ' + esc(e.whoName) + ': досягнення «' + esc(e.name) + '»</div>'; }).join('') + '</div>';
+    if (ev.length) h += '<div class="loot">' + ev.map(function (e) { return e.t === 'pet' ? '<div>🐾 ' + esc(e.whoName) + ': ' + esc(e.icon) + ' ' + esc(e.name) + (e.isNew ? ' приручено!' : e.levelUp ? ', рівень ' + e.level : '') + '</div>' : e.t === 'worldboss' ? '<div>' + esc(e.icon) + ' Бос тижня «' + esc(e.name) + '» повалений: +' + e.gold + ' золота всім!</div>' : e.t === 'levelup' ? '<div>⬆️ ' + esc(e.whoName) + ': рівень ' + e.level + '!</div>' : e.t === 'daily' ? '<div>📅 ' + esc(e.whoName) + ': завдання дня «' + esc(e.name) + '»</div>' : e.t === 'family' ? '<div>👨‍👩‍👦 <b>Сімейне досягнення «' + esc(e.name) + '»</b> усім +' + e.gold + ' 🪙</div>' : '<div>' + esc(e.icon) + ' ' + esc(e.whoName) + ': досягнення «' + esc(e.name) + '»</div>'; }).join('') + '</div>';
     h += '</div><div class="cnt">Скануй QR і заходь у лобі, щоб зіграти ще</div></div>';
     if (!prev || prev.phase !== 'results') { renderIdle(); beep(win ? 523 : 200, 200, 'triangle', 0.08); setTimeout(function () { beep(win ? 659 : 150, 200, 'triangle', 0.08); }, 220); setTimeout(function () { beep(win ? 784 : 100, 400, 'triangle', 0.08); }, 440); }
     overlay.innerHTML = h; overlay.className = 'on';

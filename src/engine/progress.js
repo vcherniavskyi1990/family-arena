@@ -1,5 +1,5 @@
 // Прогрес героя: досвід і рівні, лут 5 рідкостей, спорядження, крафт, досягнення. Чисті функції над об'єктом гравця.
-import { ITEMS, ACHIEVEMENTS, CARDS, RARITY_ORDER, cardById } from './content.js';
+import { ITEMS, ACHIEVEMENTS, CARDS, PETS, RARITY_ORDER, cardById, petById } from './content.js';
 
 export const MAX_LEVEL = 20;
 export const xpForLevel = (lvl) => Math.round(100 * Math.pow(lvl, 1.5));
@@ -8,8 +8,8 @@ export function newPlayer({ id, name, classId, age, role = 'kid', pinHash }) {
   return {
     id, name, class: classId, age: age || null, role, pinHash, icon: null, avatar: null, title: null, simple: !!(age && age <= 8),
     level: 1, xp: 0, gold: 50, deck: [], collection: [], inventory: [], equipment: {}, achievements: [],
-    stats: { kills: 0, bossKills: 0, dragonKills: 0, duelWins: 0, duels: 0, dungeons: 0, legendaries: 0, blocks: 0, crits: 0, heals: 0, quests: 0, crafts: 0, alertPauses: 0, smart: 0, seasonWins: 0, raids: 0, worldBoss: 0, level: 1 },
-    quests: {}, playedToday: { day: null, minutes: 0 }, createdAt: Date.now(),
+    stats: { kills: 0, bossKills: 0, dragonKills: 0, duelWins: 0, duels: 0, dungeons: 0, legendaries: 0, blocks: 0, crits: 0, heals: 0, quests: 0, crafts: 0, alertPauses: 0, smart: 0, seasonWins: 0, raids: 0, worldBoss: 0, pets: 0, level: 1 },
+    quests: {}, playedToday: { day: null, minutes: 0 }, createdAt: Date.now(), pets: [], activePet: null,
   };
 }
 
@@ -32,7 +32,40 @@ export function equipmentBonus(p) {
     const it = p.equipment[slot];
     if (it) for (const k of Object.keys(it.stats || {})) b[k] = (b[k] || 0) + it.stats[k];
   }
+  const pb = petBonus(p);
+  for (const k of Object.keys(pb)) b[k] = (b[k] || 0) + pb[k];
   return b;
+}
+
+/** Вихованці: випадають із підземель; активний дає бонус, що росте з рівнем вихованця (+25 % за рівень). */
+export const PET_XP_PER_LEVEL = 3;
+export function petOf(p, id) { return (p.pets || []).find(x => x.id === id); }
+export function petBonus(p) {
+  const pet = p.activePet && petOf(p, p.activePet); const def = pet && petById[pet.id];
+  if (!def) return {};
+  const mult = 1 + 0.25 * ((pet.level || 1) - 1); const b = {};
+  for (const k of Object.keys(def.bonus)) b[k] = k === 'crit' ? Math.round(def.bonus[k] * mult * 100) / 100 : Math.round(def.bonus[k] * mult);
+  return b;
+}
+export function petView(p) {
+  return (p.pets || []).map(x => { const d = petById[x.id]; return { ...x, name: d.name, icon: d.icon, rarity: d.rarity, text: d.text, bonus: d.bonus, active: p.activePet === x.id, xpNext: PET_XP_PER_LEVEL }; });
+}
+export function activePetIcon(p) { const pet = p.activePet && petOf(p, p.activePet); return pet && petById[pet.id] ? petById[pet.id].icon : null; }
+/** Випадковий вихованець за рідкістю (рівень підземелля додає шанс на рідкісних). */
+export function genPet(rng, level = 1) {
+  const r = rollRarity(rng, level * 2);
+  const pool = PETS.filter(x => x.rarity === r);
+  return rng.pick(pool.length ? pool : PETS.filter(x => x.rarity === 'common')).id;
+}
+/** Дати вихованця: новий — у список (і активний, якщо не було); повторний — досвід і рівень. Повертає подію. */
+export function grantPet(p, id) {
+  if (!p.pets) p.pets = [];
+  const d = petById[id]; if (!d) return null;
+  const have = petOf(p, id);
+  if (!have) { p.pets.push({ id, level: 1, xp: 0 }); if (!p.activePet) p.activePet = id; p.stats.pets = (p.stats.pets || 0) + 1; return { t: 'pet', who: p.id, name: d.name, icon: d.icon, rarity: d.rarity, isNew: true, level: 1 }; }
+  have.xp += 1;
+  if (have.xp >= PET_XP_PER_LEVEL) { have.xp = 0; have.level += 1; return { t: 'pet', who: p.id, name: d.name, icon: d.icon, rarity: d.rarity, isNew: false, level: have.level, levelUp: true }; }
+  return { t: 'pet', who: p.id, name: d.name, icon: d.icon, rarity: d.rarity, isNew: false, level: have.level };
 }
 
 export function rollRarity(rng, luck = 0) {

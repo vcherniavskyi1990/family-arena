@@ -18,6 +18,7 @@ input, select, textarea { font: inherit; width: 100%; padding: 12px; border-radi
 .avatar { width: 48px; height: 48px; border-radius: 12px; background: var(--panel2); display: flex; align-items: center; justify-content: center; font-size: 26px; overflow: hidden; flex: none; }
 .avatar img { width: 100%; height: 100%; object-fit: cover; } .avatar.lg { width: 96px; height: 96px; font-size: 48px; border-radius: 20px; }
 .bar { height: 10px; background: #111820; border-radius: 6px; overflow: hidden; border: 1px solid var(--line); } .bar > i { display: block; height: 100%; background: var(--green); transition: width .4s; }
+.pet .pico { font-size: 34px; margin-right: 10px; } .pet.sel { border-color: var(--blue); } .grow { flex: 1; min-width: 0; }
 .wboss .bar { height: 14px; } .ok-text { color: var(--green); font-weight: 700; }
 .bar.mana > i { background: var(--blue); } .bar.xp > i { background: var(--accent); } .bar.red > i { background: var(--red); }
 .tabs { position: fixed; bottom: 0; left: 0; right: 0; background: #0b0f14; border-top: 1px solid var(--line); display: flex; padding-bottom: env(safe-area-inset-bottom); z-index: 5; }

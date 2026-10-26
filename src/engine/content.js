@@ -13,6 +13,8 @@ export const ACHIEVEMENTS = load('achievements');
 export const DAILY = load('daily');
 export const FAMILY = load('family');
 export const WORLDBOSS = load('worldboss');
+export const PETS = load('pets');
+export const petById = Object.fromEntries(PETS.map(p => [p.id, p]));
 
 export const cardById = Object.fromEntries(CARDS.map(c => [c.id, c]));
 export const classById = Object.fromEntries(CLASSES.map(c => [c.id, c]));
