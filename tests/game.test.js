@@ -605,3 +605,51 @@ test('справа з фото: батьки бачать фото, відмов
   assert.equal(g.pendingQuests()[0].photo, null);
   assert.ok(g.questApprove(dad, a.id, 'bed').item);
 });
+
+test('мутатор дня: детермінований за датою, діє на кімнати й нагороди', () => {
+  const g = makeGame();
+  const m1 = g.mutatorToday('2026-10-26'), m2 = g.mutatorToday('2026-10-26');
+  assert.deepEqual(m1, m2);
+  const days = Array.from({ length: 30 }, (_, i) => `2026-11-${String(i + 1).padStart(2, '0')}`);
+  const withMut = days.filter(d => g.mutatorToday(d)).length;
+  assert.ok(withMut >= 8 && withMut <= 22, `мутатор приблизно через день: ${withMut}/30`);
+  const a = g.createPlayer({ name: 'A', classId: 'warrior', age: 40, pin: '1111', role: 'parent' });
+  const b = g.createPlayer({ name: 'B', classId: 'healer', age: 10, pin: '2222' });
+  g.mutatorToday = () => ({ id: 'mana_rush', name: 'Мана б’є ключем', icon: '💧', text: '', startMana: 3 });
+  assert.equal(g.lobbyView().mutator.id, 'mana_rush');
+  g.setMode(a, { mode: 'dungeon', dungeonId: 'kitchen_caves' }); g.join(a); g.join(b); g.ready(a, true); g.ready(b, true);
+  assert.equal(g.run.mutator, 'mana_rush');
+  assert.ok(g.battle.fighters.filter(f => f.kind === 'player').every(f => f.mana === 3), 'мана 3 з першої кімнати');
+  assert.equal(g.battle.meta.mutator.id, 'mana_rush');
+  // «скляні»: монстри слабші, герої теж
+  const g2 = makeGame(); g2.mutatorToday = () => ({ id: 'glass', name: 'Скляні', icon: '🪟', text: '', mobScale: 0.6, heroHp: 0.8 });
+  const c = g2.createPlayer({ name: 'C', classId: 'warrior', age: 40, pin: '1111', role: 'parent' });
+  const g3 = makeGame(); g3.mutatorToday = () => null;
+  const c3 = g3.createPlayer({ name: 'C', classId: 'warrior', age: 40, pin: '1111', role: 'parent' });
+  for (const [gg, pp] of [[g2, c], [g3, c3]]) { gg.setMode(pp, { mode: 'dungeon', dungeonId: 'kitchen_caves' }); gg.join(pp); gg.ready(pp, true); }
+  const mob2 = g2.battle.fighters.find(f => f.kind !== 'player'), mob3 = g3.battle.fighters.find(f => f.kind !== 'player');
+  assert.ok(mob2.maxHp < mob3.maxHp, 'монстри скляні');
+  assert.ok(g2.battle.fighters.find(f => f.id === c.id).maxHp < g3.battle.fighters.find(f => f.id === c3.id).maxHp, 'герої скляні');
+  // рейд без мутатора
+  const g4 = makeGame(); g4.updateSettings({ raidAnyDay: true }); g4.mutatorToday = () => ({ id: 'angry', name: 'x', icon: 'x', text: '', mobScale: 2 });
+  const d1 = g4.createPlayer({ name: 'D', classId: 'warrior', age: 40, pin: '1111', role: 'parent' }), d2 = g4.createPlayer({ name: 'E', classId: 'mage', age: 10, pin: '2222' });
+  g4.setMode(d1, { mode: 'dungeon', dungeonId: 'raid_titan' }); g4.join(d1); g4.join(d2); g4.ready(d1, true); g4.ready(d2, true);
+  assert.equal(g4.run.mutator, null);
+});
+
+test('резервна копія й відновлення', () => {
+  const g = makeGame();
+  const dad = g.createPlayer({ name: 'Тато', classId: 'warrior', age: 40, pin: '1234', role: 'parent' });
+  const a = g.createPlayer({ name: 'Віктор', classId: 'warrior', age: 10, pin: '1111' });
+  g.players[a.id].gold = 777; g.feed('тест');
+  const b = JSON.parse(JSON.stringify(g.backup()));
+  assert.equal(b.app, 'family-arena'); assert.equal(b.players[a.id].gold, 777); assert.ok(!b.tokens);
+  const g2 = makeGame();
+  const p2 = g2.createPlayer({ name: 'Хтось', classId: 'mage', age: 40, pin: '0000', role: 'parent' });
+  assert.throws(() => g2.restore(p2, { app: 'x' }), /не копія/);
+  const r = g2.restore(p2, b);
+  assert.equal(r.players, 2); assert.equal(g2.players[a.id].gold, 777); assert.ok(g2.players[a.id].pets, 'міграція після відновлення');
+  assert.ok(g2.history.feed[0].text.includes('відновлено'));
+  assert.deepEqual(g2.tokens, {});
+  assert.throws(() => g2.restore(g2.players[a.id], b), /батьки/);
+});

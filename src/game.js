@@ -4,10 +4,11 @@ import { createHash, randomBytes } from 'node:crypto';
 import { mkdirSync, writeFileSync, unlinkSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { makeRng } from './engine/rng.js';
+import { VERSION_DATA } from './version.js';
 import { createBattle, fighterFromPlayer, fighterFromMob, submitMove, resolveRound, publicFighter, alive, enemiesOf, MAX_CARDS_PER_TURN } from './engine/combat.js';
 import { newPlayer, addXp, xpForLevel, equipmentBonus, genItem, genCard, equip, unequip, craft, checkAchievements, setDeck, sellPrice, genPet, grantPet, petView, petOf, activePetIcon } from './engine/progress.js';
 import { makeQuiz, checkQuiz } from './engine/quiz.js';
-import { CLASSES, CARDS, DUNGEONS, QUESTS, ACHIEVEMENTS, DAILY, FAMILY, WORLDBOSS, PETS, CAMPAIGN, COSMETICS, ITEMS, petById, ZONES, ZONE_NAMES, classById, dungeonById, mobById, questById, cardById, starterDeck, allowedCards } from './engine/content.js';
+import { CLASSES, CARDS, DUNGEONS, QUESTS, ACHIEVEMENTS, DAILY, FAMILY, WORLDBOSS, PETS, CAMPAIGN, COSMETICS, MUTATORS, ITEMS, petById, ZONES, ZONE_NAMES, classById, dungeonById, mobById, questById, cardById, starterDeck, allowedCards } from './engine/content.js';
 
 export const ROUND_SECONDS = 30;
 const cryText = (id) => { const c = COSMETICS.cries.find(x => x.id === id); return c ? c.text : null; };
@@ -289,7 +290,8 @@ export class Game {
     } else {
       const ch = this.lobby.mode === 'campaign' ? this.campaignChapter() : null;
       const d = dungeonById[ch ? ch.dungeon : this.lobby.dungeonId];
-      this.run = { mode: 'dungeon', campaign: ch ? ch.n : undefined, dungeon: d.id, players: ids, room: 0, rooms: [...d.rooms, [d.boss]], team: fighters(ids), loot: [], xp: 0, gold: 0, kills: [], startedAt: this.now(), frames: [] };
+      const mut = d.raid ? null : this.mutatorToday();
+      this.run = { mode: 'dungeon', mutator: mut ? mut.id : null, campaign: ch ? ch.n : undefined, dungeon: d.id, players: ids, room: 0, rooms: [...d.rooms, [d.boss]], team: fighters(ids), loot: [], xp: 0, gold: 0, kills: [], startedAt: this.now(), frames: [] };
       this.nextRoom();
     }
     this.lobby.players = {};
@@ -299,10 +301,16 @@ export class Game {
   nextRoom() {
     const r = this.run;
     const d = dungeonById[r.dungeon];
-    const scale = d.raid ? 1 + Math.max(0, r.players.length - 1) * (d.scalePerPlayer || 0.5) : 1 + Math.max(0, r.players.length - 2) * 0.35;
+    const mut = r.mutator ? MUTATORS.find(m => m.id === r.mutator) : null;
+    const scale = (d.raid ? 1 + Math.max(0, r.players.length - 1) * (d.scalePerPlayer || 0.5) : 1 + Math.max(0, r.players.length - 2) * 0.35) * (mut && mut.mobScale ? mut.mobScale : 1);
     const mobs = r.rooms[r.room].map((m, i) => fighterFromMob(m, i, mobById[m].boss ? scale * 1.1 : scale));
-    for (const f of r.team) { f.move = null; f.shield = 0; f.buffs = []; f.effects = {}; f.minions = []; if (r.room > 0 && f.alive) f.hp = Math.min(f.maxHp, f.hp + Math.round(f.maxHp * ROOM_HEAL)); if (!f.alive) { f.alive = true; f.hp = Math.round(f.maxHp * 0.5); } }
-    this.battle = createBattle({ teams: [r.team, mobs], seed: this.seed + r.room, mode: 'dungeon', meta: { room: r.room + 1, rooms: r.rooms.length, boss: r.room === r.rooms.length - 1, dungeon: r.dungeon, raid: !!d.raid, scale } });
+    const heal = mut && mut.fullHeal ? 1 : ROOM_HEAL;
+    for (const f of r.team) {
+      if (r.room === 0 && mut && mut.heroHp) { f.maxHp = Math.round(f.maxHp * mut.heroHp); f.hp = f.maxHp; }
+      f.move = null; f.shield = 0; f.buffs = []; f.effects = {}; f.minions = []; if (r.room > 0 && f.alive) f.hp = Math.min(f.maxHp, f.hp + Math.round(f.maxHp * heal)); if (!f.alive) { f.alive = true; f.hp = Math.round(f.maxHp * 0.5); }
+      if (mut && mut.startMana) f.mana = Math.min(f.maxMana, mut.startMana);
+    }
+    this.battle = createBattle({ teams: [r.team, mobs], seed: this.seed + r.room, mode: 'dungeon', meta: { room: r.room + 1, rooms: r.rooms.length, boss: r.room === r.rooms.length - 1, dungeon: r.dungeon, raid: !!d.raid, scale, mutator: mut ? { id: mut.id, name: mut.name, icon: mut.icon } : null } });
     this.roundEvents = [{ t: 'room', n: r.room + 1, of: r.rooms.length, boss: r.room === r.rooms.length - 1, names: mobs.map(m => m.name) }];
     this.recordFrame();
   }
@@ -368,7 +376,7 @@ export class Game {
         const mob = mobById[m.mob];
         if (m.alive) continue;
         r.kills.push(mob.id); r.xp += mob.xp; r.gold += mob.gold;
-        if (rng.chance(mob.lootChance)) {
+        if (rng.chance(Math.min(1, mob.lootChance * (r.mutator && (MUTATORS.find(m => m.id === r.mutator) || {}).lootMult || 1)))) {
           const pid = rng.pick(r.players);
           const it = genItem(rng, mob.level, null, mob.boss ? 'rare' : 'common');
           r.loot.push({ pid, item: it, from: mob.name });
@@ -390,7 +398,10 @@ export class Game {
           this.players[pid].stats.raids = (this.players[pid].stats.raids || 0) + 1; this.addSeasonPoints(pid, 10);
         }
       }
-      if (won) for (const pid of r.players) if (rng.chance(PET_DROP)) r.loot.push({ pid, pet: genPet(rng, d.level), from: d.name });
+      const mutDef = r.mutator ? MUTATORS.find(m => m.id === r.mutator) : null;
+      if (mutDef && mutDef.rewardMult) { r.xp = Math.round(r.xp * mutDef.rewardMult); r.gold = Math.round(r.gold * mutDef.rewardMult); }
+      if (mutDef && mutDef.goldMult) r.gold = Math.round(r.gold * mutDef.goldMult);
+      if (won) for (const pid of r.players) if (rng.chance(mutDef && mutDef.petChance ? mutDef.petChance : PET_DROP)) r.loot.push({ pid, pet: genPet(rng, d.level), from: d.name });
       for (const pid of r.players) {
         const p = this.players[pid]; const f = r.team.find(x => x.id === pid);
         const share = won ? 1 : 0.4;
@@ -421,7 +432,7 @@ export class Game {
         }
       }
       const wb = this.hitWorldBoss(r.players, won ? WORLD_BOSS.dungeonBase + WORLD_BOSS.dungeonPerLevel * d.level + WORLD_BOSS.dungeonPerKill * r.kills.length : WORLD_BOSS.dungeonLoss, ev, null, r.team);
-      this.results = { mode: 'dungeon', won, raid: !!d.raid, worldBoss: wb, campaign: camp, dungeon: dungeonById[r.dungeon].name, xp: Math.round(r.xp / r.players.length), gold: Math.round(r.gold / r.players.length), kills: r.kills.length,
+      this.results = { mode: 'dungeon', won, raid: !!d.raid, worldBoss: wb, campaign: camp, mutator: mutDef ? { name: mutDef.name, icon: mutDef.icon } : null, dungeon: dungeonById[r.dungeon].name, xp: Math.round(r.xp / r.players.length), gold: Math.round(r.gold / r.players.length), kills: r.kills.length,
         loot: r.loot.map(l => ({ ...l, name: this.players[l.pid].name, cardName: l.card ? cardById[l.card].name : undefined, petName: l.pet ? petById[l.pet].name : undefined, petIcon: l.pet ? petById[l.pet].icon : undefined })), events: ev.map(e => ({ ...e, whoName: this.players[e.who] && this.players[e.who].name })), players: r.players.map(id => this.publicPlayer(this.players[id])) };
       this.feed(won ? `${d.raid ? '🗿' : '🏆'} ${r.players.map(id => this.players[id].name).join(', ')} пройшли «${dungeonById[r.dungeon].name}»` : `💀 «${dungeonById[r.dungeon].name}» виявилось сильнішим`);
     } else {
@@ -794,12 +805,35 @@ export class Game {
     if (id !== null && !petOf(p, id)) throw err('немає такого вихованця');
     p.activePet = id; this.store.save('players'); this.emit(); return petView(p);
   }
+  /** Мутатор дня для підземель: раз на ~2 дні за датою (детерміновано), інакше null. */
+  mutatorToday(day = this.kyiv().day) {
+    let h = 0; for (const ch of day) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    const n = h % (MUTATORS.length * 2);
+    return n < MUTATORS.length ? MUTATORS[n] : null;
+  }
   /** Поточний розділ кампанії (наступний непройдений). */
   campaignChapter() { return CAMPAIGN[this.history.campaign.chapter] || CAMPAIGN[0]; }
   campaignView() {
     const ch = this.campaignChapter(); const d = dungeonById[ch.dungeon];
     return { n: ch.n, of: CAMPAIGN.length, title: ch.title, intro: ch.intro, dungeon: d.name, icon: d.icon, level: d.level, runs: this.history.campaign.runs, done: this.history.campaign.done.map(x => x.n),
       chapters: CAMPAIGN.map(c => ({ n: c.n, title: c.title, done: this.history.campaign.done.some(x => x.n === c.n) })) };
+  }
+  /** Резервна копія всіх даних гри (без токенів входу) і відновлення з неї. */
+  backup() { this.store.flushAll(); return { app: 'family-arena', version: VERSION_DATA, at: this.now(), players: this.players, history: this.history, settings: this.settings }; }
+  restore(parent, data) {
+    if (!this.isParent(parent)) throw err('лише батьки', 403);
+    if (!data || data.app !== 'family-arena' || !data.players || !data.history) throw err('це не копія Родинної арени');
+    if (this.battle) throw err('бій іде, зачекай');
+    this.players = data.players; this.store.set('players', this.players); this.migratePlayers();
+    this.history = data.history; this.store.set('history', this.history);
+    for (const k of ['season', 'pastSeasons', 'raids', 'customCards', 'family', 'days', 'campaign']) if (this.history[k] === undefined) this.history[k] = k === 'season' ? { n: 1, startedAt: this.now(), points: {} } : k === 'family' ? { achievements: [] } : k === 'days' ? {} : k === 'campaign' ? { chapter: 0, runs: 0, done: [] } : [];
+    if (this.history.worldBoss === undefined) this.history.worldBoss = null;
+    for (const c of this.history.customCards) if (c.approved) this.registerCard(c);
+    if (data.settings) { this.settings = { ...DEFAULT_SETTINGS, ...data.settings }; this.store.set('settings', this.settings); }
+    this.tokens = {}; this.store.set('tokens', this.tokens);   // усі входять заново
+    this.lobby.players = {}; this.results = null; this.tournament = null;
+    this.feed('💾 Дані гри відновлено з резервної копії'); this.emit();
+    return { players: Object.keys(this.players).length };
   }
   /** Батьки: почати кампанію заново. */
   resetCampaign(parent) { if (!this.isParent(parent)) throw err('лише батьки', 403); this.history.campaign = { chapter: 0, runs: this.history.campaign.runs, done: [] }; this.store.save('history'); this.emit(); return this.campaignView(); }
@@ -817,8 +851,8 @@ export class Game {
       fighters: b.fighters.map(publicFighter), lastRound: this.lastRound && this.lastRound.n === b.round ? this.lastRound : null, roomIntro: this.roundEvents && this.roundEvents[0] && this.roundEvents[0].t === 'room' ? this.roundEvents[0] : null };
   }
   lobbyView() {
-    const camp = this.campaignView();
-    return { mode: this.lobby.mode, dungeonId: this.lobby.dungeonId, dungeon: this.lobby.mode === 'campaign' ? dungeonById[this.campaignChapter().dungeon] : dungeonById[this.lobby.dungeonId], raid: this.raidStatus(this.lobby.dungeonId), campaign: camp,
+    const camp = this.campaignView(); const mut = this.mutatorToday();
+    return { mode: this.lobby.mode, mutator: mut ? { id: mut.id, name: mut.name, icon: mut.icon, text: mut.text } : null, dungeonId: this.lobby.dungeonId, dungeon: this.lobby.mode === 'campaign' ? dungeonById[this.campaignChapter().dungeon] : dungeonById[this.lobby.dungeonId], raid: this.raidStatus(this.lobby.dungeonId), campaign: camp,
       raids: DUNGEONS.filter(d => d.raid).map(d => ({ id: d.id, name: d.name, icon: d.icon, level: d.level, ...this.raidStatus(d.id) })),
       players: Object.entries(this.lobby.players).map(([id, l]) => ({ ...this.publicPlayer(this.players[id]), ready: l.ready, team: l.team })) };
   }

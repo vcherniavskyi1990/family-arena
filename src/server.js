@@ -10,7 +10,7 @@ import { Store } from './store.js';
 import { Game, err } from './game.js';
 import { Avatars } from './avatar.js';
 
-export const VERSION = '0.16.0';
+export const VERSION = '0.17.0';
 const PUBLIC = new URL('../public/', import.meta.url);
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.ico': 'image/x-icon', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' };
 
@@ -201,6 +201,8 @@ export function createApp({ dataDir, avatars: avatarsOpt, baseUrl, alertToken = 
 
     // --- батьки ---
     if (path === '/admin/campaign/reset' && req.method === 'POST') { return ok({ campaign: game.resetCampaign(need()) }); }
+    if (path === '/admin/backup') { parent(); const b = game.backup(); return send(200, b); }
+    if (path === '/admin/restore' && req.method === 'POST') { const p = parent(); if (!game.checkPin(p, body.pin)) throw err('PIN', 403); return ok(game.restore(p, body.data)); }
     if (path === '/admin/report') { parent(); return send(200, game.weekReport(parseInt(url.searchParams.get('back') || '0', 10) || 0)); }
     if (path === '/admin/players' && req.method === 'POST') { parent(); const p = game.createPlayer(body); return ok({ player: game.publicPlayer(p) }); }
     if (path === '/admin/players/update' && req.method === 'POST') { parent(); game.updatePlayer(body.id, body); return ok(); }
