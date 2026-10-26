@@ -10,7 +10,7 @@ import { Store } from './store.js';
 import { Game, err } from './game.js';
 import { Avatars } from './avatar.js';
 
-export const VERSION = '0.11.0';
+export const VERSION = '0.12.0';
 const PUBLIC = new URL('../public/', import.meta.url);
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.ico': 'image/x-icon', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' };
 
@@ -53,6 +53,13 @@ export function createApp({ dataDir, avatars: avatarsOpt, baseUrl, alertToken = 
         if (!alertToken) return send(503, { error: 'ARENA_ALERT_TOKEN не задано в /etc/arena.env' });
         if ((req.headers['x-arena-token'] || url.searchParams.get('token')) !== alertToken) return send(403, { error: 'токен' });
         const d = game.digest();
+        return path.endsWith('.txt') ? send(200, d.text, 'text/plain; charset=utf-8') : send(200, d);
+      }
+      if (path === '/api/report' || path === '/api/report.txt') {
+        // звіт тижня для бота пульта (неділя ввечері): той самий токен; ?back=1 = минулий тиждень
+        if (!alertToken) return send(503, { error: 'ARENA_ALERT_TOKEN не задано в /etc/arena.env' });
+        if ((req.headers['x-arena-token'] || url.searchParams.get('token')) !== alertToken) return send(403, { error: 'токен' });
+        const d = game.weekReport(parseInt(url.searchParams.get('back') || '0', 10) || 0);
         return path.endsWith('.txt') ? send(200, d.text, 'text/plain; charset=utf-8') : send(200, d);
       }
       if (path === '/api/tv/replay' && req.method === 'POST') { if (game.replay) game.stopReplay(); else game.startReplay(null, { fromTv: true }); return send(200, { ok: true, replay: !!game.replay }); }
@@ -191,6 +198,7 @@ export function createApp({ dataDir, avatars: avatarsOpt, baseUrl, alertToken = 
     if (path === '/quests/approve' && req.method === 'POST') { return ok({ reward: game.questApprove(parent(), body.playerId, body.questId, body.approve !== false) }); }
 
     // --- батьки ---
+    if (path === '/admin/report') { parent(); return send(200, game.weekReport(parseInt(url.searchParams.get('back') || '0', 10) || 0)); }
     if (path === '/admin/players' && req.method === 'POST') { parent(); const p = game.createPlayer(body); return ok({ player: game.publicPlayer(p) }); }
     if (path === '/admin/players/update' && req.method === 'POST') { parent(); game.updatePlayer(body.id, body); return ok(); }
     if (path === '/admin/players/delete' && req.method === 'POST') { const a = parent(); if (!game.checkPin(a, body.pin)) throw err('PIN'); game.deletePlayer(body.id); return ok(); }
