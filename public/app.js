@@ -123,6 +123,7 @@
   // ---------- арена ----------
   function renderArena() {
     var me = state.me, h = head();
+    if (state.closing && !me.blocked) h += '<div class="card warn">' + esc(state.closing.text) + '</div>';
     if (!state.tvOnline) h += '<div class="card warn">📵 ТБ не підключений: режим блекауту, увесь бій показуємо тут</div>';
     if (state.paused) h += '<div class="card warn">⏸ Пауза: ' + (state.pauseReason === 'alert' ? 'тривога, усі в укриття' : 'батьки поставили паузу') + '</div>';
     if (state.results) return h + renderResults();

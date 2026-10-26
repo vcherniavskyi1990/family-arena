@@ -1,5 +1,6 @@
 /* ТБ LG webOS 6.5 ≈ Chromium 79: без flex gap, без inset, без :is(). Канва 1920×1080. */
 html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: #0b0f14; color: #eef2f6; font-family: "Segoe UI", Roboto, Arial, sans-serif; }
+#closing { position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); background: #3b2f0b; border: 2px solid #f1c40f; color: #ffe08a; font-size: 30px; font-weight: 700; padding: 10px 28px; border-radius: 16px; z-index: 50; white-space: nowrap; }
 #stage { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; background: radial-gradient(ellipse at 50% 30%, #1d2a3a 0%, #0b0f14 70%); }
 .idle-title { position: absolute; left: 0; right: 0; top: 440px; text-align: center; font-size: 96px; font-weight: 800; }
 .hdr { position: absolute; left: 60px; top: 30px; right: 60px; height: 90px; }

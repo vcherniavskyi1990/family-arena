@@ -757,3 +757,19 @@ test('відновлення зі старої копії без купонів 
   assert.deepEqual(g.history.coupons, []);
   assert.ok(g.couponsView(g.players[dad.id]).list.length >= 5);
 });
+
+test('арена зачиняється: попередження за 10 хв до сну і при кінці ліміту', () => {
+  const g = makeGame(); // 17:00 Київ (зимовий час)
+  const dad = g.createPlayer({ name: 'Тато', classId: 'warrior', age: 40, pin: '1234', role: 'admin' });
+  assert.equal(g.closingView(), null, 'без дітей тихо');
+  const kid = g.createPlayer({ name: 'Малий', classId: 'mage', age: 7, pin: '2222' }); const k = g.players[kid.id];
+  g.updateSettings({ bedtime: '17:30' }); assert.equal(g.closingView(), null);
+  g.updateSettings({ bedtime: '17:08' }); assert.equal(g.closingView().min, 8); assert.equal(g.closingView().why, 'bedtime');
+  assert.equal(g.tvState().closing.min, 8); assert.equal(g.playerState(k).closing.min, 8);
+  g.tick(); assert.match(g.announce.text, /зачиняється за 8 хв/); const at = g.announce.at;
+  g.advance(60 * 1000); g.tick(); assert.equal(g.announce.at, at, 'оголошення раз на день');
+  g.updateSettings({ bedtime: '23:00' }); g.addMinutes(k, g.limitFor(k) - 4);
+  assert.equal(g.playerState(k).closing.why, 'limit'); assert.equal(g.playerState(k).closing.min, 4);
+  assert.equal(g.playerState(g.players[dad.id]).closing, null, 'батькам ліміт не світить');
+  g.addMinutes(k, 10); assert.equal(g.playerState(k).closing, null, 'уже заблоковано: показується blocked');
+});
