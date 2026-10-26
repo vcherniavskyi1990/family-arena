@@ -39,6 +39,21 @@ export function handicap(age) {
   return { hp: 1, dmg: 1 };
 }
 
+/** Фора в дуелі: слабша команда (за середнім рівнем) дістає +10 % здоров'я за рівень різниці, до +50 %;
+ *  «друге дихання»: хто програв 3 дуелі поспіль, іде в бій із +20 % здоров'я і сили. */
+export const FORA = { perLevel: 0.1, max: 0.5, secondWind: 0.2, lossesFor: 3 };
+export function applyFora(teams, losses = {}) {
+  const avg = (t) => t.length ? t.reduce((s, f) => s + (f.level || 1), 0) / t.length : 0;
+  const diff = avg(teams[0]) - avg(teams[1]);
+  const weak = diff < 0 ? teams[0] : diff > 0 ? teams[1] : [];
+  const pct = Math.min(FORA.max, Math.abs(diff) * FORA.perLevel);
+  for (const f of weak) if (pct > 0) { f.fora = Math.round(pct * 100); f.maxHp = Math.round(f.maxHp * (1 + pct)); f.hp = f.maxHp; }
+  for (const t of teams) for (const f of t) if ((losses[f.id] || 0) >= FORA.lossesFor) {
+    f.secondWind = true; f.maxHp = Math.round(f.maxHp * (1 + FORA.secondWind)); f.hp = f.maxHp; f.atk = Math.round(f.atk * (1 + FORA.secondWind));
+  }
+  return teams;
+}
+
 export function fighterFromMob(mobId, index, scale = 1) {
   const m = mobById[mobId];
   const maxHp = Math.round(m.hp * scale);
@@ -271,7 +286,7 @@ function hurt(b, from, to, dmg, ev, kind, extra = {}) {
 export function publicFighter(f) {
   return {
     id: f.id, name: f.name, icon: f.icon, avatar: f.avatar, team: f.team, kind: f.kind, class: f.class, level: f.level, pet: f.pet || null, frame: f.frame || null, cry: f.cry || null,
-    hp: f.hp, maxHp: f.maxHp, mana: f.mana, maxMana: f.maxMana, shield: f.shield, alive: f.alive, raged: !!f.raged,
+    hp: f.hp, maxHp: f.maxHp, mana: f.mana, maxMana: f.maxMana, shield: f.shield, alive: f.alive, raged: !!f.raged, fora: f.fora || 0, secondWind: !!f.secondWind,
     minions: f.minions.map(m => ({ name: m.name, icon: m.icon, atk: m.atk })), ready: !!f.move,
     poison: !!f.effects.poison, stunned: !!f.effects.stunned, buff: f.buffs.reduce((s, x) => s + x.atk, 0), handSize: f.hand.length,
   };

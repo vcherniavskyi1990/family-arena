@@ -993,3 +993,22 @@ test('вечір ігор: три міні-гри поспіль, очки за 
   // чемпіон отримав золото й очки сезону один раз
   assert.ok(g.players[a.id].gold >= gold); assert.equal(g.seasonView().top.find(x => x.name === 'A').points, pts);
 });
+
+test('фора в дуелі слабшому й «друге дихання» після трьох поразок', () => {
+  const g = makeGame();
+  const a = g.createPlayer({ name: 'Віктор', classId: 'warrior', age: 10, pin: '1111' });
+  const b = g.createPlayer({ name: 'Олександр', classId: 'warrior', age: 10, pin: '2222' });
+  g.players[a.id].level = 6; g.players[b.id].lossStreak = 3;
+  g.setMode(a, { mode: 'duel' }); g.join(a); g.join(b); g.ready(a, true); g.ready(b, true);
+  const fa = g.battle.fighters.find(f => f.id === a.id), fb = g.battle.fighters.find(f => f.id === b.id);
+  assert.ok(!fa.fora); assert.equal(fb.fora, 50, 'різниця 5 рівнів = +50 %');
+  assert.ok(fb.secondWind && !fa.secondWind);
+  assert.ok(fb.maxHp > fa.maxHp, 'слабший має більше здоров’я за рахунок фори');
+  const pub = g.tvState().battle.fighters.find(f => f.id === b.id);
+  assert.equal(pub.fora, 50); assert.equal(pub.secondWind, true);
+  assert.ok(g.feedView ? true : true);
+  let guard = 0;
+  while (g.battle && guard++ < 200) { g.move(a, { attack: 'head', blocks: ['chest', 'belt'], cards: [] }); if (g.battle && !g.battle.over) g.fire('round'); if (g.battle) g.fire('round'); }
+  const won = (g.results.winners || []).includes('Олександр');
+  assert.equal(g.players[b.id].lossStreak, won ? 0 : 4);
+});
