@@ -336,11 +336,27 @@
     });
     return h + '<div class="small muted">Стовпчик вище ліміту дня — червоний.</div>';
   }
+  function fmtUp(s) { var d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60); return (d ? d + ' д ' : '') + (h ? h + ' год ' : '') + m + ' хв'; }
+  function fmtAt(ts) { if (!ts) return 'ще не було'; var d = new Date(ts); return d.toLocaleDateString('uk-UA', { day: 'numeric', month: 'short' }) + ' ' + d.toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' }); }
+  function statusHtml(s) {
+    var rows = [
+      ['Версія', s.version + ' · дані v' + s.dataVersion + ' · Node ' + s.node],
+      ['Працює', fmtUp(s.uptimeSec) + ' · ' + s.memoryMb + ' МБ'],
+      ['ТБ', s.tv ? '🟢 підключений' : '⚪ не підключений (блекаут-режим)'],
+      ['Аватари Gemini', s.gemini ? '🟢 ключ задано' : '⚠️ ключа немає: аватари блокові. GEMINI_API_KEY у /etc/arena.env, потім systemctl restart arena'],
+      ['Пульт дому', s.alertToken ? '🟢 токен тривоги задано' + (s.lastAlert ? ' · остання: ' + (s.lastAlert.on ? '🚨 тривога' : '✅ відбій') + ' ' + fmtAt(s.lastAlert.at) : ' · сигналів ще не було') : '⚠️ ARENA_ALERT_TOKEN не задано: пауза на тривогу й дайджест у бот не працюють'],
+      ['Гравці', s.players + ' (батьків ' + s.parents + ') · боїв ' + s.battles + ' · останній ' + fmtAt(s.lastBattleAt)],
+      ['Дані', Math.round(s.bytes / 1024) + ' КБ · сезон «' + s.season + '» · бос тижня ' + s.worldBoss + (s.mutator ? ' · мутатор: ' + s.mutator : '')],
+      ['Час', s.settings.tz + ' · сон ' + s.settings.bedtime + '–' + s.settings.wakeup + (s.paused ? ' · ⏸ пауза: ' + s.pauseReason : '')]
+    ];
+    return '<table class="status">' + rows.map(function (r) { return '<tr><td>' + esc(r[0]) + '</td><td>' + esc(r[1]) + '</td></tr>'; }).join('') + '</table>';
+  }
   function renderAdmin() {
     var h = head() + (state.dm ? renderDm() : (state.me.isParent ? '<div class="card"><div class="row"><input id="dm-text" class="grow" placeholder="Оголошення на ТБ…" maxlength="120"><button class="btn-sm" data-dm="say">📣</button></div></div>' : '')) + '<div class="card"><h3>Пауза гри</h3><button class="btn-block ' + (state.paused ? 'btn-green' : 'btn-red') + '" id="pause">' + (state.paused ? '▶️ Зняти паузу' : '⏸ Поставити на паузу (тривога)') + '</button></div>';
     h += '<div class="card"><h3>На ТБ</h3><button class="btn-block" id="replay" ' + (state.hasReplay && !state.battle ? '' : 'disabled') + '>📼 Повтор останнього бою на ТБ</button></div>';
     h += '<div class="card"><h3>Сезон</h3><div class="small muted">Зараз: ' + esc(state.season.name) + '. Закриття: лідер стає чемпіоном сезону (титул, +100 🪙), очки обнуляються.</div><input id="season-name" placeholder="Назва нового сезону (необов’язково)"><button class="btn-block btn-red" id="season-end">🏁 Закрити сезон</button></div>';
     h += '<div class="card"><h3>📊 Звіт тижня</h3>' + (ui.report ? reportHtml(ui.report) : '<div class="small muted">Хвилини, бої, справи й розумні відповіді кожної дитини по днях.</div>') + '<div class="row" style="margin-top:8px"><button class="btn-sm" data-report="0">Цей тиждень</button><button class="btn-sm" data-report="1">Минулий</button></div></div>';
+    h += '<div class="card"><h3>🛠 Служба</h3>' + (ui.status ? statusHtml(ui.status) : '<div class="small muted">Версія, час роботи, ключ Gemini, зв’язок із пультом, розмір даних.</div>') + '<div class="row" style="margin-top:8px"><button class="btn-sm" id="status">' + (ui.status ? 'Оновити' : 'Показати') + '</button></div></div>';
     h += '<div class="card"><h3>💾 Дані гри</h3><div class="small muted">Копія всього: герої, прогрес, історія, правила (без фото й аватарів). Збережи файл собі; відновлення з файла потребує PIN.</div><div class="row" style="margin-top:8px"><button class="btn-sm" id="backup">⬇️ Завантажити копію</button><label class="btn-sm qph">⬆️ Відновити<input type="file" accept="application/json,.json" id="restore"></label></div></div>';
     h += '<div class="card"><h3>Новий гравець</h3>' + playerForm('Додати', true) + '</div>';
     h += '<div class="card"><h3>Гравці</h3>' + (ui.players || []).map(function (p) { return '<div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)">' + avatarHtml(p) + '<div class="grow"><b>' + esc(p.name) + '</b><div class="small muted">' + esc(p.className) + ' · ' + p.level + ' рів. · ' + (p.role === 'kid' ? 'дитина' : 'батьки') + (p.age ? ' · ' + p.age + ' р.' : '') + '</div></div><button class="btn-sm" data-edit="' + p.id + '">✏️</button></div>'; }).join('') + '</div>';
@@ -383,6 +399,7 @@
     on('#go', function () { var m = ui.move; ui.sent = true; render(); act('/battle/move', { target: m.target, attack: m.attack, blocks: m.blocks, cards: m.cards.map(function (k) { return k.split('#')[0]; }), quiz: m.quiz }).catch(function () { ui.sent = false; render(); }); });
     on('#backup', function () { api('/admin/backup').then(function (d) { var blob = new Blob([JSON.stringify(d)], { type: 'application/json' }); var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'arena-' + new Date().toISOString().slice(0, 10) + '.json'; document.body.appendChild(a); a.click(); a.remove(); toast('💾 Копію завантажено'); }).catch(function (e) { toast(e.message, 3000); }); });
     var rs = $('#restore'); if (rs) rs.onchange = function (ev) { var f = ev.target.files[0]; if (!f) return; var pin = prompt('PIN батьків, щоб відновити дані з «' + f.name + '». Поточні дані буде замінено.'); if (!pin) return; var rd = new FileReader(); rd.onload = function () { var data; try { data = JSON.parse(rd.result); } catch (e) { toast('Це не JSON-файл', 3000); return; } act('/admin/restore', { pin: pin, data: data }, '💾 Відновлено, увійди знову'); }; rd.readAsText(f); };
+    var sb = $('#status'); if (sb) sb.onclick = function () { api('/admin/status').then(function (r) { ui.status = r; render(); }).catch(function (e) { toast(e.message, 3000); }); };
     on('[data-report]', function (el) { api('/admin/report?back=' + el.dataset.report).then(function (r) { ui.report = r; render(); }).catch(function (e) { toast(e.message, 3000); }); });
     on('[data-hv]', function (el) { ui.heroView = el.dataset.hv; ui.lastChest = null; render(); });
     var gb = $('#gift'); if (gb) gb.onclick = function () { act('/me/gift').then(function (r) { toast('🎁 +' + r.gold + ' 🪙' + (r.item ? ' і ' + r.item.name : '') + ' · серія ' + r.days + ' дн.', 3000); }); };

@@ -10,7 +10,7 @@ import { Store } from './store.js';
 import { Game, err } from './game.js';
 import { Avatars } from './avatar.js';
 
-export const VERSION = '0.19.0';
+export const VERSION = '0.20.0';
 const PUBLIC = new URL('../public/', import.meta.url);
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.ico': 'image/x-icon', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' };
 
@@ -47,7 +47,7 @@ export function createApp({ dataDir, avatars: avatarsOpt, baseUrl, alertToken = 
     const path = url.pathname;
     const send = (code, body, type = 'application/json') => { res.writeHead(code, { 'Content-Type': type, 'Cache-Control': 'no-store' }); res.end(type.startsWith('application/json') ? JSON.stringify(body) : body); };
     try {
-      if (path === '/health') return send(200, { ok: true, version: VERSION, players: game.playerList.length, phase: game.tvState().phase, paused: game.paused, tv: game.tvOnline() });
+      if (path === '/health') return send(200, { ok: true, version: VERSION, uptimeSec: Math.round(process.uptime()), players: game.playerList.length, phase: game.tvState().phase, paused: game.paused, tv: game.tvOnline() });
       if (path === '/api/digest' || path === '/api/digest.txt') {
         // дайджест дня для бота пульта: лише з токеном інтеграції (той самий, що для тривоги)
         if (!alertToken) return send(503, { error: 'ARENA_ALERT_TOKEN не задано в /etc/arena.env' });
@@ -204,6 +204,7 @@ export function createApp({ dataDir, avatars: avatarsOpt, baseUrl, alertToken = 
     if (path === '/admin/campaign/reset' && req.method === 'POST') { return ok({ campaign: game.resetCampaign(need()) }); }
     if (path === '/admin/backup') { parent(); const b = game.backup(); return send(200, b); }
     if (path === '/admin/restore' && req.method === 'POST') { const p = parent(); if (!game.checkPin(p, body.pin)) throw err('PIN', 403); return ok(game.restore(p, body.data)); }
+    if (path === '/admin/status') { parent(); return send(200, { ...game.serviceStatus(), version: VERSION, node: process.version, uptimeSec: Math.round(process.uptime()), memoryMb: Math.round(process.memoryUsage().rss / 1048576), gemini: avatars.enabled, alertToken: !!alertToken, baseUrl: baseUrl || null }); }
     if (path === '/admin/report') { parent(); return send(200, game.weekReport(parseInt(url.searchParams.get('back') || '0', 10) || 0)); }
     if (path === '/admin/players' && req.method === 'POST') { parent(); const p = game.createPlayer(body); return ok({ player: game.publicPlayer(p) }); }
     if (path === '/admin/players/update' && req.method === 'POST') { parent(); game.updatePlayer(body.id, body); return ok(); }

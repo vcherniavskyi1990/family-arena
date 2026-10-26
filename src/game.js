@@ -5,6 +5,7 @@ import { mkdirSync, writeFileSync, unlinkSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { makeRng } from './engine/rng.js';
 import { VERSION_DATA } from './version.js';
+import { statSync } from 'node:fs';
 import { createBattle, fighterFromPlayer, fighterFromMob, submitMove, resolveRound, publicFighter, alive, enemiesOf, MAX_CARDS_PER_TURN } from './engine/combat.js';
 import { newPlayer, addXp, xpForLevel, equipmentBonus, genItem, genCard, equip, unequip, craft, checkAchievements, setDeck, sellPrice, genPet, grantPet, petView, petOf, activePetIcon } from './engine/progress.js';
 import { makeQuiz, checkQuiz } from './engine/quiz.js';
@@ -470,6 +471,7 @@ export class Game {
   }
   /** Тривога з дому (пульт шле POST /api/alert): пауза з причиною alert, оголошення на ТБ. */
   setAlert(on) {
+    this.lastAlert = { on: !!on, at: this.now() };
     if (on && !(this.paused && this.pauseReason === 'alert')) { this.setPaused(true, 'alert'); this.announce = { text: '🚨 Тривога! Усі в укриття, гра зачекає', by: 'Дім', at: this.now() }; this.feed('🚨 Тривога: гра на паузі'); this.emit(); }
     else if (!on && this.paused && this.pauseReason === 'alert') { this.setPaused(false); this.announce = { text: '✅ Відбій тривоги. Граємо далі!', by: 'Дім', at: this.now() }; this.feed('✅ Відбій тривоги'); this.emit(); }
     return { paused: this.paused, reason: this.pauseReason };
@@ -843,6 +845,16 @@ export class Game {
       chapters: CAMPAIGN.map(c => ({ n: c.n, title: c.title, done: this.history.campaign.done.some(x => x.n === c.n) })) };
   }
   /** Резервна копія всіх даних гри (без токенів входу) і відновлення з неї. */
+  serviceStatus() {
+    let bytes = 0; try { for (const n of ['players', 'history', 'settings']) bytes += statSync(this.store.path(n)).size; } catch (e) {}
+    const lastBattle = this.history.battles[0] || null;
+    return {
+      dataVersion: VERSION_DATA, players: this.playerList.length, parents: this.playerList.filter(p => this.isParent(p)).length,
+      battles: this.history.battles.length, lastBattleAt: lastBattle ? lastBattle.at : null, bytes, tv: this.tvOnline(), paused: this.paused, pauseReason: this.pauseReason,
+      lastAlert: this.lastAlert || null, mutator: this.mutatorToday() ? this.mutatorToday().name : null, worldBoss: this.worldBossView().name,
+      season: this.seasonView().name, settings: { tz: this.settings.tz, bedtime: this.settings.bedtime, wakeup: this.settings.wakeup },
+    };
+  }
   backup() { this.store.flushAll(); return { app: 'family-arena', version: VERSION_DATA, at: this.now(), players: this.players, history: this.history, settings: this.settings }; }
   restore(parent, data) {
     if (!this.isParent(parent)) throw err('лише батьки', 403);
