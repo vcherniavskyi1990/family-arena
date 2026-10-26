@@ -59,7 +59,7 @@ const WORLD_BOSS = { duelWin: 30, duelLoss: 10, dungeonBase: 40, dungeonPerLevel
 
 const DEFAULT_SETTINGS = {
   bedtime: '21:30', wakeup: '07:00', limitWeekday: 45, limitWeekend: 90, roundSeconds: ROUND_SECONDS,
-  questsEnabled: true, season: 'Сезон 1: Перші кроки', tz: 'Europe/Kyiv', smartCards: true, raidAnyDay: false,
+  questsEnabled: true, season: 'Сезон 1: Перші кроки', seasonDays: 14, tz: 'Europe/Kyiv', smartCards: true, raidAnyDay: false,
   familyGoal: null,   // ціль сім'ї на тиждень: {kind: quests|smart|wins|battles, n, reward} або null
 };
 const GOAL_KINDS = { quests: ['справ по дому', '🧹'], smart: ['розумних відповідей', '🧠'], wins: ['перемог', '🏆'], battles: ['боїв', '⚔️'] };
@@ -859,7 +859,7 @@ export class Game {
   }
   /** Раз на 30 с: оголошення на ТБ за 10 хв до сну (раз на день). */
   tick() {
-    this.expireChallenges();
+    this.expireChallenges(); this.autoCloseSeason();
     const bed = this.minutesToBedtime(); const day = this.kyiv().day;
     if (bed > 0 && bed <= CLOSING_WARN_MIN && this.closingWarnedDay !== day && this.playerList.some(x => !this.isParent(x))) {
       this.closingWarnedDay = day;
@@ -1136,12 +1136,23 @@ export class Game {
   seasonView() {
     const s = this.history.season;
     const top = this.playerList.map(p => ({ ...this.publicPlayer(p), points: s.points[p.id] || 0 })).sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
-    return { n: s.n, name: this.settings.season, startedAt: s.startedAt, top, past: this.history.pastSeasons.slice(-5).reverse() };
+    const days = Number(this.settings.seasonDays) || 0; const endsAt = days > 0 ? s.startedAt + days * 86400000 : null;
+    const daysLeft = endsAt ? Math.max(0, Math.ceil((endsAt - this.now()) / 86400000)) : null;
+    return { n: s.n, name: this.settings.season, startedAt: s.startedAt, endsAt, daysLeft, days, top, past: this.history.pastSeasons.slice(-5).reverse() };
+  }
+  /** Сезон із датою: закривається сам у перший тихий вечір (18:00–сон) після кінця, якщо немає бою. Викликається з tick(). */
+  autoCloseSeason() {
+    const v = this.seasonView(); if (!v.endsAt || this.now() < v.endsAt || this.battle || this.ceremony && this.now() - this.ceremony.at < CEREMONY_MS) return false;
+    const hm = this.kyiv().hm; if (hm < '18:00' || hm >= this.settings.bedtime) return false;
+    this.closeSeason(null, 'auto'); return true;
   }
   /** Батьки закривають сезон: лідер стає чемпіоном (титул), очки обнуляються, новий сезон отримує назву. */
   endSeason(parent, newName) {
     if (!this.isParent(parent)) throw err('лише батьки', 403);
     if (this.battle) throw err('дочекайся кінця бою');
+    return this.closeSeason(newName, 'parent');
+  }
+  closeSeason(newName, by = 'parent') {
     const v = this.seasonView();
     const winner = v.top.find(p => p.points > 0) || null;
     const past = { n: v.n, name: v.name, startedAt: v.startedAt, endedAt: this.now(), winner: winner ? winner.name : null, winnerId: winner ? winner.id : null, top: v.top.slice(0, 5).map(p => ({ name: p.name, points: p.points })) };
@@ -1151,6 +1162,7 @@ export class Game {
     else this.feed(`Сезон ${v.n} «${v.name}» закрито без чемпіона`);
     this.history.season = { n: v.n + 1, startedAt: this.now(), points: {} };
     this.settings.season = (newName && String(newName).trim().slice(0, 40)) || `Сезон ${v.n + 1}`;
+    if (by === 'auto') { this.announce = { text: `🏁 Сезон ${v.n} закрито: ${winner ? 'чемпіон ' + winner.name : 'без чемпіона'}. Починається «${this.settings.season}»`, by: 'Арена', at: this.now() }; this.feed(`🏁 Сезон ${v.n} закрився сам за розкладом (${v.days} дн.)`); }
     this.store.set('settings', this.settings); this.store.save('history'); this.store.save('players');
     this.emit();
     return past;
@@ -1344,7 +1356,7 @@ export class Game {
     const phase = this.battle ? 'battle' : this.replay ? 'replay' : this.results ? 'results' : Object.keys(this.lobby.players).length ? 'lobby' : 'idle';
     const hm = this.kyiv().hm; const quiet = hm < '07:00' || (hm >= '13:00' && hm < '15:00');
     const sv = this.seasonView();
-    return { phase, closing: this.closingView(), ceremony: this.ceremony && this.now() - this.ceremony.at < CEREMONY_MS ? this.ceremony : null, season: this.settings.season, seasonN: sv.n, seasonTop: sv.top.slice(0, 5), pastSeasons: sv.past.slice(0, 3), quiet, now: this.now(), announce: this.announce, lobby: this.lobbyView(), battle: this.battle ? this.battleView() : this.replayView(), results: this.results, paused: this.paused, pauseReason: this.pauseReason,
+    return { phase, closing: this.closingView(), ceremony: this.ceremony && this.now() - this.ceremony.at < CEREMONY_MS ? this.ceremony : null, season: this.settings.season, seasonN: sv.n, seasonDaysLeft: sv.daysLeft, seasonTop: sv.top.slice(0, 5), pastSeasons: sv.past.slice(0, 3), quiet, now: this.now(), announce: this.announce, lobby: this.lobbyView(), battle: this.battle ? this.battleView() : this.replayView(), results: this.results, paused: this.paused, pauseReason: this.pauseReason,
       heroes: this.playerList.map(p => ({ ...this.publicPlayer(p), pet: activePetIcon(p), streak: this.streakView(p).days, xp: p.xp, xpNext: xpForLevel(p.level), kills: p.stats.kills, duelWins: p.stats.duelWins, dungeons: p.stats.dungeons, legendaries: p.stats.legendaries, achievements: p.achievements.length })),
       legendaries: this.history.legendaries.slice(0, 5), feed: this.history.feed.slice(0, 8), pendingQuests: this.pendingQuests().length,
       family: this.familyView(), worldBoss: this.worldBossView(), campaign: this.campaignView(), tournament: this.tournamentView(), today: this.todayView(), familyGoal: this.familyGoalView(), mini: this.miniView(), party: this.partyView(), event: this.eventView(), envelopes: this.envelopesView() };
@@ -1357,7 +1369,7 @@ export class Game {
       me: { ...this.publicPlayer(p), xp: p.xp, xpNext: xpForLevel(p.level), gold: p.gold, deck: p.deck, collection: p.collection, inventory: p.inventory, equipment: p.equipment, bonus: equipmentBonus(p), pets: petView(p), cosmetics: this.cosmeticsView(p), streak: this.streakView(p), gift: this.giftView(p), coupons: this.couponsView(p), stats: p.stats, achievements: p.achievements,
         minutesToday: this.minutesToday(p), limit: this.limitFor(p), blocked: this.blockedReason(p), isParent: this.isParent(p), avatarPending: p.avatarPending || null,
         seasonPoints: this.history.season.points[p.id] || 0, seasonRank: sv.top.findIndex(x => x.id === p.id) + 1 },
-      phase: sv.phase, season: { n: sv.n, name: sv.name, top: sv.top.slice(0, 5) }, lobby: this.lobbyView(), inLobby: !!inLobby, results: this.results, paused: this.paused, pauseReason: this.pauseReason,
+      phase: sv.phase, season: { n: sv.n, name: sv.name, daysLeft: sv.daysLeft, days: sv.days, top: sv.top.slice(0, 5) }, lobby: this.lobbyView(), inLobby: !!inLobby, results: this.results, paused: this.paused, pauseReason: this.pauseReason,
       dm: this.isParent(p) && b && b.mode === 'dungeon' && !b.over ? { mobs: this.dmMobs(), players: this.run.players.map(id => this.publicPlayer(this.players[id])) } : null,
       replay: this.replay ? { mode: this.replay.mode, names: this.replay.names } : null, hasReplay: !!(this.history.lastReplay && this.history.lastReplay.frames.length),
       battle: b ? { ...this.battleView(), me: f ? { hand: f.hand.map(id => cardById[id]), mana: f.mana, maxMana: f.maxMana, hp: f.hp, maxHp: f.maxHp, alive: f.alive, move: f.move, shield: f.shield, quiz: f.quiz && !f.move ? { kind: f.quiz.kind, q: f.quiz.q, choices: f.quiz.choices } : null, hint: p.simple && !f.move ? this.hintFor(f) : null } : null } : null,

@@ -1063,3 +1063,22 @@ test('конверти-сюрпризи відкриваються за спіл
   const g2 = makeGame(); g2.createPlayer({ name: 'Тато', classId: 'warrior', age: 40, pin: '1234', role: 'admin' });
   assert.equal(g2.envelopesView().opened, 0, 'нова гра: нічого не відкрито');
 });
+
+test('сезон із датою: відлік і автозакриття ввечері', () => {
+  const g = makeGame();
+  g.createPlayer({ name: 'Тато', classId: 'warrior', age: 40, pin: '1234', role: 'admin' });
+  const a = g.createPlayer({ name: 'Віктор', classId: 'warrior', age: 10, pin: '1111' });
+  assert.equal(g.seasonView().days, 14); assert.equal(g.seasonView().daysLeft, 14);
+  assert.equal(g.tvState().seasonDaysLeft, 14); assert.equal(g.playerState(a).season.daysLeft, 14);
+  g.addSeasonPoints(a.id, 5);
+  g.advance(13 * 86400000); assert.equal(g.seasonView().daysLeft, 1); assert.equal(g.autoCloseSeason(), false);
+  g.advance(86400000); // рівно 14 днів, 17:00 Київ — вечір, але не бій
+  assert.equal(g.seasonView().daysLeft, 0);
+  assert.equal(g.autoCloseSeason(), false, 'до 18:00 не закриває');
+  g.advance(3600000 + 60000);
+  assert.equal(g.autoCloseSeason(), true);
+  assert.equal(g.seasonView().n, 2); assert.equal(g.history.pastSeasons[0].winner, 'Віктор');
+  assert.ok(g.announce.text.includes('чемпіон Віктор')); assert.equal(g.seasonView().daysLeft, 14);
+  assert.equal(g.autoCloseSeason(), false, 'новий сезон щойно почався');
+  g.updateSettings({ seasonDays: 0 }); assert.equal(g.seasonView().daysLeft, null); assert.equal(g.tvState().seasonDaysLeft, null);
+});
