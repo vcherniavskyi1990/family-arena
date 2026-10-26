@@ -321,7 +321,7 @@ export class Game {
       this.emit(); return this.miniView(p);
     }
     if (kind === 'memory') {
-      this.mini = { kind, phase: 'wait', by: p.id, at: this.now(), goAt: null, seq: Array.from({ length: MEMORY_LEN }).reduce(a => { let c; do c = this.rng.int(0, 3); while (c === a[a.length - 1]); return [...a, c]; }, []),   // без двох однакових поспіль inputs: {}, taps: {}, faults: {}, ranking: [] };
+      this.mini = { kind, phase: 'wait', by: p.id, at: this.now(), goAt: null, seq: this.memorySeq(), inputs: {}, taps: {}, faults: {}, ranking: [] };
       this.setTimer('mini-go', MEMORY_LEN * MEMORY_STEP_MS + 1200, () => {
         const m = this.mini; if (!m || m.phase !== 'wait') return;
         m.phase = 'go'; m.goAt = this.now(); this.emit();
@@ -359,6 +359,12 @@ export class Game {
     const active = Object.values(m.prog).filter(x => x.i > 0);
     if (this.now() - m.at < QUIZ_MIN_MS || !active.length || !active.every(x => x.doneAt)) return false;
     this.endMini(); return true;
+  }
+  /** Послідовність для «Пам'яті»: без двох однакових кольорів поспіль. */
+  memorySeq() {
+    const seq = [];
+    while (seq.length < MEMORY_LEN) { const c = this.rng.int(0, 3); if (c !== seq[seq.length - 1]) seq.push(c); }
+    return seq;
   }
   /** «Пам'ять»: повторити послідовність кольорів з ТБ; не той колір = помилка, повна = час. */
   pressMini(p, color) {
