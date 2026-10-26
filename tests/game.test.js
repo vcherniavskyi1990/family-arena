@@ -319,6 +319,29 @@ test('майстерня мобів: дитина малює монстра, б�
   assert.equal(g.history.customMobs.length, 1);
 });
 
+test('книга сім\'ї: рекорди побиваються, моменти записуються', () => {
+  const g = makeGame();
+  const dad = g.createPlayer({ name: 'Тато', classId: 'warrior', role: 'parent', pin: '0000' });
+  const a = g.createPlayer({ name: 'Віктор', classId: 'archer', age: 10, pin: '1111' });
+  assert.equal(g.setRecord('bigHit', 0, a.id, 'нуль'), false);
+  assert.equal(g.setRecord('bigHit', 12, a.id, 'Віктор: 12'), true);
+  assert.equal(g.setRecord('bigHit', 10, a.id, 'менше'), false, 'менший не записується');
+  assert.equal(g.setRecord('bigHit', 20, a.id, 'Віктор: 20'), true);
+  assert.ok(!g.tvState().announce, 'того ж дня рекорд не оголошується');
+  g.advance(24 * 3600 * 1000);
+  assert.equal(g.setRecord('bigHit', 30, a.id, 'Віктор: 30'), true);
+  assert.match(g.tvState().announce.text, /Рекорд сім'ї/);
+  const bv = g.bookView();
+  assert.equal(bv.records.find(r => r.key === 'bigHit').value, 30);
+  assert.ok(bv.moments.some(m => m.text.includes('Рекорд')));
+  // дуель лишає рекорд довжини, підземелля — моменти босів
+  g.setMode(dad, { mode: 'duel' }); g.join(dad); g.join(a); g.ready(dad, true); g.ready(a, true);
+  let guard = 0; while (g.battle && guard++ < 400) g.fire('round');
+  assert.ok(g.history.book.records.longDuel && g.history.book.records.longDuel.value >= 1);
+  assert.ok(g.playerState(a).book.records.length === 4);
+  assert.ok(g.tvState().book.moments.length <= 6);
+});
+
 test('тривога з дому: пауза і відбій', () => {
   const g = makeGame();
   const a = g.createPlayer({ name: 'Віктор', classId: 'archer', age: 10, pin: '1111' });

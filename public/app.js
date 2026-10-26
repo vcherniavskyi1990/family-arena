@@ -140,7 +140,7 @@
     if (state.replay) h += '<div class="card">📼 На ТБ іде повтор: ' + esc(state.replay.names.join(', ')) + (me.isParent ? ' <button class="btn-sm" id="replay-stop">Зупинити</button>' : '') + '</div>';
     if (state.welcome) h += '<div class="card ok welcome"><h3>👋 З поверненням!</h3><div>Тебе не було ' + state.welcome.away + ' дн. Арена сумувала. Серія днів збережена, а ось і подарунок:</div><button class="btn-sm btn-blue" id="welcome" style="margin-top:8px">Дякую! +' + state.welcome.gold + ' 🪙</button></div>';
     if (!me.blocked && !state.battle) h += '<div class="card mini"><h3>Міні-ігри для всіх, хто з телефоном</h3><div class="row"><div class="grow"><b>⚡ Реакція</b><div class="small muted">ТБ скаже «ТИСНИ!», хто швидший — +5 🪙</div></div><button class="btn-sm btn-primary" id="mini-start">Грати</button></div><div class="row" style="margin-top:8px"><div class="grow"><b>🎉 Вечір ігор</b><div class="small muted">Усі три поспіль, очки за місця; чемпіон +15 🪙 і +3 очки сезону</div></div><button class="btn-sm btn-primary" id="party-start">Грати</button></div><div class="row" style="margin-top:8px"><div class="grow"><b>🧩 Пам\'ять</b><div class="small muted">ТБ показує 4 кольори, повтори на телефоні швидше за всіх — +5 🪙</div></div><button class="btn-sm btn-primary" id="memory-start">Грати</button></div><div class="row" style="margin-top:8px"><div class="grow"><b>🧠 Бліц</b><div class="small muted">5 прикладів чи слів за віком, хто більше й швидше — +5 🪙, усе йде в розумні відповіді</div></div><button class="btn-sm btn-primary" id="quiz-start">Грати</button></div></div>';
-    h += eventHtml(); h += envelopesHtml(); h += worldBossHtml(); h += goalHtml(); h += giftHtml();
+    h += eventHtml(); h += envelopesHtml(); h += worldBossHtml(); h += goalHtml(); h += giftHtml(); h += bookHtml();
     var lob = state.lobby;
     var raidOf = {}; (lob.raids || []).forEach(function (r) { raidOf[r.id] = r; });
     var dungeons = content.dungeons.filter(function (d) { return !d.practice; }).map(function (d) { var r = raidOf[d.id], lk = (lob.locked || []).indexOf(d.id) >= 0; return '<option value="' + d.id + '"' + (lob.dungeonId === d.id ? ' selected' : '') + (r && !r.available || lk ? ' disabled' : '') + '>' + (lk ? '✉️ ???' : d.icon + ' ' + esc(d.name)) + ' (рівень ' + d.level + ')' + (r && !r.available ? ' 🔒' : lk ? ' · у конверті' : '') + '</option>'; }).join('');
@@ -366,6 +366,15 @@
     h += customCardsHtml();
     h += customMobsHtml();
     return h;
+  }
+  function bookHtml() {
+    var b = state.book; if (!b) return '';
+    var recs = b.records.filter(function (r) { return r.value; });
+    var h = '<details class="card book"><summary><b>📖 Книга сім’ї</b> <span class="small muted">' + recs.length + ' ' + plural(recs.length, 'рекорд', 'рекорди', 'рекордів') + ' · ' + b.total + ' ' + plural(b.total, 'момент', 'моменти', 'моментів') + '</span></summary>';
+    h += '<div class="small" style="margin-top:6px"><b>Рекорди</b></div>' + b.records.map(function (r) { return '<div class="row small" style="padding:3px 0"><span>' + esc(r.icon) + '</span><div class="grow">' + esc(r.name) + (r.value ? ': <b>' + esc(r.text) + '</b>' : '') + '</div><span class="muted">' + (r.value ? esc(r.day) : '—') + '</span></div>'; }).join('');
+    h += '<div class="small" style="margin-top:8px"><b>Пам’ятні моменти</b></div>' + (b.moments.length ? b.moments.map(function (m) { return '<div class="row small" style="padding:3px 0"><span class="muted">' + esc(m.day) + '</span><span>' + esc(m.icon) + '</span><div class="grow">' + esc(m.text) + '</div></div>'; }).join('') : '<div class="small muted">Ще порожньо: перший бос, перший конверт, перша легендарка потраплять сюди.</div>');
+    if (b.seasons.length) h += '<div class="small" style="margin-top:8px"><b>Сезони</b></div>' + b.seasons.map(function (s) { return '<div class="small">🏅 Сезон ' + s.n + ' «' + esc(s.name) + '»: ' + esc(s.winner || 'без чемпіона') + '</div>'; }).join('');
+    return h + '</details>';
   }
   function customMobsHtml() {
     var mine = state.customMobs || [], all = state.mobs || [], pts = ui.mobPts, total = state.mobPoints || 10, left = total - pts.str - pts.hp - pts.trick;

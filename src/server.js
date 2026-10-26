@@ -10,7 +10,7 @@ import { Store } from './store.js';
 import { Game, err } from './game.js';
 import { Avatars } from './avatar.js';
 
-export const VERSION = '0.44.0';
+export const VERSION = '0.45.0';
 const PUBLIC = new URL('../public/', import.meta.url);
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.ico': 'image/x-icon', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' };
 
@@ -63,6 +63,7 @@ export function createApp({ dataDir, avatars: avatarsOpt, baseUrl, alertToken = 
         return path.endsWith('.txt') ? send(200, d.text, 'text/plain; charset=utf-8') : send(200, d);
       }
       if (path === '/api/tv/replay' && req.method === 'POST') { if (game.replay) game.stopReplay(); else game.startReplay(null, { fromTv: true }); return send(200, { ok: true, replay: !!game.replay }); }
+      if (path === '/api/tv/book') return send(200, game.bookView(14));
       if (path === '/api/tv/hero') { const h = game.heroProfile(url.searchParams.get('id')); return h ? send(200, h) : send(404, { error: 'немає героя' }); }
       if (path === '/api/alert') {
         // тривога з дому: пульт (192.168.1.21) шле POST з токеном; гра сама нікуди не ходить
