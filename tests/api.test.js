@@ -98,3 +98,20 @@ test('API тривоги: без токена 503, з чужим 403, зі св�
   assert.equal(r4.status, 503);
   srv.closeAllConnections(); srv.close(); srv2.closeAllConnections(); srv2.close();
 });
+
+test('QR-картки гравців: /print і /qr.svg?p=<id> ведуть на вхід цього гравця', async () => {
+  const { createApp } = await import('../src/server.js');
+  const { mkdtempSync } = await import('node:fs'); const { tmpdir } = await import('node:os'); const { join } = await import('node:path');
+  const srv = createApp({ dataDir: mkdtempSync(join(tmpdir(), 'print-')), baseUrl: 'http://192.168.1.26' });
+  await new Promise(r => srv.listen(0, r));
+  const base = `http://127.0.0.1:${srv.address().port}`;
+  const p = srv.game.createPlayer({ name: 'Віктор', classId: 'archer', age: 10, pin: '1111' });
+  const html = await (await fetch(base + '/print')).text();
+  assert.match(html, /картки гравців/);
+  const svg = await (await fetch(base + '/qr.svg?dark=1&p=' + p.id)).text();
+  assert.match(svg, /<svg/);
+  const QRCode = (await import('qrcode')).default;
+  const expected = await QRCode.toString('http://192.168.1.26/?p=' + p.id, { type: 'svg', margin: 1, color: { dark: '#000000', light: '#ffffff' } });
+  assert.equal(svg, expected, 'QR кодує адресу з id гравця');
+  srv.closeAllConnections(); srv.close();
+});

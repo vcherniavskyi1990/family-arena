@@ -47,6 +47,9 @@
 
   // ---------- вхід ----------
   function renderLogin(pl) {
+    // QR-картка гравця (/print): ?p=<id> одразу відкриває PIN цього гравця
+    var want = (location.search.match(/[?&]p=([\w]+)/) || [])[1];
+    if (want && !ui.loginPlayer && !pl.setup) { var pp = pl.players.filter(function (x) { return x.id === want; })[0]; if (pp) ui.loginPlayer = pp; }
     if (pl.setup) {
       app.innerHTML = '<div class="screen"><h1>⚔️ Родинна арена</h1><div class="card"><p>Перший гравець стає адміністратором (тато). Далі він додає інших.</p>' + playerForm('Створити') + '</div></div>';
       bindPlayerForm(function (data) { return api('/setup', data).then(function (r) { token = r.token; localStorage.setItem('arena.token', token); connect(); }); });

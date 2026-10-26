@@ -10,7 +10,7 @@ import { Store } from './store.js';
 import { Game, err } from './game.js';
 import { Avatars } from './avatar.js';
 
-export const VERSION = '0.7.0';
+export const VERSION = '0.8.0';
 const PUBLIC = new URL('../public/', import.meta.url);
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.ico': 'image/x-icon', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' };
 
@@ -92,10 +92,12 @@ export function createApp({ dataDir, avatars: avatarsOpt, baseUrl, alertToken = 
       }
       if (path === '/qr.svg') {
         const base = baseUrl || process.env.ARENA_URL || `http://${req.headers.host || lanAddress()}`;
-        return send(200, await QRCode.toString(base + '/', { type: 'svg', margin: 1, color: { dark: '#ffffff', light: '#00000000' } }), 'image/svg+xml');
+        const pid = url.searchParams.get('p'); const dark = url.searchParams.get('dark') === '1';
+        const target = base + '/' + (pid && game.players[pid] ? `?p=${pid}` : '');
+        return send(200, await QRCode.toString(target, { type: 'svg', margin: 1, color: dark ? { dark: '#000000', light: '#ffffff' } : { dark: '#ffffff', light: '#00000000' } }), 'image/svg+xml');
       }
       // статика
-      let file = path === '/' ? 'index.html' : path === '/tv' ? 'tv.html' : path.slice(1);
+      let file = path === '/' ? 'index.html' : path === '/tv' ? 'tv.html' : path === '/print' ? 'print.html' : path.slice(1);
       if (file.includes('..')) return send(404, 'no', 'text/plain');
       const full = new URL(file, PUBLIC);
       try { const s = await stat(full); if (!s.isFile()) throw new Error(); } catch { return send(404, 'немає', 'text/plain'); }

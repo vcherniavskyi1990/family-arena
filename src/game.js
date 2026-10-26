@@ -32,7 +32,7 @@ const DEFAULT_SETTINGS = {
 export const hashPin = (pin, salt) => createHash('sha256').update(`${salt}:${pin}`).digest('hex');
 
 export class Game {
-  constructor({ store, now = () => Date.now(), realTimers = true, cardsDir = null }) {
+  constructor({ store, now = () => Date.now(), realTimers = true, cardsDir = null, seed = null }) {
     this.store = store;
     this.cardsDir = cardsDir; if (cardsDir) mkdirSync(cardsDir, { recursive: true });
     this.tvOnline = () => true;
@@ -55,7 +55,7 @@ export class Game {
     this.paused = false; this.pauseReason = null;
     this.listeners = new Set();
     this.timers = {};
-    this.seed = (Date.now() % 1e9) | 0;
+    this.seed = seed !== null ? seed : (Date.now() % 1e9) | 0;
     this.rng = makeRng(this.seed);
   }
 
