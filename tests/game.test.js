@@ -797,3 +797,15 @@ test('церемонія закриття сезону на ТБ: подіум �
   const c = g.tvState().ceremony; assert.ok(c); assert.equal(c.winner, 'A'); assert.equal(c.podium.length, 2); assert.equal(c.podium[0].name, 'A'); assert.equal(c.podium[0].points, 7);
   g.advance(41 * 1000); assert.equal(g.tvState().ceremony, null);
 });
+
+test('завдання дня й досягнення для подарунка, купонів, тренування', () => {
+  const g = makeGame();
+  const a = g.createPlayer({ name: 'A', classId: 'warrior', age: 7, pin: '1111' }); const p = g.players[a.id]; p.gold = 500;
+  p.daily = null; g.dailyFor(p); p.daily.tasks = [{ id: 'gift_1', base: 0, done: false }, { id: 'practice_1', base: 0, done: false }, { id: 'boss_1', base: 0, done: false }];
+  const r = g.claimGift(p); assert.deepEqual(r.daily, ['Забери щоденний подарунок']);
+  g.buyCoupon(p, 'icecream'); assert.ok(p.achievements.includes('coupon_1'));
+  g.setMode(a, { mode: 'practice' }); g.join(a); g.ready(a, true);
+  let guard = 0; while (g.battle && guard++ < 200) { try { g.move(a, { attack: 'head', blocks: ['chest', 'belt'], cards: [] }); } catch (e) {} g.fire('round'); }
+  assert.equal(p.stats.practice, 1); assert.ok(g.results.events.some(e => e.t === 'daily' && e.name === 'Потренуйся на манекені'));
+  assert.ok(p.daily.tasks.find(t => t.id === 'practice_1').done);
+});
