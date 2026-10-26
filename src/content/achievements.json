@@ -46,7 +46,7 @@
     "title": "Рятівник дому",
     "cond": {
       "stat": "chapters",
-      "gte": 6
+      "gte": 8
     }
   },
   {
