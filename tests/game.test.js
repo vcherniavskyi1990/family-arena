@@ -507,7 +507,7 @@ test('кампанія: розділи по черзі, фінал, з поча�
   if (r1.won) { assert.ok(r1.campaign.outro); assert.equal(g.campaignView().n, 2); assert.equal(g.players[a.id].stats.chapters, 1); assert.ok(g.players[a.id].achievements.includes('chapter_1')); }
   else assert.equal(g.campaignView().n, 1);
   // перемотуємо на останній розділ і проходимо: кампанія з початку, runs +1
-  g.history.campaign.chapter = 5; g.history.campaign.done = [1, 2, 3, 4, 5].map(n => ({ n }));
+  g.history.campaign.chapter = 7; g.history.campaign.done = [1, 2, 3, 4, 5, 6, 7].map(n => ({ n }));
   g.players[a.id].level = 40; g.players[dad.id].level = 40;
   assert.equal(g.lobbyView().dungeon.id, 'balcony_citadel');
   const r6 = playChapter();
@@ -515,7 +515,7 @@ test('кампанія: розділи по черзі, фінал, з поча�
   assert.throws(() => g.resetCampaign(g.players[a.id]), /батьки/);
   g.history.campaign.chapter = 3;
   assert.equal(g.resetCampaign(dad).n, 1);
-  assert.equal(g.tvState().campaign.of, 6);
+  assert.equal(g.tvState().campaign.of, 8);
 });
 
 test('турнір на 3: кожен з кожним, дуелі самі, чемпіон', () => {
