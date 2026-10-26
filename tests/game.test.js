@@ -709,3 +709,25 @@ test('тренування: один гравець проти манекена,
   guard = 0; while (g2.battle && guard++ < 600) { try { g2.move(b, { attack: 'head', blocks: ['chest', 'belt'], cards: [] }); } catch (e) {} g2.fire('round'); }
   assert.equal(g2.players[b.id].streak.days, 1);
 });
+
+test('купони бажань: купити за золото, батьки виконують або повертають', () => {
+  const g = makeGame();
+  const dad = g.createPlayer({ name: 'Тато', classId: 'warrior', age: 40, pin: '1234', role: 'admin' });
+  const kid = g.createPlayer({ name: 'Малий', classId: 'mage', age: 7, pin: '2222' });
+  const k = g.players[kid.id]; k.gold = 500;
+  assert.ok(g.couponsView(k).list.length >= 5);
+  assert.throws(() => g.buyCoupon(k, 'nope'), /немає/);
+  const o = g.buyCoupon(k, 'icecream'); assert.equal(k.gold, 400); assert.equal(o.status, 'pending');
+  assert.equal(g.playerState(g.players[dad.id]).pendingCoupons.length, 1);
+  assert.equal(g.playerState(k).pendingCoupons.length, 0);
+  assert.throws(() => g.couponDone(k, o.id), /батьки/);
+  g.couponDone(g.players[dad.id], o.id); assert.equal(g.history.coupons[0].status, 'done'); assert.equal(k.gold, 400);
+  const o2 = g.buyCoupon(k, 'cartoon30'); g.couponDone(g.players[dad.id], o2.id, true); assert.equal(k.gold, 400, 'повернення золота');
+  k.gold = 10; assert.throws(() => g.buyCoupon(k, 'icecream'), /золота/);
+  k.gold = 2000; g.buyCoupon(k, 'icecream'); g.buyCoupon(k, 'icecream'); g.buyCoupon(k, 'icecream');
+  assert.throws(() => g.buyCoupon(k, 'icecream'), /до 3/);
+  const list = g.setCoupons(g.players[dad.id], [{ name: 'Кіно', icon: '🎬', price: 250 }]);
+  assert.equal(list.length, 1); assert.equal(g.couponsView(k).list[0].name, 'Кіно');
+  assert.throws(() => g.setCoupons(g.players[dad.id], [{ name: '', price: 5 }]), /назва/);
+  assert.equal(g.couponsView(k).orders.length, 5);
+});
