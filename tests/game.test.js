@@ -1034,3 +1034,32 @@ test('події тижня: п’ятниця золото ×2, субота б
   const tue = makeGame(Date.UTC(2026, 9, 27, 15, 0)); assert.equal(tue.eventView().tomorrow.id, 'smart_wed');
   const wed = makeGame(Date.UTC(2026, 9, 28, 15, 0)); assert.equal(wed.miniGold(), 10);
 });
+
+test('конверти-сюрпризи відкриваються за спільні бої і справи', () => {
+  const g = makeGame();
+  const dad = g.createPlayer({ name: 'Тато', classId: 'warrior', age: 40, pin: '1234', role: 'admin' });
+  const a = g.createPlayer({ name: 'Віктор', classId: 'warrior', age: 10, pin: '1111' });
+  const b = g.createPlayer({ name: 'Олександр', classId: 'mage', age: 7, pin: '2222' });
+  const ev0 = g.envelopesView();
+  assert.equal(ev0.opened, 0); assert.equal(ev0.total, 8); assert.equal(ev0.next.at, 10); assert.ok(ev0.list[0].hint && !ev0.list[0].name);
+  assert.ok(g.lobbyView().locked.includes('attic_ghosts'));
+  assert.throws(() => g.setMode(a, { mode: 'dungeon', dungeonId: 'attic_ghosts' }), /конверт/);
+  for (let i = 0; i < 9; i++) g.history.battles.unshift({ mode: 'duel', players: [a.id, b.id], at: g.now(), winners: ['Віктор'] });
+  assert.deepEqual(g.checkEnvelopes(), []);
+  g.history.battles.unshift({ mode: 'duel', players: [a.id, b.id], at: g.now(), winners: ['Віктор'] });
+  const got = g.checkEnvelopes();
+  assert.equal(got.length, 1); assert.equal(got[0].id, 'env_10');
+  assert.ok(g.players[b.id].pets.some(p => p.id === 'pet_bee'), 'бджілка кожному');
+  assert.ok(g.players[dad.id].pets.some(p => p.id === 'pet_bee'));
+  assert.equal(g.envelopesView().opened, 1); assert.equal(g.envelopesView().next.left, 15);
+  assert.ok(g.announce.text.includes('Перший конверт'));
+  for (let i = 0; i < 40; i++) g.history.battles.unshift({ mode: 'duel', players: [a.id, b.id], at: g.now(), winners: ['Віктор'] });
+  const got2 = g.checkEnvelopes();
+  assert.deepEqual(got2.map(x => x.id), ['env_25', 'env_50']);
+  assert.ok(g.players[a.id].collection.includes('diamond_sword'));
+  assert.ok(!g.lobbyView().locked.includes('attic_ghosts'));
+  g.setMode(a, { mode: 'dungeon', dungeonId: 'attic_ghosts' });
+  assert.equal(g.tvState().envelopes.opened, 3); assert.equal(g.playerState(a).envelopes.list[2].name, 'Конверт зі скрипом');
+  const g2 = makeGame(); g2.createPlayer({ name: 'Тато', classId: 'warrior', age: 40, pin: '1234', role: 'admin' });
+  assert.equal(g2.envelopesView().opened, 0, 'нова гра: нічого не відкрито');
+});

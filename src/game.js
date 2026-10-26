@@ -9,7 +9,7 @@ import { statSync } from 'node:fs';
 import { createBattle, applyFora, fighterFromPlayer, fighterFromMob, submitMove, resolveRound, publicFighter, alive, enemiesOf, MAX_CARDS_PER_TURN } from './engine/combat.js';
 import { newPlayer, addXp, xpForLevel, equipmentBonus, genItem, genCard, equip, unequip, craft, checkAchievements, setDeck, autoDeck, sellPrice, genPet, grantPet, petView, petOf, activePetIcon } from './engine/progress.js';
 import { makeQuiz, checkQuiz } from './engine/quiz.js';
-import { CLASSES, CARDS, DUNGEONS, QUESTS, ACHIEVEMENTS, DAILY, FAMILY, WORLDBOSS, PETS, CAMPAIGN, COSMETICS, MUTATORS, EVENTS, ITEMS, petById, ZONES, ZONE_NAMES, classById, dungeonById, mobById, questById, cardById, starterDeck, allowedCards } from './engine/content.js';
+import { CLASSES, CARDS, DUNGEONS, QUESTS, ACHIEVEMENTS, DAILY, FAMILY, WORLDBOSS, PETS, CAMPAIGN, COSMETICS, MUTATORS, EVENTS, ENVELOPES, ITEMS, petById, ZONES, ZONE_NAMES, classById, dungeonById, mobById, questById, cardById, starterDeck, allowedCards } from './engine/content.js';
 
 export const ROUND_SECONDS = 30;
 const cryText = (id) => { const c = COSMETICS.cries.find(x => x.id === id); return c ? c.text : null; };
@@ -90,7 +90,8 @@ export class Game {
     if (!this.history.familyGoal) this.history.familyGoal = { week: null, done: false };   // чи вже зараховано ціль сім'ї цього тижня   // зараховані справи: {day, pid, qid, at} (тиждень на телефоні, «сьогодні» на ТБ)
     if (!this.history.coupons) this.history.coupons = [];   // замовлення купонів: {id, pid, couponId, name, icon, price, at, status: pending|done|refunded}
     if (!this.settings.coupons) { this.settings.coupons = DEFAULT_COUPONS.map(c => ({ ...c })); this.store.set('settings', this.settings); }
-    if (!this.history.campaign) this.history.campaign = { chapter: 0, runs: 0, done: [] };   // сюжетна кампанія: chapter = індекс наступного розділу   // журнал по днях для звіту тижня: {день: {гравець: {minutes, battles, wins, quests, smart, kills}}}
+    if (!this.history.campaign) this.history.campaign = { chapter: 0, runs: 0, done: [] };
+    if (!this.history.envelopes) this.history.envelopes = [];   // відкриті конверти-сюрпризи: {id, at}   // сюжетна кампанія: chapter = індекс наступного розділу   // журнал по днях для звіту тижня: {день: {гравець: {minutes, battles, wins, quests, smart, kills}}}
     for (const c of this.history.customCards) if (c.approved) this.registerCard(c);
     this.announce = null;
     this.party = null;   // «Вечір ігор»: {by, i, points:{pid: n}, phase: run|done, ranking}
@@ -308,7 +309,7 @@ export class Game {
     if (this.battle) throw err('бій уже йде');
     if (mode && !['dungeon', 'duel', 'campaign', 'tournament', 'practice'].includes(mode)) throw err('режим');
     if (mode) this.lobby.mode = mode;
-    if (dungeonId) { if (!dungeonById[dungeonId]) throw err('підземелля'); const rs = this.raidStatus(dungeonId); if (!rs.available) throw err(rs.reason); this.lobby.dungeonId = dungeonId; }
+    if (dungeonId) { if (!dungeonById[dungeonId]) throw err('підземелля'); if (this.dungeonLocked(dungeonId)) throw err('це підземелля ще в запечатаному конверті'); const rs = this.raidStatus(dungeonId); if (!rs.available) throw err(rs.reason); this.lobby.dungeonId = dungeonId; }
     for (const l of Object.values(this.lobby.players)) l.ready = false;
     this.emit();
   }
@@ -458,7 +459,7 @@ export class Game {
   /** Після міні-гри: досягнення й завдання дня учасникам, рядки в хроніку. */
   afterMini(ids) {
     for (const id of ids) { const p = this.players[id]; if (!p) continue; for (const a of checkAchievements(p)) this.feed(`🏅 ${p.name}: досягнення «${a.name}»${a.title ? `, титул «${a.title}»` : ''}`); this.checkDaily(p); }
-    this.checkFamily();
+    this.checkFamily(); this.checkEnvelopes();
   }
   miniView(p = null) {
     const m = this.mini; if (!m) return null;
@@ -744,6 +745,7 @@ export class Game {
         this.addMinutes(p, minutes); this.touchStreak(p, ev);
       }
       for (const a of this.checkFamily()) ev.push({ t: 'family', name: a.name, icon: a.icon, gold: a.gold });
+      for (const e of this.checkEnvelopes()) ev.push({ t: 'envelope', ...e });
       let camp = null;
       if (r.campaign) {
         const ch = CAMPAIGN.find(c => c.n === r.campaign); const cur = this.campaignChapter();
@@ -773,6 +775,7 @@ export class Game {
         this.addMinutes(p, minutes); this.touchStreak(p, ev);
       }
       for (const a of this.checkFamily()) ev.push({ t: 'family', name: a.name, icon: a.icon, gold: a.gold });
+      for (const e of this.checkEnvelopes()) ev.push({ t: 'envelope', ...e });
       const wb = this.hitWorldBoss(r.players, 0, ev, (pid) => winners.includes(pid) ? WORLD_BOSS.duelWin : WORLD_BOSS.duelLoss, b.fighters);
       let tr = null; if (r.tournament !== undefined && this.tournament) { tr = this.tournamentAfterDuel(winners); if (tr.achievements) ev.push(...tr.achievements); }
       this.results = { mode: 'duel', worldBoss: wb, tournament: tr ? { ...this.tournamentView(), done: tr.done } : null, winners: winners.map(id => this.players[id].name), xp: 40, gold: 12, events: ev.map(e => ({ ...e, whoName: this.players[e.who] && this.players[e.who].name })), players: r.players.map(id => this.publicPlayer(this.players[id])) };
@@ -961,6 +964,36 @@ export class Game {
   }
 
   // ---------- сімейні досягнення: спільні для всіх ----------
+  // ---------- конверти-сюрпризи: відкриваються за спільні бої і справи (як у Zombie Kidz Evolution) ----------
+  envelopeProgress() { return this.history.battles.length + this.familySum('quests'); }
+  dungeonLocked(id) { const d = dungeonById[id]; return !!(d && d.envelope && !this.history.envelopes.some(e => e.id === d.envelope)); }
+  envelopesView() {
+    const n = this.envelopeProgress(); const opened = this.history.envelopes;
+    const list = ENVELOPES.map(e => { const o = opened.find(x => x.id === e.id); return o ? { id: e.id, at: e.at, name: e.name, icon: e.icon, text: e.text, opened: true, openedAt: o.at } : { id: e.id, at: e.at, icon: '✉️', hint: e.hint, opened: false }; });
+    const next = ENVELOPES.find(e => !opened.some(x => x.id === e.id)) || null;
+    return { progress: n, opened: opened.length, total: ENVELOPES.length, next: next ? { at: next.at, left: Math.max(0, next.at - n), hint: next.hint } : null, list };
+  }
+  /** Відкрити всі конверти, до яких дотягнувся лічильник; нагорода кожному гравцю. */
+  checkEnvelopes() {
+    const n = this.envelopeProgress(); const got = [];
+    for (const e of ENVELOPES) {
+      if (n < e.at || this.history.envelopes.some(x => x.id === e.id)) continue;
+      this.history.envelopes.push({ id: e.id, at: this.now() });
+      const r = e.reward;
+      for (const p of this.playerList) {
+        if (r.gold) p.gold += r.gold;
+        if (r.pet) grantPet(p, r.pet);
+        if (r.card && !p.collection.includes(r.card)) p.collection.push(r.card);
+        if (r.frame) { if (!p.cosmetics) p.cosmetics = { owned: [], frame: null, cry: null }; if (!p.cosmetics.owned.includes('frame:' + r.frame)) p.cosmetics.owned.push('frame:' + r.frame); p.cosmetics.frame = r.frame; }
+        if (r.legendary) { const it = genItem(this.rng, p.level, 'legendary'); p.inventory.push(it); p.stats.legendaries += 1; this.history.legendaries.unshift({ pid: p.id, name: p.name, item: it, at: this.now() }); }
+      }
+      this.feed(`${e.icon} Конверт «${e.name}» відкрито! ${e.text}`);
+      this.announce = { text: `${e.icon} Конверт «${e.name}» відкрито! ${e.text}`, by: 'Арена', at: this.now() };
+      got.push({ id: e.id, name: e.name, icon: e.icon, text: e.text });
+    }
+    if (got.length) { this.store.save('history'); this.store.save('players'); }
+    return got;
+  }
   familySum(stat) { return this.playerList.reduce((s, p) => s + (p.stats[stat] || 0), 0); }
   checkFamily() {
     const got = [];
@@ -1019,7 +1052,7 @@ export class Game {
     const it = genItem(this.rng, p.level, null, q.chest); p.inventory.push(it);
     if (it.rarity === 'legendary') { p.stats.legendaries += 1; this.feed(`🟠 ${p.name} отримав легендарку за справу: ${it.name}!`); }
     p.playedToday.minutes = Math.max(0, this.minutesToday(p) - 10); // кожна справа повертає 10 хв гри
-    checkAchievements(p); this.checkDaily(p); this.checkFamily(); this.store.save('players');
+    checkAchievements(p); this.checkDaily(p); this.checkFamily(); this.checkEnvelopes(); this.store.save('players');
     this.feed(`✅ ${p.name}: «${q.name}» зараховано, +${q.gold} золота`);
     this.emit();
     return { item: it, gold: q.gold, xp: q.xp, levelups: ev };
@@ -1302,7 +1335,7 @@ export class Game {
   }
   lobbyView() {
     const camp = this.campaignView(); const mut = this.mutatorToday();
-    return { mode: this.lobby.mode, mutator: mut ? { id: mut.id, name: mut.name, icon: mut.icon, text: mut.text } : null, dungeonId: this.lobby.dungeonId, dungeon: this.lobby.mode === 'campaign' ? dungeonById[this.campaignChapter().dungeon] : this.lobby.mode === 'practice' ? dungeonById.practice : dungeonById[this.lobby.dungeonId], raid: this.raidStatus(this.lobby.dungeonId), campaign: camp,
+    return { locked: DUNGEONS.filter(d => this.dungeonLocked(d.id)).map(d => d.id), mode: this.lobby.mode, mutator: mut ? { id: mut.id, name: mut.name, icon: mut.icon, text: mut.text } : null, dungeonId: this.lobby.dungeonId, dungeon: this.lobby.mode === 'campaign' ? dungeonById[this.campaignChapter().dungeon] : this.lobby.mode === 'practice' ? dungeonById.practice : dungeonById[this.lobby.dungeonId], raid: this.raidStatus(this.lobby.dungeonId), campaign: camp,
       practice: this.lobby.mode === 'practice',
       raids: DUNGEONS.filter(d => d.raid).map(d => ({ id: d.id, name: d.name, icon: d.icon, level: d.level, ...this.raidStatus(d.id) })),
       players: Object.entries(this.lobby.players).map(([id, l]) => ({ ...this.publicPlayer(this.players[id]), ready: l.ready, team: l.team })) };
@@ -1314,7 +1347,7 @@ export class Game {
     return { phase, closing: this.closingView(), ceremony: this.ceremony && this.now() - this.ceremony.at < CEREMONY_MS ? this.ceremony : null, season: this.settings.season, seasonN: sv.n, seasonTop: sv.top.slice(0, 5), pastSeasons: sv.past.slice(0, 3), quiet, now: this.now(), announce: this.announce, lobby: this.lobbyView(), battle: this.battle ? this.battleView() : this.replayView(), results: this.results, paused: this.paused, pauseReason: this.pauseReason,
       heroes: this.playerList.map(p => ({ ...this.publicPlayer(p), pet: activePetIcon(p), streak: this.streakView(p).days, xp: p.xp, xpNext: xpForLevel(p.level), kills: p.stats.kills, duelWins: p.stats.duelWins, dungeons: p.stats.dungeons, legendaries: p.stats.legendaries, achievements: p.achievements.length })),
       legendaries: this.history.legendaries.slice(0, 5), feed: this.history.feed.slice(0, 8), pendingQuests: this.pendingQuests().length,
-      family: this.familyView(), worldBoss: this.worldBossView(), campaign: this.campaignView(), tournament: this.tournamentView(), today: this.todayView(), familyGoal: this.familyGoalView(), mini: this.miniView(), party: this.partyView(), event: this.eventView() };
+      family: this.familyView(), worldBoss: this.worldBossView(), campaign: this.campaignView(), tournament: this.tournamentView(), today: this.todayView(), familyGoal: this.familyGoalView(), mini: this.miniView(), party: this.partyView(), event: this.eventView(), envelopes: this.envelopesView() };
   }
   playerState(p) {
     const b = this.battle; const f = b && b.fighters.find(x => x.id === p.id);
@@ -1328,7 +1361,7 @@ export class Game {
       dm: this.isParent(p) && b && b.mode === 'dungeon' && !b.over ? { mobs: this.dmMobs(), players: this.run.players.map(id => this.publicPlayer(this.players[id])) } : null,
       replay: this.replay ? { mode: this.replay.mode, names: this.replay.names } : null, hasReplay: !!(this.history.lastReplay && this.history.lastReplay.frames.length),
       battle: b ? { ...this.battleView(), me: f ? { hand: f.hand.map(id => cardById[id]), mana: f.mana, maxMana: f.maxMana, hp: f.hp, maxHp: f.maxHp, alive: f.alive, move: f.move, shield: f.shield, quiz: f.quiz && !f.move ? { kind: f.quiz.kind, q: f.quiz.q, choices: f.quiz.choices } : null, hint: p.simple && !f.move ? this.hintFor(f) : null } : null } : null,
-      closing: this.closingView(p), done: this.doneView(p), challenges: this.challengesView(p), familyGoal: this.familyGoalView(), mini: this.miniView(p), party: this.partyView(), event: this.eventView(), quests: this.settings.questsEnabled ? this.questsFor(p) : [], pendingQuests: this.isParent(p) ? this.pendingQuests() : [], pendingCoupons: this.isParent(p) ? this.pendingCoupons() : [],
+      closing: this.closingView(p), done: this.doneView(p), challenges: this.challengesView(p), familyGoal: this.familyGoalView(), mini: this.miniView(p), party: this.partyView(), event: this.eventView(), envelopes: this.envelopesView(), quests: this.settings.questsEnabled ? this.questsFor(p) : [], pendingQuests: this.isParent(p) ? this.pendingQuests() : [], pendingCoupons: this.isParent(p) ? this.pendingCoupons() : [],
       daily: this.dailyFor(p), tournament: this.tournamentView(), worldBoss: { ...this.worldBossView(), mine: (this.worldBoss().dmg[p.id] || 0) }, family: this.familyView(),
       customCards: this.customCardsOf(p), pendingCards: this.isParent(p) ? this.pendingCards() : [], cardTemplates: CARD_TEMPLATES, tvOnline: this.tvOnline(),
     };

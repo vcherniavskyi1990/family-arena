@@ -128,6 +128,30 @@
     "boss": "boss_ender_dragon"
   },
   {
+    "id": "attic_ghosts",
+    "name": "Горище привидів",
+    "icon": "👻",
+    "level": 5,
+    "envelope": "env_50",
+    "text": "Під дахом хтось шепоче. Відкрилося з конверта.",
+    "rooms": [
+      [
+        "phantom",
+        "phantom"
+      ],
+      [
+        "dust_bunny",
+        "ghast"
+      ],
+      [
+        "phantom",
+        "piglin",
+        "ghast"
+      ]
+    ],
+    "boss": "boss_nightmare"
+  },
+  {
     "id": "dad_office",
     "name": "Серверна в кабінеті тата",
     "icon": "🖥️",
