@@ -27,6 +27,7 @@ export const CARD_TEMPLATES = {
 const SEASON_POINTS = { duelWin: 3, duelLoss: 1, dungeonLoss: 1, quest: 1, worldBoss: 5, chapter: 3, champion: 8 };
 const TOURNAMENT_MIN = 3, TOURNAMENT_MAX = 4;
 /** Бос тижня: спільне здоров’я на всю сім’ю; кожен бій відколює шматок. Нагорода, коли впав. */
+const GIFT = { base: 10, perDay: 5, maxDays: 7, itemEvery: 7 };
 const PET_DROP = 0.35;   // шанс вихованця за пройдене підземелля
 const WORLD_BOSS = { duelWin: 30, duelLoss: 10, dungeonBase: 40, dungeonPerLevel: 15, dungeonPerKill: 3, dungeonLoss: 10, smartMult: 2, gold: 40 };
 
@@ -445,7 +446,7 @@ export class Game {
         ev.push(...addXp(p, won ? 40 : 15)); p.gold += won ? 12 : 4;
         for (const a of checkAchievements(p)) ev.push({ t: 'achievement', who: pid, name: a.name, icon: a.icon, title: a.title });
         for (const d of this.checkDaily(p)) ev.push({ t: 'daily', who: pid, name: d.name, icon: d.icon, gold: d.gold });
-        this.addMinutes(p, minutes);
+        this.addMinutes(p, minutes); this.touchStreak(p, ev);
       }
       for (const a of this.checkFamily()) ev.push({ t: 'family', name: a.name, icon: a.icon, gold: a.gold });
       const wb = this.hitWorldBoss(r.players, 0, ev, (pid) => winners.includes(pid) ? WORLD_BOSS.duelWin : WORLD_BOSS.duelLoss, b.fighters);
@@ -507,6 +508,29 @@ export class Game {
     if (frame !== undefined) { if (frame !== null && !p.cosmetics.owned.includes('frame:' + frame)) throw err('не куплено'); p.cosmetics.frame = frame; }
     if (cry !== undefined) { if (cry !== null && !p.cosmetics.owned.includes('cry:' + cry)) throw err('не куплено'); p.cosmetics.cry = cry; }
     this.store.save('players'); this.emit(); return this.cosmeticsView(p);
+  }
+  // ---------- серія днів і щоденний подарунок ----------
+  prevDay(day) { const d = new Date(day + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - 1); return d.toISOString().slice(0, 10); }
+  touchStreak(p, ev = []) {
+    const day = this.kyiv().day; const s = p.streak || (p.streak = { days: 0, last: null });
+    if (s.last === day) return s.days;
+    s.days = s.last === this.prevDay(day) ? s.days + 1 : 1; s.last = day;
+    if (s.days > (p.stats.streakBest || 0)) p.stats.streakBest = s.days;
+    for (const a of checkAchievements(p)) ev.push({ t: 'achievement', who: p.id, name: a.name, icon: a.icon, title: a.title });
+    if (s.days >= 3 && s.days % 3 === 0) this.feed(`🔥 ${p.name}: ${s.days} днів поспіль!`);
+    return s.days;
+  }
+  streakView(p) { const day = this.kyiv().day; const s = p.streak || { days: 0, last: null }; const active = s.last === day || s.last === this.prevDay(day); return { days: active ? s.days : 0, today: s.last === day, best: p.stats.streakBest || 0 }; }
+  giftGold(days) { return GIFT.base + GIFT.perDay * Math.min(days, GIFT.maxDays); }
+  giftView(p) { const day = this.kyiv().day; const st = this.streakView(p); const d = st.days + (st.today ? 0 : 1); return { claimed: (p.gift && p.gift.day) === day, gold: this.giftGold(d), item: d > 0 && d % GIFT.itemEvery === 0 }; }
+  claimGift(p) {
+    const day = this.kyiv().day; if (!p.gift) p.gift = { day: null };
+    if (p.gift.day === day) throw err('подарунок на сьогодні вже забрано');
+    const days = this.touchStreak(p); const gold = this.giftGold(days);
+    p.gift.day = day; p.gold += gold; p.stats.gifts = (p.stats.gifts || 0) + 1;
+    let item = null; if (days % GIFT.itemEvery === 0) { item = genItem(this.rng, p.level, null, 'rare'); p.inventory.push(item); if (item.rarity === 'legendary') p.stats.legendaries += 1; }
+    checkAchievements(p); this.store.save('players'); this.emit();
+    return { gold, item, days };
   }
   buyChest(p, kind) {
     const price = { common: 40, rare: 150 }[kind]; if (!price) throw err('немає такої скрині');
@@ -596,7 +620,7 @@ export class Game {
     this.questsFor(p);
     if (!approve) { p.quests.state[qid] = 'open'; this.questPhotoDrop(p, qid); this.store.save('players'); this.emit(); return null; }
     p.quests.state[qid] = 'approved';
-    p.gold += q.gold; const ev = addXp(p, q.xp); p.stats.quests += 1; this.addSeasonPoints(pid, SEASON_POINTS.quest); this.logDay(pid, { quests: 1 });
+    p.gold += q.gold; const ev = addXp(p, q.xp); p.stats.quests += 1; this.addSeasonPoints(pid, SEASON_POINTS.quest); this.logDay(pid, { quests: 1 }); this.touchStreak(p, ev);
     const it = genItem(this.rng, p.level, null, q.chest); p.inventory.push(it);
     if (it.rarity === 'legendary') { p.stats.legendaries += 1; this.feed(`🟠 ${p.name} отримав легендарку за справу: ${it.name}!`); }
     p.playedToday.minutes = Math.max(0, this.minutesToday(p) - 10); // кожна справа повертає 10 хв гри
@@ -861,7 +885,7 @@ export class Game {
     const hm = this.kyiv().hm; const quiet = hm < '07:00' || (hm >= '13:00' && hm < '15:00');
     const sv = this.seasonView();
     return { phase, season: this.settings.season, seasonN: sv.n, seasonTop: sv.top.slice(0, 5), pastSeasons: sv.past.slice(0, 3), quiet, now: this.now(), announce: this.announce, lobby: this.lobbyView(), battle: this.battle ? this.battleView() : this.replayView(), results: this.results, paused: this.paused, pauseReason: this.pauseReason,
-      heroes: this.playerList.map(p => ({ ...this.publicPlayer(p), pet: activePetIcon(p), xp: p.xp, xpNext: xpForLevel(p.level), kills: p.stats.kills, duelWins: p.stats.duelWins, dungeons: p.stats.dungeons, legendaries: p.stats.legendaries, achievements: p.achievements.length })),
+      heroes: this.playerList.map(p => ({ ...this.publicPlayer(p), pet: activePetIcon(p), streak: this.streakView(p).days, xp: p.xp, xpNext: xpForLevel(p.level), kills: p.stats.kills, duelWins: p.stats.duelWins, dungeons: p.stats.dungeons, legendaries: p.stats.legendaries, achievements: p.achievements.length })),
       legendaries: this.history.legendaries.slice(0, 5), feed: this.history.feed.slice(0, 8), pendingQuests: this.pendingQuests().length,
       family: this.familyView(), worldBoss: this.worldBossView(), campaign: this.campaignView(), tournament: this.tournamentView() };
   }
@@ -870,7 +894,7 @@ export class Game {
     const inLobby = this.lobby.players[p.id];
     const tv = this.tvState(); const sv = { ...this.seasonView(), phase: tv.phase };
     return {
-      me: { ...this.publicPlayer(p), xp: p.xp, xpNext: xpForLevel(p.level), gold: p.gold, deck: p.deck, collection: p.collection, inventory: p.inventory, equipment: p.equipment, bonus: equipmentBonus(p), pets: petView(p), cosmetics: this.cosmeticsView(p), stats: p.stats, achievements: p.achievements,
+      me: { ...this.publicPlayer(p), xp: p.xp, xpNext: xpForLevel(p.level), gold: p.gold, deck: p.deck, collection: p.collection, inventory: p.inventory, equipment: p.equipment, bonus: equipmentBonus(p), pets: petView(p), cosmetics: this.cosmeticsView(p), streak: this.streakView(p), gift: this.giftView(p), stats: p.stats, achievements: p.achievements,
         minutesToday: this.minutesToday(p), limit: this.limitFor(p), blocked: this.blockedReason(p), isParent: this.isParent(p), avatarPending: p.avatarPending || null,
         seasonPoints: this.history.season.points[p.id] || 0, seasonRank: sv.top.findIndex(x => x.id === p.id) + 1 },
       phase: sv.phase, season: { n: sv.n, name: sv.name, top: sv.top.slice(0, 5) }, lobby: this.lobbyView(), inLobby: !!inLobby, results: this.results, paused: this.paused, pauseReason: this.pauseReason,
