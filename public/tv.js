@@ -25,8 +25,8 @@
   }
   function onState() {
     var phase = state.phase;
-    if (!prev || prev.phase !== phase) { shownRound = 0; queue = []; roomShown = null; }
-    if (phase === 'battle') renderBattle(); else if (phase === 'lobby') renderLobby(); else if (phase === 'results') renderResults(); else renderIdle();
+    if (!prev || prev.phase !== phase) { shownRound = 0; queue = []; roomShown = null; playing = false; stage.removeAttribute('data-next'); }
+    if (phase === 'battle' || phase === 'replay') renderBattle(); else if (phase === 'lobby') renderLobby(); else if (phase === 'results') renderResults(); else renderIdle();
     if (state.paused) { overlay.className = 'on'; overlay.innerHTML = '<div class="banner pause"><div class="big">⏸ ПАУЗА</div><div class="sub">' + (state.pauseReason === 'alert' ? 'Тривога. Усі в укриття, бій зачекає.' : 'Батьки поставили гру на паузу') + '</div></div>'; }
     else if (phase !== 'results' && Date.now() > introUntil) overlay.className = '';
   }
@@ -37,7 +37,9 @@
     h += '<div class="qr big"><img src="/qr.svg"><div>' + esc(location.host) + '</div></div>';
     h += '<div class="heroes">' + state.heroes.slice(0, 8).map(function (p) { return '<div class="hero">' + av(p) + '<div class="n">' + esc(p.name) + '</div><div class="c">' + esc(p.title || p.className) + ' · ' + p.level + ' рів.</div><div class="st">⚔️ ' + p.kills + ' · 🏰 ' + p.dungeons + ' · 🥊 ' + p.duelWins + ' · 🟠 ' + p.legendaries + '</div></div>'; }).join('') + '</div>';
     h += '<div class="feed"><div class="h">Хроніка</div>' + state.feed.slice(0, 6).map(function (f) { return '<div>' + esc(f.text) + '</div>'; }).join('') + '</div>';
-    h += '<div class="legend"><div class="h">Зал легендарок</div>' + (state.legendaries.length ? state.legendaries.map(function (l) { return '<div>🟠 <b>' + esc(l.name) + '</b>: <span class="r-legendary">' + esc(l.item.name) + '</span></div>'; }).join('') : '<div style="color:#5c6f85">Ще ніхто не вибив легендарку…</div>') + (state.pendingQuests ? '<div style="margin-top:20px;color:#f1c40f">✅ Справ чекають підтвердження: ' + state.pendingQuests + '</div>' : '') + '</div>';
+    var top = (state.seasonTop || []).filter(function (p) { return p.points > 0; });
+    if (top.length) h += '<div class="season"><div class="h">🏆 ' + esc(state.season) + '</div>' + top.slice(0, 5).map(function (p, i) { return '<div><span class="pl">' + ['🥇', '🥈', '🥉', '4', '5'][i] + '</span> ' + av(p, 'avs') + ' <b>' + esc(p.name) + '</b><span class="pts">' + p.points + '</span></div>'; }).join('') + ((state.pastSeasons || []).length ? '<div class="past">' + state.pastSeasons.map(function (ps) { return '🏅 сезон ' + ps.n + ': ' + esc(ps.winner || '—'); }).join(' · ') + '</div>' : '') + '</div>';
+    h += '<div class="legend' + (top.length ? ' short' : '') + '"><div class="h">Зал легендарок</div>' + (state.legendaries.length ? state.legendaries.map(function (l) { return '<div>🟠 <b>' + esc(l.name) + '</b>: <span class="r-legendary">' + esc(l.item.name) + '</span></div>'; }).join('') : '<div style="color:#5c6f85">Ще ніхто не вибив легендарку…</div>') + (state.pendingQuests ? '<div style="margin-top:20px;color:#f1c40f">✅ Справ чекають підтвердження: ' + state.pendingQuests + '</div>' : '') + '</div>';
     stage.innerHTML = h; ticker.innerHTML = '';
   }
   // ---------- лобі ----------
@@ -64,13 +66,13 @@
     var b = state.battle;
     var t0 = b.fighters.filter(function (f) { return f.team === 0; }), t1 = b.fighters.filter(function (f) { return f.team === 1; });
     var title = b.mode === 'duel' ? '⚔️ Дуель' : (b.meta.boss ? '👑 БОС' : '🏰 Кімната ' + b.meta.room + ' з ' + b.meta.rooms);
-    var h = '<div class="hdr"><div class="t">' + title + '</div><div class="s">' + esc(state.season) + '</div></div>';
+    var h = '<div class="hdr"><div class="t">' + (b.replay ? '📼 ПОВТОР · ' : '') + title + '</div><div class="s">' + esc(state.season) + '</div>' + (b.replay ? '<div class="r">Повтор останнього бою</div>' : '') + '</div>';
     h += '<div class="arena"><div class="team l">' + t0.map(function (f) { return fighterHtml(f, false); }).join('') + '</div>';
     h += '<div class="mid"><div class="round">раунд ' + (b.round + 1) + '</div><div class="timer" id="timer">' + (b.roundEnds ? Math.max(0, Math.round((b.roundEnds - Date.now()) / 1000)) : '…') + '</div><div class="vs">VS</div></div>';
     h += '<div class="team r">' + t1.map(function (f) { return fighterHtml(f, true); }).join('') + '</div></div>';
-    if (!playing || !prev || prev.phase !== 'battle') { stage.innerHTML = h; } else { stage.setAttribute('data-next', h); }
+    if (!playing || !prev || prev.phase !== state.phase) { stage.innerHTML = h; } else { stage.setAttribute('data-next', h); }
     clearInterval(timerId);
-    timerId = setInterval(function () { var t = document.getElementById('timer'); if (!t || !state.battle) return; if (!state.battle.roundEnds) { t.textContent = '…'; return; } var left = Math.max(0, Math.round((state.battle.roundEnds - Date.now()) / 1000)); t.textContent = left; t.className = 'timer' + (left <= 10 ? ' low' : ''); if (left === 5) beep(880, 80); }, 400);
+    timerId = setInterval(function () { var t = document.getElementById('timer'); if (!t || !state.battle) return; if (!state.battle.roundEnds) { t.textContent = state.battle.replay ? '📼' : '…'; return; } var left = Math.max(0, Math.round((state.battle.roundEnds - Date.now()) / 1000)); t.textContent = left; t.className = 'timer' + (left <= 10 ? ' low' : ''); if (left === 5) beep(880, 80); }, 400);
     if (b.roomIntro && b.round === 0 && roomShown !== b.meta.room) {
       roomShown = b.meta.room;
       overlay.className = 'on'; introUntil = Date.now() + 2500;
@@ -93,11 +95,12 @@
   function setHp(id, hp) { var e = el(id); if (!e) return; var f = state.battle && state.battle.fighters.filter(function (x) { return x.id === id; })[0]; if (!f) return; var i = e.querySelector('.bar i'), b = e.querySelector('.bar b'); if (i) i.style.width = Math.max(0, Math.round(100 * hp / f.maxHp)) + '%'; if (b) b.textContent = hp + ' / ' + f.maxHp; }
   function playNext() {
     var e = queue.shift();
-    if (!e) { playing = false; var next = stage.getAttribute('data-next'); if (next) { stage.innerHTML = next; stage.removeAttribute('data-next'); } if (state && state.phase !== 'battle') onState(); return; }
+    if (!e) { playing = false; var next = stage.getAttribute('data-next'); if (next) { stage.innerHTML = next; stage.removeAttribute('data-next'); } if (state && state.phase !== 'battle' && state.phase !== 'replay') onState(); return; }
     playing = true;
     var wait = 450, who = esc(e.whoName), by = esc(e.byName);
     switch (e.t) {
       case 'round': say('<b>Раунд ' + e.n + '</b>: усі розкривають ходи!'); wait = 700; break;
+      case 'smart': floatText(e.who, '🧠 ×1.5', 'heal'); say('🧠 <b>' + who + '</b> розв’язав розумну карту: удар у півтора раза сильніший!'); beep(900, 150, 'sine', 0.06); wait = 900; break;
       case 'card': showCard(e); say('🃏 ' + who + ' грає <b>' + esc(e.name) + '</b>'); beep(520, 120, 'triangle'); wait = 1100; break;
       case 'block': flash(e.who, 'blocked'); floatText(e.who, '🛡 БЛОК', 'block'); say('🛡 ' + who + ' заблокував удар ' + by + ' (' + ZONE[e.zone] + ')'); beep(300, 80); break;
       case 'dodge': floatText(e.who, 'повз!', 'miss'); say('💨 ' + who + ' ухилився від ' + by); break;

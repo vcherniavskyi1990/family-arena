@@ -113,3 +113,89 @@ test('магазин, продаж, зміна колоди', () => {
   assert.ok(a.gold > gold);
   assert.throws(() => g.setDeck(a, []), /20/);
 });
+
+test('2×2: дві команди по двоє, бій іде до кінця', () => {
+  const g = makeGame();
+  const ps = [['Тато', 'warrior', 40, 'admin'], ['Віктор', 'archer', 10, 'kid'], ['Мама', 'healer', 38, 'parent'], ['Олександр', 'mage', 7, 'kid']]
+    .map(([name, classId, age, role], i) => g.createPlayer({ name, classId, age, pin: '111' + i, role }));
+  g.setMode(ps[0], { mode: 'duel' });
+  for (const p of ps) g.join(p);
+  g.setTeam(ps[0], 0); g.setTeam(ps[1], 0); g.setTeam(ps[2], 1); g.setTeam(ps[3], 1);
+  for (const p of ps) g.ready(p, true);
+  assert.ok(g.battle);
+  assert.deepEqual(g.battle.fighters.map(f => f.team), [0, 0, 1, 1]);
+  let guard = 0;
+  while (g.battle && guard++ < 300) { g.fire('round'); }
+  assert.equal(g.results.mode, 'duel');
+  assert.equal(g.results.winners.length, 2);
+  assert.ok(g.history.lastReplay.frames.length >= 2, 'повтор записано');
+});
+
+test('розумні карти: правильна відповідь підсилює удар, неправильна ні', () => {
+  const g = makeGame();
+  const a = g.createPlayer({ name: 'Віктор', classId: 'warrior', age: 10, pin: '1111' });
+  const b = g.createPlayer({ name: 'Олександр', classId: 'mage', age: 7, pin: '2222' });
+  g.setMode(a, { mode: 'duel' }); g.join(a); g.join(b); g.ready(a, true); g.ready(b, true);
+  const st = g.playerState(a);
+  assert.ok(st.battle.me.quiz && st.battle.me.quiz.choices.length === 3, 'є питання');
+  const fa = g.battle.fighters.find(f => f.id === a.id);
+  const right = fa.quiz.a;
+  g.move(a, { attack: 'head', blocks: ['chest', 'belt'], cards: [], quiz: right });
+  assert.equal(fa.move.smart, true);
+  assert.equal(g.players[a.id].stats.smart, 1);
+  const fb = g.battle.fighters.find(f => f.id === b.id);
+  g.move(b, { attack: 'head', blocks: ['chest', 'belt'], cards: [], quiz: 'не знаю' });
+  // після ходу обох раунд уже розіграно
+  const ev = g.lastRound.events;
+  assert.ok(ev.some(e => e.t === 'smart' && e.who === a.id), 'подія smart для Віктора');
+  assert.ok(!ev.some(e => e.t === 'smart' && e.who === b.id));
+  assert.equal(g.players[b.id].stats.smart, 0);
+  // без розумних карт питання немає
+  g.updateSettings({ smartCards: false });
+  g.fire('round');
+  if (g.battle) assert.equal(g.playerState(a).battle.me.quiz, null);
+});
+
+test('сезон: очки за бої, закриття сезону дає чемпіона й титул', () => {
+  const g = makeGame();
+  const dad = g.createPlayer({ name: 'Тато', classId: 'warrior', age: 40, pin: '1234', role: 'admin' });
+  const a = g.createPlayer({ name: 'Віктор', classId: 'warrior', age: 10, pin: '1111' });
+  const b = g.createPlayer({ name: 'Олександр', classId: 'mage', age: 7, pin: '2222' });
+  g.setMode(a, { mode: 'duel' }); g.join(a); g.join(b); g.ready(a, true); g.ready(b, true);
+  let guard = 0; while (g.battle && guard++ < 300) g.fire('round');
+  const v = g.seasonView();
+  assert.equal(v.n, 1);
+  const pts = v.top.map(p => p.points);
+  assert.ok(pts.includes(3) && pts.includes(1), `очки ${pts}`);
+  assert.throws(() => g.endSeason(a, 'x'), /батьки/);
+  const past = g.endSeason(dad, 'Сезон 2: Зима');
+  assert.equal(past.n, 1); assert.ok(past.winner);
+  const champ = g.playerList.find(p => p.name === past.winner);
+  assert.equal(champ.title, 'Чемпіон сезону 1');
+  assert.ok(champ.achievements.includes('season_1'));
+  assert.equal(g.seasonView().n, 2);
+  assert.equal(g.settings.season, 'Сезон 2: Зима');
+  assert.ok(g.seasonView().top.every(p => p.points === 0));
+});
+
+test('повтор останнього бою на ТБ: кадри йдуть по таймеру', () => {
+  const g = makeGame();
+  const dad = g.createPlayer({ name: 'Тато', classId: 'warrior', age: 40, pin: '1234', role: 'admin' });
+  const a = g.createPlayer({ name: 'Віктор', classId: 'archer', age: 10, pin: '1111' });
+  assert.throws(() => g.startReplay(dad), /немає бою/);
+  g.join(dad); g.join(a); g.ready(dad, true); g.ready(a, true);
+  let guard = 0; while (g.battle && guard++ < 400) g.fire('round');
+  g.fire('results');
+  const n = g.history.lastReplay.frames.length;
+  assert.ok(n >= 3);
+  g.startReplay(dad);
+  const tv = g.tvState();
+  assert.equal(tv.phase, 'replay');
+  assert.equal(tv.battle.replay, true);
+  assert.ok(tv.battle.roomIntro, 'перший кадр: вступ кімнати');
+  g.fire('replay');
+  assert.equal(g.tvState().battle.round, 1);
+  for (let i = 0; i < n; i++) g.fire('replay');
+  assert.equal(g.replay, null);
+  assert.equal(g.tvState().phase, 'idle');
+});
