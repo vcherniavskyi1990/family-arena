@@ -653,3 +653,29 @@ test('резервна копія й відновлення', () => {
   assert.deepEqual(g2.tokens, {});
   assert.throws(() => g2.restore(g2.players[a.id], b), /батьки/);
 });
+
+test('серія днів і щоденний подарунок', () => {
+  const g = makeGame();
+  const a = g.createPlayer({ name: 'A', classId: 'warrior', age: 10, pin: '1111' });
+  const p = g.players[a.id]; const DAY = 24 * 3600 * 1000;
+  assert.equal(g.streakView(p).days, 0);
+  const r1 = g.claimGift(p); assert.equal(r1.days, 1); assert.equal(r1.gold, 15); assert.equal(r1.item, null);
+  assert.throws(() => g.claimGift(p), /вже забрано/);
+  assert.ok(g.playerState(p).me.gift.claimed);
+  g.advance(DAY); assert.equal(g.touchStreak(p), 2); assert.equal(g.touchStreak(p), 2, 'той самий день не рахується двічі');
+  g.advance(DAY); assert.equal(g.claimGift(p).days, 3);
+  assert.ok(p.achievements.includes('streak_3'), 'досягнення за 3 дні');
+  assert.equal(g.playerState(p).me.streak.days, 3);
+  assert.equal(g.tvState().heroes[0].streak, 3);
+  for (let i = 4; i <= 6; i++) { g.advance(DAY); g.touchStreak(p); }
+  g.advance(DAY); const inv = p.inventory.length; const r7 = g.claimGift(p);
+  assert.equal(r7.days, 7); assert.equal(r7.gold, 45); assert.ok(r7.item && p.inventory.length === inv + 1, 'сьомий день дає предмет');
+  assert.ok(p.achievements.includes('streak_7'));
+  g.advance(2 * DAY); assert.equal(g.streakView(p).days, 0, 'пропуск дня обнуляє');
+  assert.equal(g.touchStreak(p), 1); assert.equal(p.stats.streakBest, 7);
+  // бій теж рахує день
+  const g2 = makeGame(); const b = g2.createPlayer({ name: 'B', classId: 'warrior', age: 10, pin: '1111' }); const c = g2.createPlayer({ name: 'C', classId: 'mage', age: 10, pin: '2222' });
+  g2.setMode(b, { mode: 'duel' }); g2.join(b); g2.join(c); g2.ready(b, true); g2.ready(c, true);
+  let guard = 0; while (g2.battle && guard++ < 200) { try { g2.move(b, { attack: 'head', blocks: ['chest', 'belt'], cards: [] }); g2.move(c, { attack: 'chest', blocks: ['head', 'belt'], cards: [] }); } catch (e) {} g2.fire('round'); }
+  assert.equal(g2.players[b.id].streak.days, 1);
+});

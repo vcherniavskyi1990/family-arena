@@ -12,6 +12,7 @@ html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; backgro
 .hero { float: left; width: 280px; height: 260px; margin: 0 20px 20px 0; background: #1b2430; border: 2px solid #33445a; border-radius: 20px; padding: 16px; box-sizing: border-box; text-align: center; }
 .hero .av { width: 110px; height: 110px; margin: 0 auto 8px; border-radius: 18px; background: #243040; font-size: 64px; line-height: 110px; overflow: hidden; } .hero .av img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .hero .n { font-size: 28px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .hero .c { font-size: 20px; color: #9fb0c3; } .hero .st { font-size: 18px; color: #c9d4e0; margin-top: 6px; }
+.hero { position: relative; } .hero .flame { position: absolute; top: 10px; left: 12px; font-size: 20px; color: #ffb74d; font-weight: 700; }
 .feed { position: absolute; left: 100px; top: 700px; width: 980px; } .feed div { font-size: 26px; padding: 6px 0; border-bottom: 1px dotted #33445a; color: #c9d4e0; } .feed .h { font-size: 22px; color: #9fb0c3; text-transform: uppercase; letter-spacing: .08em; border: 0; }
 .legend { position: absolute; left: 1120px; top: 700px; width: 740px; } .legend div { font-size: 24px; padding: 6px 0; } .legend .h { font-size: 22px; color: #9fb0c3; text-transform: uppercase; letter-spacing: .08em; }
 .r-common { color: #c8c8c8 } .r-uncommon { color: #1eff00 } .r-rare { color: #4aa3ff } .r-epic { color: #c77dff } .r-legendary { color: #ff8000; text-shadow: 0 0 16px #ff8000aa }

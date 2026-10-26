@@ -10,7 +10,7 @@ import { Store } from './store.js';
 import { Game, err } from './game.js';
 import { Avatars } from './avatar.js';
 
-export const VERSION = '0.17.0';
+export const VERSION = '0.18.0';
 const PUBLIC = new URL('../public/', import.meta.url);
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.ico': 'image/x-icon', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' };
 
@@ -155,6 +155,7 @@ export function createApp({ dataDir, avatars: avatarsOpt, baseUrl, alertToken = 
     if (path === '/me/chest' && req.method === 'POST') { return ok({ item: game.buyChest(need(), body.kind) }); }
     if (path === '/me/cosmetic/buy' && req.method === 'POST') { return ok({ cosmetics: game.buyCosmetic(need(), body.key) }); }
     if (path === '/me/cosmetic' && req.method === 'POST') { return ok({ cosmetics: game.setCosmetic(need(), { frame: body.frame, cry: body.cry }) }); }
+    if (path === '/me/gift' && req.method === 'POST') { return ok(game.claimGift(need())); }
     if (path === '/me/pet' && req.method === 'POST') { return ok({ pets: game.setPet(need(), body.petId || null) }); }
     if (path === '/me/simple' && req.method === 'POST') { const p = need(); game.updatePlayer(p.id, { simple: !!body.on }); return ok(); }
     if (path === '/me/pin' && req.method === 'POST') { const p = need(); if (!game.checkPin(p, body.oldPin)) throw err('старий PIN неправильний'); game.updatePlayer(p.id, { pin: body.pin }); return ok(); }

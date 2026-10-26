@@ -129,7 +129,7 @@
     if (state.tournament && !state.battle) h += tournamentHtml(state.tournament);
     if (state.battle && !state.battle.replay) return h + '<div class="card">Бій уже йде без тебе. Зачекай, поки закінчиться.</div>' + battleSpectator();
     if (state.replay) h += '<div class="card">📼 На ТБ іде повтор: ' + esc(state.replay.names.join(', ')) + (me.isParent ? ' <button class="btn-sm" id="replay-stop">Зупинити</button>' : '') + '</div>';
-    h += worldBossHtml();
+    h += worldBossHtml(); h += giftHtml();
     var lob = state.lobby;
     var raidOf = {}; (lob.raids || []).forEach(function (r) { raidOf[r.id] = r; });
     var dungeons = content.dungeons.map(function (d) { var r = raidOf[d.id]; return '<option value="' + d.id + '"' + (lob.dungeonId === d.id ? ' selected' : '') + (r && !r.available ? ' disabled' : '') + '>' + d.icon + ' ' + esc(d.name) + ' (рівень ' + d.level + ')' + (r && !r.available ? ' 🔒' : '') + '</option>'; }).join('');
@@ -166,6 +166,11 @@
     return '<div class="camp"><div class="small muted">Розділ ' + c.n + ' з ' + c.of + (c.runs ? ' · пройдено ' + c.runs + ' раз' : '') + '</div><b>' + esc(c.icon) + ' ' + esc(c.title) + '</b> <span class="small muted">' + esc(c.dungeon) + ', рівень ' + c.level + '</span>' +
       '<div class="story">' + esc(c.intro) + '</div><div class="chap">' + c.chapters.map(function (x) { return '<span class="' + (x.done ? 'done' : x.n === c.n ? 'cur' : '') + '" title="' + esc(x.title) + '">' + x.n + '</span>'; }).join('') + '</div>' +
       (state.me.isParent ? '<button class="btn-sm" id="camp-reset">Почати кампанію заново</button>' : '') + '</div>';
+  }
+  function giftHtml() {
+    var me = state.me, s = me.streak || { days: 0 }, g = me.gift || {};
+    return '<div class="card gift"><h3>🎁 Щоденний подарунок <span class="small muted">· 🔥 серія ' + s.days + (s.days ? ' дн.' : '') + (s.best > 1 ? ' · рекорд ' + s.best : '') + '</span></h3>' +
+      (g.claimed ? '<div class="ok-text">Забрано! Завтра знову: грай щодня, і подарунок росте.</div>' : '<div class="row"><button class="btn-sm btn-blue" id="gift">Забрати +' + g.gold + ' 🪙' + (g.item ? ' + предмет' : '') + '</button><span class="small muted">7 днів поспіль = рідкісний предмет</span></div>') + '</div>';
   }
   function worldBossHtml() {
     var w = state.worldBoss; if (!w) return '';
@@ -380,6 +385,7 @@
     var rs = $('#restore'); if (rs) rs.onchange = function (ev) { var f = ev.target.files[0]; if (!f) return; var pin = prompt('PIN батьків, щоб відновити дані з «' + f.name + '». Поточні дані буде замінено.'); if (!pin) return; var rd = new FileReader(); rd.onload = function () { var data; try { data = JSON.parse(rd.result); } catch (e) { toast('Це не JSON-файл', 3000); return; } act('/admin/restore', { pin: pin, data: data }, '💾 Відновлено, увійди знову'); }; rd.readAsText(f); };
     on('[data-report]', function (el) { api('/admin/report?back=' + el.dataset.report).then(function (r) { ui.report = r; render(); }).catch(function (e) { toast(e.message, 3000); }); });
     on('[data-hv]', function (el) { ui.heroView = el.dataset.hv; ui.lastChest = null; render(); });
+    var gb = $('#gift'); if (gb) gb.onclick = function () { act('/me/gift').then(function (r) { toast('🎁 +' + r.gold + ' 🪙' + (r.item ? ' і ' + r.item.name : '') + ' · серія ' + r.days + ' дн.', 3000); }); };
     on('[data-buy]', function (el) { act('/me/cosmetic/buy', { key: el.dataset.buy }, '🛍 Куплено!'); });
     on('[data-frame]', function (el) { act('/me/cosmetic', { frame: el.dataset.frame || null }); });
     on('[data-cry]', function (el) { act('/me/cosmetic', { cry: el.dataset.cry || null }); });
