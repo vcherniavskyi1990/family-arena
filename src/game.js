@@ -9,7 +9,7 @@ import { statSync } from 'node:fs';
 import { createBattle, applyFora, fighterFromPlayer, fighterFromMob, submitMove, resolveRound, publicFighter, alive, enemiesOf, MAX_CARDS_PER_TURN } from './engine/combat.js';
 import { newPlayer, addXp, xpForLevel, equipmentBonus, genItem, genCard, equip, unequip, craft, checkAchievements, setDeck, autoDeck, sellPrice, genPet, grantPet, petView, petOf, activePetIcon } from './engine/progress.js';
 import { makeQuiz, checkQuiz } from './engine/quiz.js';
-import { CLASSES, CARDS, DUNGEONS, QUESTS, ACHIEVEMENTS, DAILY, FAMILY, WORLDBOSS, PETS, CAMPAIGN, COSMETICS, MUTATORS, EVENTS, ENVELOPES, ITEMS, petById, ZONES, ZONE_NAMES, classById, dungeonById, mobById, questById, cardById, starterDeck, allowedCards } from './engine/content.js';
+import { CLASSES, CARDS, DUNGEONS, QUESTS, ACHIEVEMENTS, DAILY, FAMILY, WORLDBOSS, PETS, CAMPAIGN, CAMPAIGN2, camp2ById, COSMETICS, MUTATORS, EVENTS, ENVELOPES, ITEMS, petById, ZONES, ZONE_NAMES, classById, dungeonById, mobById, questById, cardById, starterDeck, allowedCards } from './engine/content.js';
 
 export const ROUND_SECONDS = 30;
 const cryText = (id) => { const c = COSMETICS.cries.find(x => x.id === id); return c ? c.text : null; };
@@ -60,6 +60,7 @@ const GIFT = { base: 10, perDay: 5, maxDays: 7, itemEvery: 7 };
 const WELCOME = { afterDays: 3, gold: 20 };
 const RECORDS = { bigHit: { name: 'Найсильніший удар', icon: '💥' }, runKills: { name: 'Найбільше ворогів за похід', icon: '⚔️' }, longDuel: { name: 'Найдовша дуель', icon: '🥊' }, streak: { name: 'Найдовша серія днів', icon: '🔥' } };
 const BOOK_MOMENTS = 80;
+const CAMPAIGN2_LEN = 8;   // розділів у проходженні другої книги (розвилки дають різні шляхи)
 const AUTO_ROUND_MS = 8000;  // коли всі ходи зробив автобій, раунд закривається за 8 с   // «з поверненням» після паузи: золото і збережена серія
 const PET_DROP = 0.35;   // шанс вихованця за пройдене підземелля
 const WORLD_BOSS = { duelWin: 30, duelLoss: 10, dungeonBase: 40, dungeonPerLevel: 15, dungeonPerKill: 3, dungeonLoss: 10, smartMult: 2, gold: 40 };
@@ -100,6 +101,7 @@ export class Game {
     if (!this.history.coupons) this.history.coupons = [];   // замовлення купонів: {id, pid, couponId, name, icon, price, at, status: pending|done|refunded}
     if (!this.settings.coupons) { this.settings.coupons = DEFAULT_COUPONS.map(c => ({ ...c })); this.store.set('settings', this.settings); }
     if (!this.history.campaign) this.history.campaign = { chapter: 0, runs: 0, done: [] };
+    this.campaignMigrate();
     if (!this.history.envelopes) this.history.envelopes = [];   // відкриті конверти-сюрпризи: {id, at}   // сюжетна кампанія: chapter = індекс наступного розділу   // журнал по днях для звіту тижня: {день: {гравець: {minutes, battles, wins, quests, smart, kills}}}
     for (const c of this.history.customCards) if (c.approved) this.registerCard(c);
     for (const m of this.history.customMobs) if (m.approved) this.registerMob(m);
@@ -336,10 +338,11 @@ export class Game {
   }
   leave(p) { delete this.lobby.players[p.id]; this.emit(); }
   ready(p, on) { const l = this.lobby.players[p.id]; if (!l) throw err('ти не в лобі'); l.ready = !!on; this.emit(); this.maybeStart(); }
-  setMode(p, { mode, dungeonId }) {
+  setMode(p, { mode, dungeonId, book }) {
     if (this.battle) throw err('бій уже йде');
     if (mode && !['dungeon', 'duel', 'campaign', 'tournament', 'practice'].includes(mode)) throw err('режим');
     if (mode) this.lobby.mode = mode;
+    if (book) { const c = this.history.campaign; if (+book === 2 && c.runs < 1) throw err('друга книга відкриється після першої'); if (![1, 2].includes(+book)) throw err('книга'); c.book = +book; this.store.save('history'); }
     if (dungeonId) { if (!dungeonById[dungeonId]) throw err('підземелля'); if (this.dungeonLocked(dungeonId)) throw err('це підземелля ще в запечатаному конверті'); const rs = this.raidStatus(dungeonId); if (!rs.available) throw err(rs.reason); this.lobby.dungeonId = dungeonId; }
     for (const l of Object.values(this.lobby.players)) l.ready = false;
     this.emit();
@@ -559,7 +562,9 @@ export class Game {
     } else if (this.lobby.mode === 'duel') {
       const t0 = ids.filter(id => this.lobby.players[id].team === 0), t1 = ids.filter(id => this.lobby.players[id].team === 1);
       if (!t0.length || !t1.length) return;
-    } else if (this.lobby.mode !== 'campaign' && this.lobby.mode !== 'practice') {
+    } else if (this.lobby.mode === 'campaign') {
+      if (this.history.campaign.pending) return; // спершу розвилка
+    } else if (this.lobby.mode !== 'practice') {
       const rs = this.raidStatus(this.lobby.dungeonId);
       if (rs.raid && (!rs.available || ids.length < rs.minPlayers)) return;
     }
@@ -626,8 +631,8 @@ export class Game {
     } else {
       const ch = this.lobby.mode === 'campaign' ? this.campaignChapter() : null;
       const d = dungeonById[ch ? ch.dungeon : this.lobby.mode === 'practice' ? 'practice' : this.lobby.dungeonId];
-      const mut = d.raid || d.practice ? null : this.mutatorToday();
-      this.run = { mode: 'dungeon', mutator: mut ? mut.id : null, campaign: ch ? ch.n : undefined, dungeon: d.id, players: ids, room: 0, rooms: [...d.rooms, [d.boss]], team: fighters(ids), loot: [], xp: 0, gold: 0, kills: [], startedAt: this.now(), frames: [] };
+      const mut = ch && ch.mutator ? MUTATORS.find(m => m.id === ch.mutator) : d.raid || d.practice ? null : this.mutatorToday();
+      this.run = { mode: 'dungeon', mutator: mut ? mut.id : null, campaign: ch ? ch.n : undefined, campaignId: ch && ch.id ? ch.id : undefined, dungeon: d.id, players: ids, room: 0, rooms: [...d.rooms, [d.boss]], team: fighters(ids), loot: [], xp: 0, gold: 0, kills: [], startedAt: this.now(), frames: [] };
       this.nextRoom();
     }
     this.lobby.players = {};
@@ -801,7 +806,25 @@ export class Game {
       for (const a of this.checkFamily()) ev.push({ t: 'family', name: a.name, icon: a.icon, gold: a.gold });
       for (const e of this.checkEnvelopes()) ev.push({ t: 'envelope', ...e });
       let camp = null;
-      if (r.campaign) {
+      if (r.campaignId) {
+        const c = this.history.campaign; const ch = camp2ById[r.campaignId];
+        camp = { n: ch.n, of: CAMPAIGN2_LEN, book: 2, title: ch.title, outro: won ? ch.outro : null, finished: false, choice: null };
+        if (won && c.node === ch.id) {
+          c.done2.push({ id: ch.id, n: ch.n, at: this.now(), players: r.players.map(id => this.players[id].name) }); c.path.push(ch.id);
+          for (const pid of r.players) { const p = this.players[pid]; p.stats.chapters = (p.stats.chapters || 0) + 1; this.addSeasonPoints(pid, SEASON_POINTS.chapter); for (const a of checkAchievements(p)) ev.push({ t: 'achievement', who: pid, name: a.name, icon: a.icon, title: a.title }); }
+          if (ch.choice) {
+            c.pending = { id: ch.id, text: ch.choice.text, options: ch.choice.options, players: r.players.slice() };
+            camp.choice = this.campaignChoiceView();
+            this.feed(`📖 Розділ ${ch.n} «${ch.title}» пройдено. Розвилка: ${ch.choice.text}`);
+            this.announce = { text: `📖 Розвилка! ${ch.choice.text} Обирайте на телефоні`, by: 'Арена', at: this.now() };
+          } else if (ch.next) { c.node = ch.next; this.feed(`📖 Розділ ${ch.n} «${ch.title}» пройдено. Далі: «${camp2ById[ch.next].title}»`); }
+          else {
+            c.runs2 += 1; c.node = CAMPAIGN2[0].id; c.path = []; c.done2 = []; camp.finished = true;
+            this.feed(`📖 Другу книгу пройдено! Портал зачинено (${c.runs2}-й раз)`); this.announce = { text: '📖 Другу книгу пройдено! Портал зачинено 🎉', by: 'Арена', at: this.now() };
+            this.moment('📖', `Другу книгу кампанії пройдено: ${r.players.map(id => this.players[id].name).join(', ')}`);
+          }
+        }
+      } else if (r.campaign) {
         const ch = CAMPAIGN.find(c => c.n === r.campaign); const cur = this.campaignChapter();
         camp = { n: ch.n, of: CAMPAIGN.length, title: ch.title, outro: won ? ch.outro : null, finished: false };
         if (won && cur && cur.n === ch.n) {
@@ -1438,11 +1461,38 @@ export class Game {
     return n < MUTATORS.length ? MUTATORS[n] : null;
   }
   /** Поточний розділ кампанії (наступний непройдений). */
-  campaignChapter() { return CAMPAIGN[this.history.campaign.chapter] || CAMPAIGN[0]; }
+  campaignMigrate() { const c = this.history.campaign; if (!c.book) Object.assign(c, { book: 1, node: CAMPAIGN2[0].id, path: [], pending: null, runs2: 0, done2: [] }); if (!camp2ById[c.node]) c.node = CAMPAIGN2[0].id; }
+  campaignChapter() { const c = this.history.campaign; if (c.book === 2) return camp2ById[c.node] || CAMPAIGN2[0]; return CAMPAIGN[c.chapter] || CAMPAIGN[0]; }
+  campaignChoiceView() { const p = this.history.campaign.pending; return p ? { id: p.id, text: p.text, options: p.options.map(o => ({ id: o.id, label: o.label, rewardText: o.rewardText })), players: p.players } : null; }
+  /** Розвилка другої книги: обирає будь-хто з учасників походу (або батьки); нагорода всім учасникам. */
+  chooseCampaign(p, optionId) {
+    const c = this.history.campaign; const pend = c.pending; if (!pend) throw err('зараз немає розвилки');
+    if (!pend.players.includes(p.id) && !this.isParent(p)) throw err('обирають ті, хто пройшов розділ');
+    const opt = pend.options.find(o => o.id === optionId); if (!opt) throw err('немає такого шляху');
+    const got = [];
+    for (const pid of pend.players) {
+      const pl = this.players[pid]; if (!pl) continue; const rw = opt.reward || {};
+      if (rw.gold) pl.gold += rw.gold;
+      if (rw.pet) { const pe = grantPet(pl, rw.pet); if (pe) got.push(pe); }
+      if (rw.item) { const it = genItem(this.rng, pl.level, null, rw.item); pl.inventory.push(it); if (it.rarity === 'legendary') pl.stats.legendaries += 1; }
+      if (rw.card) { const cd = genCard(this.rng, pl.class, rw.card); if (cd && !pl.collection.includes(cd)) pl.collection.push(cd); }
+    }
+    c.node = opt.next; c.pending = null;
+    this.feed(`📖 ${p.name} обрав шлях: ${opt.label}. ${opt.rewardText}. Далі: «${camp2ById[opt.next].title}»`);
+    this.announce = { text: `📖 Обрано: ${opt.label}`, by: p.name, at: this.now() };
+    this.moment('📖', `Розвилка: ${opt.label} (обрав ${p.name})`, p.id);
+    this.store.save('history'); this.store.save('players'); this.emit();
+    return { next: camp2ById[opt.next].title, rewardText: opt.rewardText };
+  }
   campaignView() {
-    const ch = this.campaignChapter(); const d = dungeonById[ch.dungeon];
-    return { n: ch.n, of: CAMPAIGN.length, title: ch.title, intro: ch.intro, dungeon: d.name, icon: d.icon, level: d.level, runs: this.history.campaign.runs, done: this.history.campaign.done.map(x => x.n),
-      chapters: CAMPAIGN.map(c => ({ n: c.n, title: c.title, done: this.history.campaign.done.some(x => x.n === c.n) })) };
+    const c = this.history.campaign; const ch = this.campaignChapter(); const d = dungeonById[ch.dungeon];
+    const books = [{ n: 1, title: 'Книга 1: Дім у небезпеці', runs: c.runs, locked: false }, { n: 2, title: 'Книга 2: Портал', runs: c.runs2, locked: c.runs < 1 }];
+    const base = { book: c.book, books, pending: this.campaignChoiceView(), n: ch.n, title: ch.title, intro: ch.intro, dungeon: d.name, icon: d.icon, level: d.level, mutator: ch.mutator ? (MUTATORS.find(m => m.id === ch.mutator) || {}).name : null };
+    if (c.book === 2) {
+      const chapters = []; for (let n = 1; n <= CAMPAIGN2_LEN; n++) { const done = c.done2.find(x => x.n === n); chapters.push({ n, title: done ? camp2ById[done.id].title : n === ch.n ? ch.title : '?', done: !!done }); }
+      return { ...base, of: CAMPAIGN2_LEN, runs: c.runs2, done: c.done2.map(x => x.n), chapters };
+    }
+    return { ...base, of: CAMPAIGN.length, runs: c.runs, done: c.done.map(x => x.n), chapters: CAMPAIGN.map(x => ({ n: x.n, title: x.title, done: c.done.some(y => y.n === x.n) })) };
   }
   /** Резервна копія всіх даних гри (без токенів входу) і відновлення з неї. */
   serviceStatus() {
@@ -1464,6 +1514,7 @@ export class Game {
     this.history = data.history; this.store.set('history', this.history);
     if (!this.history.book) this.history.book = { records: {}, moments: [], bosses: [] };
     for (const k of ['season', 'pastSeasons', 'raids', 'customCards', 'customMobs', 'family', 'days', 'campaign']) if (this.history[k] === undefined) this.history[k] = k === 'season' ? { n: 1, startedAt: this.now(), points: {} } : k === 'family' ? { achievements: [] } : k === 'days' ? {} : k === 'campaign' ? { chapter: 0, runs: 0, done: [] } : [];
+    this.campaignMigrate();
     if (this.history.worldBoss === undefined) this.history.worldBoss = null;
     if (!Array.isArray(this.history.coupons)) this.history.coupons = [];
     if (!Array.isArray(this.history.questLog)) this.history.questLog = [];
@@ -1479,7 +1530,7 @@ export class Game {
     return { players: Object.keys(this.players).length };
   }
   /** Батьки: почати кампанію заново. */
-  resetCampaign(parent) { if (!this.isParent(parent)) throw err('лише батьки', 403); this.history.campaign = { chapter: 0, runs: this.history.campaign.runs, done: [] }; this.store.save('history'); this.emit(); return this.campaignView(); }
+  resetCampaign(parent) { if (!this.isParent(parent)) throw err('лише батьки', 403); const c = this.history.campaign; if (c.book === 2) { Object.assign(c, { node: CAMPAIGN2[0].id, path: [], pending: null, done2: [] }); this.store.save('history'); this.emit(); return this.campaignView(); } this.history.campaign = { ...c, chapter: 0, done: [] }; this.store.save('history'); this.emit(); return this.campaignView(); }
   worldBossView() {
     const w = this.worldBoss(); const def = WORLDBOSS.find(b => b.id === w.id);
     const end = new Date(w.week + 'T12:00:00Z'); end.setUTCDate(end.getUTCDate() + 7);
