@@ -36,6 +36,9 @@ const DEFAULT_COUPONS = [
   { id: 'icecream', name: 'Морозиво', icon: '🍦', price: 100 },
 ];
 const CLOSING_WARN_MIN = 10;
+const MINI_GOLD = 5;   // золото найшвидшому в «Реакції»
+const MINI_TAP_MS = 3000;   // скільки чекаємо натискань після «ТИСНИ!»
+const MINI_SHOW_MS = 8000;   // скільки висять підсумки
 const CHALLENGE_MS = 120000;   // виклик на дуель живе 2 хв
 const CEREMONY_MS = 40000;   // церемонія закриття сезону на ТБ
 const GIFT = { base: 10, perDay: 5, maxDays: 7, itemEvery: 7 };
@@ -78,6 +81,7 @@ export class Game {
     if (!this.history.campaign) this.history.campaign = { chapter: 0, runs: 0, done: [] };   // сюжетна кампанія: chapter = індекс наступного розділу   // журнал по днях для звіту тижня: {день: {гравець: {minutes, battles, wins, quests, smart, kills}}}
     for (const c of this.history.customCards) if (c.approved) this.registerCard(c);
     this.announce = null;
+    this.mini = null;   // міні-гра «Реакція»: {phase: wait|go|done, by, at, goAt, taps:{pid: ms}, faults:{pid: true}, ranking}
     this.challenges = [];   // виклики на дуель (лише в пам'яті): {id, from, to, at}
     this.replay = null;
     this.lobby = { players: {}, mode: 'dungeon', dungeonId: DUNGEONS[0].id };
@@ -294,6 +298,43 @@ export class Game {
     if (dungeonId) { if (!dungeonById[dungeonId]) throw err('підземелля'); const rs = this.raidStatus(dungeonId); if (!rs.available) throw err(rs.reason); this.lobby.dungeonId = dungeonId; }
     for (const l of Object.values(this.lobby.players)) l.ready = false;
     this.emit();
+  }
+  // ---------- міні-гра «Реакція»: ТБ каже «ТИСНИ!», хто швидше натисне на телефоні ----------
+  startMini(p) {
+    if (this.battle) throw err('бій уже йде, зачекай');
+    if (this.mini && this.mini.phase !== 'done') throw err('«Реакція» вже йде');
+    const why = this.blockedReason(p); if (why) throw err(why);
+    this.clearTimer('mini-clear');
+    this.mini = { phase: 'wait', by: p.id, at: this.now(), goAt: null, taps: {}, faults: {}, ranking: [] };
+    this.setTimer('mini-go', 2000 + this.rng.int(0, 3500), () => {
+      const m = this.mini; if (!m || m.phase !== 'wait') return;
+      m.phase = 'go'; m.goAt = this.now(); this.emit();
+      this.setTimer('mini-end', MINI_TAP_MS, () => this.endMini());
+    });
+    this.emit();
+    return this.miniView(p);
+  }
+  tapMini(p) {
+    const m = this.mini; if (!m || m.phase === 'done') throw err('«Реакція» не йде');
+    if (m.faults[p.id] || m.taps[p.id] !== undefined) return this.miniView(p);
+    if (m.phase === 'wait') m.faults[p.id] = true; else m.taps[p.id] = this.now() - m.goAt;
+    this.emit(); return this.miniView(p);
+  }
+  endMini() {
+    const m = this.mini; if (!m || m.phase === 'done') return;
+    this.clearTimer('mini-go'); this.clearTimer('mini-end');
+    m.phase = 'done'; m.endAt = this.now();
+    m.ranking = Object.entries(m.taps).filter(([pid]) => this.players[pid]).sort((a, b) => a[1] - b[1]).map(([pid, ms]) => ({ id: pid, name: this.players[pid].name, ms }));
+    if (m.ranking.length) { const w = this.players[m.ranking[0].id]; w.gold += MINI_GOLD; w.stats.reaction = (w.stats.reaction || 0) + 1; this.store.save('players'); this.feed(`⚡ Реакція: ${w.name} найшвидший (${m.ranking[0].ms} мс), +${MINI_GOLD} золота`); }
+    this.emit();
+    this.setTimer('mini-clear', MINI_SHOW_MS, () => { this.mini = null; this.emit(); });
+  }
+  miniView(p = null) {
+    const m = this.mini; if (!m) return null;
+    const name = id => this.players[id] ? this.players[id].name : '?';
+    const v = { phase: m.phase, by: name(m.by), at: m.at, goAt: m.goAt, ranking: m.ranking, faults: Object.keys(m.faults).map(name), tapped: Object.keys(m.taps).length };
+    if (p) v.me = { tapped: m.taps[p.id] !== undefined ? m.taps[p.id] : null, fault: !!m.faults[p.id] };
+    return v;
   }
   // ---------- виклик на дуель: з телефона братові, той приймає на своєму ----------
   challenge(p, toId) {
@@ -1106,7 +1147,7 @@ export class Game {
     return { phase, closing: this.closingView(), ceremony: this.ceremony && this.now() - this.ceremony.at < CEREMONY_MS ? this.ceremony : null, season: this.settings.season, seasonN: sv.n, seasonTop: sv.top.slice(0, 5), pastSeasons: sv.past.slice(0, 3), quiet, now: this.now(), announce: this.announce, lobby: this.lobbyView(), battle: this.battle ? this.battleView() : this.replayView(), results: this.results, paused: this.paused, pauseReason: this.pauseReason,
       heroes: this.playerList.map(p => ({ ...this.publicPlayer(p), pet: activePetIcon(p), streak: this.streakView(p).days, xp: p.xp, xpNext: xpForLevel(p.level), kills: p.stats.kills, duelWins: p.stats.duelWins, dungeons: p.stats.dungeons, legendaries: p.stats.legendaries, achievements: p.achievements.length })),
       legendaries: this.history.legendaries.slice(0, 5), feed: this.history.feed.slice(0, 8), pendingQuests: this.pendingQuests().length,
-      family: this.familyView(), worldBoss: this.worldBossView(), campaign: this.campaignView(), tournament: this.tournamentView(), today: this.todayView(), familyGoal: this.familyGoalView() };
+      family: this.familyView(), worldBoss: this.worldBossView(), campaign: this.campaignView(), tournament: this.tournamentView(), today: this.todayView(), familyGoal: this.familyGoalView(), mini: this.miniView() };
   }
   playerState(p) {
     const b = this.battle; const f = b && b.fighters.find(x => x.id === p.id);
@@ -1120,7 +1161,7 @@ export class Game {
       dm: this.isParent(p) && b && b.mode === 'dungeon' && !b.over ? { mobs: this.dmMobs(), players: this.run.players.map(id => this.publicPlayer(this.players[id])) } : null,
       replay: this.replay ? { mode: this.replay.mode, names: this.replay.names } : null, hasReplay: !!(this.history.lastReplay && this.history.lastReplay.frames.length),
       battle: b ? { ...this.battleView(), me: f ? { hand: f.hand.map(id => cardById[id]), mana: f.mana, maxMana: f.maxMana, hp: f.hp, maxHp: f.maxHp, alive: f.alive, move: f.move, shield: f.shield, quiz: f.quiz && !f.move ? { kind: f.quiz.kind, q: f.quiz.q, choices: f.quiz.choices } : null, hint: p.simple && !f.move ? this.hintFor(f) : null } : null } : null,
-      closing: this.closingView(p), done: this.doneView(p), challenges: this.challengesView(p), familyGoal: this.familyGoalView(), quests: this.settings.questsEnabled ? this.questsFor(p) : [], pendingQuests: this.isParent(p) ? this.pendingQuests() : [], pendingCoupons: this.isParent(p) ? this.pendingCoupons() : [],
+      closing: this.closingView(p), done: this.doneView(p), challenges: this.challengesView(p), familyGoal: this.familyGoalView(), mini: this.miniView(p), quests: this.settings.questsEnabled ? this.questsFor(p) : [], pendingQuests: this.isParent(p) ? this.pendingQuests() : [], pendingCoupons: this.isParent(p) ? this.pendingCoupons() : [],
       daily: this.dailyFor(p), tournament: this.tournamentView(), worldBoss: { ...this.worldBossView(), mine: (this.worldBoss().dmg[p.id] || 0) }, family: this.familyView(),
       customCards: this.customCardsOf(p), pendingCards: this.isParent(p) ? this.pendingCards() : [], cardTemplates: CARD_TEMPLATES, tvOnline: this.tvOnline(),
     };

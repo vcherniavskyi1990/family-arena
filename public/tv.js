@@ -30,8 +30,9 @@
     if (state.announce && (!prev || !prev.announce || prev.announce.at !== state.announce.at)) showAnnounce(state.announce);
     var cl = document.getElementById('closing'); if (state.closing) { if (!cl) { cl = document.createElement('div'); cl.id = 'closing'; document.body.appendChild(cl); } cl.textContent = state.closing.text; } else if (cl) cl.remove();
     if (state.ceremony && (!prev || !prev.ceremony || prev.ceremony.at !== state.ceremony.at)) showCeremony(state.ceremony);
+    if (state.mini) showMini(state.mini, prev && prev.mini);
     if (state.paused) { overlay.className = 'on'; overlay.innerHTML = '<div class="banner pause"><div class="big">⏸ ПАУЗА</div><div class="sub">' + (state.pauseReason === 'alert' ? 'Тривога. Усі в укриття, бій зачекає.' : 'Батьки поставили гру на паузу') + '</div></div>'; }
-    else if (phase !== 'results' && Date.now() > introUntil) overlay.className = '';
+    else if (phase !== 'results' && !state.mini && Date.now() > introUntil) overlay.className = '';
   }
   var introUntil = 0;
   function showAnnounce(a) {
@@ -60,6 +61,15 @@
   }
   // ---------- церемонія закриття сезону ----------
   var ceremonyTimer = null;
+  function showMini(m, pm) {
+    var h;
+    if (m.phase === 'wait') h = '<div class="banner mini wait"><div class="big">⚡ РЕАКЦІЯ</div><div class="sub">Запустив ' + esc(m.by) + '. Тримай палець над кнопкою…</div><div class="go">ЧЕКАЙ</div></div>';
+    else if (m.phase === 'go') h = '<div class="banner mini go"><div class="go">ТИСНИ!</div><div class="sub">натиснули: ' + m.tapped + '</div></div>';
+    else h = '<div class="banner mini done"><div class="big">⚡ Хто найшвидший</div>' + (m.ranking.length ? '<div class="rank">' + m.ranking.map(function (r, i) { return '<div><span class="pl">' + ['🥇', '🥈', '🥉', '4', '5', '6'][i] + '</span> <b>' + esc(r.name) + '</b><span class="ms">' + r.ms + ' мс</span></div>'; }).join('') + '</div>' : '<div class="sub">Ніхто не встиг за 3 с 😅</div>') + (m.faults.length ? '<div class="sub">Фальстарт: ' + esc(m.faults.join(', ')) + '</div>' : '') + '</div>';
+    overlay.innerHTML = h; overlay.className = 'on'; introUntil = Date.now() + 2000;
+    if (m.phase === 'go' && (!pm || pm.phase !== 'go')) beep(880, 150, 'square', 0.08);
+    if (m.phase === 'done' && (!pm || pm.phase !== 'done')) { beep(523, 120, 'triangle', 0.08); setTimeout(function () { beep(784, 200, 'triangle', 0.08); }, 150); }
+  }
   function showCeremony(c) {
     var pod = c.podium || [], order = [1, 0, 2];
     var h = '<div class="banner ceremony"><div class="big">🏁 «' + esc(c.name) + '» закрито</div>' +
