@@ -61,11 +61,13 @@
       if (!p || p.error) return;
       var eq = ['weapon', 'helmet', 'armor', 'amulet'].map(function (sl) { var it = p.equipment[sl]; return it ? '<span class="r-' + it.rarity + '">' + esc(it.name) + '</span>' : null; }).filter(Boolean);
       var h = '<div class="banner hero-prof"><div class="row">' + av(p, 'avbig') + '<div class="grow"><div class="big">' + esc(p.name) + '</div><div class="sub">' + esc(p.title || p.className) + ' · ' + p.level + ' рів. · ' + p.xp + '/' + p.xpNext + ' досвіду · 🪙 ' + p.gold + '</div>' +
-        '<div class="sub">🏆 Сезон: ' + p.seasonPoints + ' очок, місце ' + (p.seasonRank || '—') + '</div></div></div>' +
+        '<div class="sub">🏆 Сезон: ' + p.seasonPoints + ' очок, місце ' + (p.seasonRank || '—') + (p.streak && p.streak.days >= 2 ? ' · 🔥 серія ' + p.streak.days + ' дн.' + (p.streak.best > p.streak.days ? ' (рекорд ' + p.streak.best + ')' : '') : '') + (p.worldBossDmg ? ' · 🐉 босу тижня ' + p.worldBossDmg : '') + '</div></div></div>' +
         '<div class="cols"><div class="loot"><div><b>Статистика</b></div><div>⚔️ вбито ' + p.stats.kills + ' · 👑 босів ' + p.stats.bossKills + ' · 🏰 підземель ' + p.stats.dungeons + '</div><div>🥊 дуелей ' + p.stats.duelWins + '/' + p.stats.duels + ' · 💥 критів ' + p.stats.crits + ' · 🛡 блоків ' + p.stats.blocks + '</div><div>🧠 розумних ' + (p.stats.smart || 0) + ' · ✅ справ ' + p.stats.quests + ' · 🟠 легендарок ' + p.stats.legendaries + '</div>' +
         '<div style="margin-top:10px"><b>Спорядження</b></div><div>' + (eq.length ? eq.join(', ') : 'порожньо') + '</div></div>' +
         '<div class="loot"><div><b>Досягнення</b></div><div>' + (p.achievements.length ? p.achievements.map(function (a) { return esc(a.icon) + ' ' + esc(a.name); }).join(' · ') : 'ще немає') + '</div>' +
         '<div style="margin-top:10px"><b>Завдання дня</b></div>' + p.daily.map(function (t) { return '<div>' + (t.done ? '✅' : '○') + ' ' + esc(t.name) + ' (' + t.progress + '/' + t.n + ')</div>'; }).join('') +
+        (p.pets && p.pets.length ? '<div style="margin-top:10px"><b>Вихованці</b></div><div>' + p.pets.map(function (x) { return (x.active ? '★ ' : '') + esc(x.icon) + ' ' + esc(x.name) + ' ' + x.level + ' рів.'; }).join(' · ') + '</div>' : '') +
+        (p.coupons && p.coupons.length ? '<div style="margin-top:10px"><b>🎟 Чекає від батьків</b></div><div>' + p.coupons.map(function (c) { return esc(c.icon) + ' ' + esc(c.title); }).join(' · ') + '</div>' : '') +
         (p.customCards.length ? '<div style="margin-top:10px"><b>Свої карти</b></div><div>' + p.customCards.map(function (c) { return (c.image ? '<img class="ccimg" src="' + esc(c.image) + '" alt=""> ' : '🖍️ ') + esc(c.name); }).join(' · ') + '</div>' : '') + '</div></div>' +
         '<div class="cnt">закриється саме</div></div>';
       overlay.innerHTML = h; overlay.className = 'on';

@@ -838,7 +838,9 @@ export class Game {
     const p = this.players[id]; if (!p) return null;
     const sv = this.seasonView();
     return { ...this.publicPlayer(p), xp: p.xp, xpNext: xpForLevel(p.level), gold: p.gold, stats: p.stats, equipment: p.equipment, achievements: ACHIEVEMENTS.filter(a => p.achievements.includes(a.id)).map(a => ({ name: a.name, icon: a.icon })),
-      seasonPoints: this.history.season.points[p.id] || 0, seasonRank: sv.top.findIndex(x => x.id === p.id) + 1, customCards: this.customCardsOf(p).filter(c => c.approved).map(c => ({ name: c.name, image: c.image, text: c.text })), daily: this.dailyFor(p) };
+      seasonPoints: this.history.season.points[p.id] || 0, seasonRank: sv.top.findIndex(x => x.id === p.id) + 1, customCards: this.customCardsOf(p).filter(c => c.approved).map(c => ({ name: c.name, image: c.image, text: c.text })), daily: this.dailyFor(p),
+      pets: petView(p).map(x => ({ icon: x.icon, name: x.name, level: x.level, active: x.active })), streak: this.streakView(p), worldBossDmg: this.worldBoss().dmg[p.id] || 0,
+      coupons: this.history.coupons.filter(o => o.pid === p.id && o.status === 'pending').map(o => ({ icon: o.icon, title: o.title })) };
   }
 
   // ---------- стан для клієнтів ----------
