@@ -516,3 +516,49 @@ test('кампанія: розділи по черзі, фінал, з поча�
   assert.equal(g.resetCampaign(dad).n, 1);
   assert.equal(g.tvState().campaign.of, 6);
 });
+
+test('турнір на 3: кожен з кожним, дуелі самі, чемпіон', () => {
+  const g = makeGame();
+  const a = g.createPlayer({ name: 'Віктор', classId: 'warrior', age: 10, pin: '1111' });
+  const b = g.createPlayer({ name: 'Саша', classId: 'mage', age: 7, pin: '2222' });
+  const c = g.createPlayer({ name: 'Тато', classId: 'warrior', age: 40, pin: '1234', role: 'parent' });
+  g.setMode(a, { mode: 'tournament' });
+  g.join(a); g.join(b); g.ready(a, true); g.ready(b, true);
+  assert.equal(g.battle, null, 'двох замало');
+  g.join(c); g.ready(c, true);
+  assert.ok(g.battle && g.tournament, 'турнір почався з трьох');
+  assert.equal(g.tournament.kind, 'robin'); assert.equal(g.tournament.matches.length, 3);
+  assert.ok(g.tvState().tournament.matches[0].live);
+  const playDuel = () => {
+    const ids = g.run.players; let guard = 0;
+    while (g.battle && guard++ < 300) { for (const id of ids) { try { g.move(g.players[id], { attack: 'head', blocks: ['chest', 'belt'], cards: [] }); } catch (e) { /* анімація */ } } g.fire('round'); if (g.battle) g.fire('round'); }
+  };
+  playDuel();
+  assert.ok(g.results.tournament && g.results.tournament.done === false && g.results.tournament.current === 1);
+  g.fire('results');
+  assert.ok(g.battle, 'друга дуель почалась сама'); assert.equal(g.run.tournament, 1);
+  playDuel(); g.fire('results'); assert.ok(g.battle); assert.equal(g.run.tournament, 2);
+  playDuel();
+  assert.equal(g.results.tournament.done, true); assert.ok(g.results.tournament.champion);
+  const champ = g.playerList.find(p => p.name === g.results.tournament.champion);
+  assert.equal(champ.stats.tournaments, 1); assert.ok(champ.achievements.includes('champion_1'));
+  assert.ok(g.announce.text.includes('Чемпіон'));
+  g.fire('results');
+  assert.equal(g.battle, null); assert.equal(g.tournament, null); assert.equal(g.tvState().phase, 'idle');
+});
+
+test('турнір на 4: півфінали й фінал', () => {
+  const g = makeGame();
+  const ps = ['A', 'B', 'C', 'D'].map((n, i) => g.createPlayer({ name: n, classId: i % 2 ? 'mage' : 'warrior', age: 10, pin: '1111' }));
+  g.setMode(ps[0], { mode: 'tournament' });
+  for (const p of ps) g.join(p);
+  for (const p of ps) g.ready(p, true);
+  assert.equal(g.tournament.kind, 'bracket');
+  const playDuel = () => { const ids = g.run.players; let guard = 0; while (g.battle && guard++ < 300) { for (const id of ids) { try { g.move(g.players[id], { attack: 'head', blocks: ['chest', 'belt'], cards: [] }); } catch (e) { } } g.fire('round'); if (g.battle) g.fire('round'); } };
+  playDuel(); g.fire('results'); playDuel();
+  const t = g.tournament; assert.ok(t.matches[2].a && t.matches[2].b, 'фіналісти = переможці півфіналів');
+  assert.equal(t.matches[2].a, t.matches[0].winner); assert.equal(t.matches[2].b, t.matches[1].winner);
+  g.fire('results'); assert.ok(g.tvState().tournament.matches[2].final && g.tvState().tournament.matches[2].live);
+  playDuel();
+  assert.equal(g.results.tournament.done, true); assert.equal(g.tournamentStandings()[0].id, t.matches[2].winner);
+});

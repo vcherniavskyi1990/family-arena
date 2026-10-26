@@ -1,4 +1,5 @@
 [
+  { "id": "champion_1", "name": "Чемпіон турніру", "icon": "🏆", "title": "Чемпіон", "cond": { "stat": "tournaments", "gte": 1 } },
   { "id": "chapter_1", "name": "Перший розділ", "icon": "📖", "title": "Оповідач", "cond": { "stat": "chapters", "gte": 1 } },
   { "id": "campaign_6", "name": "Дім урятовано", "icon": "🏠", "title": "Рятівник дому", "cond": { "stat": "chapters", "gte": 6 } },
   { "id": "pets_1", "name": "Перший друг", "icon": "🐾", "title": "Приборкувач", "cond": { "stat": "pets", "gte": 1 } },
