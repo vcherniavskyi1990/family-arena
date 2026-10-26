@@ -9,7 +9,7 @@ import { statSync } from 'node:fs';
 import { createBattle, applyFora, fighterFromPlayer, fighterFromMob, submitMove, resolveRound, publicFighter, alive, enemiesOf, MAX_CARDS_PER_TURN } from './engine/combat.js';
 import { newPlayer, addXp, xpForLevel, equipmentBonus, genItem, genCard, equip, unequip, craft, checkAchievements, setDeck, autoDeck, sellPrice, genPet, grantPet, petView, petOf, activePetIcon } from './engine/progress.js';
 import { makeQuiz, checkQuiz } from './engine/quiz.js';
-import { CLASSES, CARDS, DUNGEONS, QUESTS, ACHIEVEMENTS, DAILY, FAMILY, WORLDBOSS, PETS, CAMPAIGN, COSMETICS, MUTATORS, ITEMS, petById, ZONES, ZONE_NAMES, classById, dungeonById, mobById, questById, cardById, starterDeck, allowedCards } from './engine/content.js';
+import { CLASSES, CARDS, DUNGEONS, QUESTS, ACHIEVEMENTS, DAILY, FAMILY, WORLDBOSS, PETS, CAMPAIGN, COSMETICS, MUTATORS, EVENTS, ITEMS, petById, ZONES, ZONE_NAMES, classById, dungeonById, mobById, questById, cardById, starterDeck, allowedCards } from './engine/content.js';
 
 export const ROUND_SECONDS = 30;
 const cryText = (id) => { const c = COSMETICS.cries.find(x => x.id === id); return c ? c.text : null; };
@@ -184,7 +184,7 @@ export class Game {
   kyiv(ts = this.now()) {
     const f = new Intl.DateTimeFormat('en-GB', { timeZone: this.settings.tz, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', weekday: 'short' });
     const o = Object.fromEntries(f.formatToParts(ts).map(x => [x.type, x.value]));
-    return { day: `${o.year}-${o.month}-${o.day}`, hm: `${o.hour === '24' ? '00' : o.hour}:${o.minute}`, weekend: o.weekday === 'Sat' || o.weekday === 'Sun' };
+    return { day: `${o.year}-${o.month}-${o.day}`, hm: `${o.hour === '24' ? '00' : o.hour}:${o.minute}`, weekend: o.weekday === 'Sat' || o.weekday === 'Sun', weekday: o.weekday };
   }
   /** Ключ тижня (понеділок) за Києвом для щотижневих рейдів. */
   weekKey(ts = this.now()) {
@@ -444,14 +444,14 @@ export class Game {
     if (m.kind === 'quiz') {
       m.ranking = Object.entries(m.prog).filter(([pid, x]) => this.players[pid] && x.i > 0).sort((a, b) => b[1].correct - a[1].correct || (a[1].doneAt || Infinity) - (b[1].doneAt || Infinity)).map(([pid, x]) => ({ id: pid, name: this.players[pid].name, correct: x.correct, ms: x.doneAt ? x.doneAt - m.at : null }));
       for (const r of m.ranking) { const p = this.players[r.id]; p.stats.minis = (p.stats.minis || 0) + 1; if (r.correct === QUIZ_N) p.stats.quizPerfect = (p.stats.quizPerfect || 0) + 1; if (r.correct) { p.stats.smart = (p.stats.smart || 0) + r.correct; this.logDay(r.id, { smart: r.correct }); } }
-      if (m.ranking.length && m.ranking[0].correct) { const w = this.players[m.ranking[0].id]; w.gold += MINI_GOLD; w.stats.quiz = (w.stats.quiz || 0) + 1; this.feed(`🧠 Бліц: ${w.name} найрозумніший (${m.ranking[0].correct} з ${QUIZ_N}), +${MINI_GOLD} золота`); }
+      if (m.ranking.length && m.ranking[0].correct) { const w = this.players[m.ranking[0].id]; w.gold += this.miniGold(); w.stats.quiz = (w.stats.quiz || 0) + 1; this.feed(`🧠 Бліц: ${w.name} найрозумніший (${m.ranking[0].correct} з ${QUIZ_N}), +${this.miniGold()} золота`); }
       this.afterMini(m.ranking.map(r => r.id)); this.store.save('players'); this.emit();
       this.finishMini();
       return;
     }
     m.ranking = Object.entries(m.taps).filter(([pid]) => this.players[pid]).sort((a, b) => a[1] - b[1]).map(([pid, ms]) => ({ id: pid, name: this.players[pid].name, ms }));
     for (const r of m.ranking) this.players[r.id].stats.minis = (this.players[r.id].stats.minis || 0) + 1;
-    if (m.ranking.length) { const w = this.players[m.ranking[0].id]; w.gold += MINI_GOLD; if (m.kind === 'memory') { w.stats.memory = (w.stats.memory || 0) + 1; this.feed(`🧩 Пам'ять: ${w.name} найуважніший (${(m.ranking[0].ms / 1000).toFixed(1)} с), +${MINI_GOLD} золота`); } else { w.stats.reaction = (w.stats.reaction || 0) + 1; this.feed(`⚡ Реакція: ${w.name} найшвидший (${m.ranking[0].ms} мс), +${MINI_GOLD} золота`); } }
+    if (m.ranking.length) { const w = this.players[m.ranking[0].id]; w.gold += this.miniGold(); if (m.kind === 'memory') { w.stats.memory = (w.stats.memory || 0) + 1; this.feed(`🧩 Пам'ять: ${w.name} найуважніший (${(m.ranking[0].ms / 1000).toFixed(1)} с), +${this.miniGold()} золота`); } else { w.stats.reaction = (w.stats.reaction || 0) + 1; this.feed(`⚡ Реакція: ${w.name} найшвидший (${m.ranking[0].ms} мс), +${this.miniGold()} золота`); } }
     this.afterMini(m.ranking.map(r => r.id)); this.store.save('players'); this.emit();
     this.finishMini();
   }
@@ -684,7 +684,7 @@ export class Game {
     const b = this.battle, r = this.run;
     const ev = [];
     const rng = this.rng;
-    const minutes = Math.max(1, Math.round((this.now() - r.startedAt) / 60000));
+    const minutes = Math.max(1, Math.round((this.now() - r.startedAt) / 60000)); const evt = this.eventToday();
     if (r.mode === 'dungeon') {
       // нагороди за кімнату: досвід, золото, лут із мобів
       for (const m of b.fighters.filter(f => f.team === 1)) {
@@ -722,6 +722,9 @@ export class Game {
       const mutDef = r.mutator ? MUTATORS.find(m => m.id === r.mutator) : null;
       if (mutDef && mutDef.rewardMult) { r.xp = Math.round(r.xp * mutDef.rewardMult); r.gold = Math.round(r.gold * mutDef.rewardMult); }
       if (mutDef && mutDef.goldMult) r.gold = Math.round(r.gold * mutDef.goldMult);
+      if (evt && evt.goldMult) r.gold = Math.round(r.gold * evt.goldMult);
+      if (evt && evt.familyXpMult && r.players.length >= 2) { r.xp = Math.round(r.xp * evt.familyXpMult); if (won) for (const pid of r.players) this.addSeasonPoints(pid, evt.familyPoints); }
+      if (evt && evt.parentBonus && won && r.players.some(id => this.isParent(this.players[id]))) for (const pid of r.players) this.addSeasonPoints(pid, evt.parentBonus);
       if (won) for (const pid of r.players) if (rng.chance(mutDef && mutDef.petChance ? mutDef.petChance : PET_DROP)) r.loot.push({ pid, pet: genPet(rng, d.level), from: d.name });
       for (const pid of r.players) {
         const p = this.players[pid]; const f = r.team.find(x => x.id === pid);
@@ -764,7 +767,7 @@ export class Game {
         p.stats.duels += 1; if (won) p.stats.duelWins += 1; p.lossStreak = won ? 0 : (p.lossStreak || 0) + 1;
         this.addSeasonPoints(pid, won ? SEASON_POINTS.duelWin : SEASON_POINTS.duelLoss);
         p.stats.crits += f.stats.crits; p.stats.blocks += f.stats.blocks; p.stats.heals += f.stats.heals;
-        ev.push(...addXp(p, won ? 40 : 15)); p.gold += won ? 12 : 4;
+        ev.push(...addXp(p, won ? 40 : 15)); p.gold += (won ? 12 : 4) * (evt && evt.goldMult ? evt.goldMult : 1);
         for (const a of checkAchievements(p)) ev.push({ t: 'achievement', who: pid, name: a.name, icon: a.icon, title: a.title });
         for (const d of this.checkDaily(p)) ev.push({ t: 'daily', who: pid, name: d.name, icon: d.icon, gold: d.gold });
         this.addMinutes(p, minutes); this.touchStreak(p, ev);
@@ -1166,6 +1169,7 @@ export class Game {
     const pend = this.pendingQuests().length + this.pendingCards().length; if (pend) lines.push(`⏳ Чекають підтвердження батьків: ${pend}.`);
     const pc = this.pendingCoupons(); if (pc.length) lines.push(`🎟 Куплені бажання чекають: ${pc.map(o => `${o.name}: ${o.icon} ${o.title}`).join('; ')}.`);
     const streaks = this.playerList.filter(p => !this.isParent(p) && this.streakView(p).days >= 2).map(p => `${p.name} ${this.streakView(p).days}`); if (streaks.length) lines.push(`🔥 Серії днів: ${streaks.join(', ')}.`);
+    const evTomorrow = this.eventView().tomorrow; if (evTomorrow) lines.push(`${evTomorrow.icon} Завтра ${evTomorrow.name}: ${evTomorrow.text}`);
     if (sv.top.some(p => p.points > 0)) lines.push(`🏆 ${sv.name}: ${sv.top.slice(0, 3).map((p, i) => `${['🥇', '🥈', '🥉'][i]} ${p.name} ${p.points}`).join(', ')}.`);
     for (const p of this.playerList) if (!this.isParent(p)) { const m = this.minutesToday(p); if (m) lines.push(`⏱ ${p.name}: ${m} хв з ${this.limitFor(p)}.`); }
     return { day, text: lines.join('\n'), battles: todayBattles.length, season: { name: sv.name, top: sv.top.slice(0, 3).map(p => ({ name: p.name, points: p.points })) }, pending: pend,
@@ -1203,6 +1207,7 @@ export class Game {
       const p = this.players[pid]; if (!p) continue;
       let d = perPid ? perPid(pid) : Math.round(amount / pids.length);
       if (fighters) { const f = fighters.find(x => x.id === pid); if (f && f.stats && f.stats.smartHits) d = Math.round(d * WORLD_BOSS.smartMult); }
+      const evt = this.eventToday(); if (evt && evt.worldBossMult) d = Math.round(d * evt.worldBossMult);
       w.dmg[pid] = (w.dmg[pid] || 0) + d; total += d;
     }
     w.hp = Math.max(0, w.hp - total);
@@ -1226,6 +1231,14 @@ export class Game {
   setPet(p, id) {
     if (id !== null && !petOf(p, id)) throw err('немає такого вихованця');
     p.activePet = id; this.store.save('players'); this.emit(); return petView(p);
+  }
+  miniGold() { const e = this.eventToday(); return MINI_GOLD * (e && e.miniGoldMult ? e.miniGoldMult : 1); }
+  /** Подія тижня за днем (середа, п'ятниця, субота, неділя). */
+  eventToday(ts = this.now()) { const k = this.kyiv(ts); return EVENTS.find(e => e.weekday === k.weekday) || null; }
+  eventView() {
+    const today = this.eventToday(); const tomorrow = this.eventToday(this.now() + 24 * 3600 * 1000);
+    const pick = (e) => e ? { id: e.id, name: e.name, icon: e.icon, text: e.text } : null;
+    return { today: pick(today), tomorrow: pick(tomorrow) };
   }
   /** Мутатор дня для підземель: раз на ~2 дні за датою (детерміновано), інакше null. */
   mutatorToday(day = this.kyiv().day) {
@@ -1301,7 +1314,7 @@ export class Game {
     return { phase, closing: this.closingView(), ceremony: this.ceremony && this.now() - this.ceremony.at < CEREMONY_MS ? this.ceremony : null, season: this.settings.season, seasonN: sv.n, seasonTop: sv.top.slice(0, 5), pastSeasons: sv.past.slice(0, 3), quiet, now: this.now(), announce: this.announce, lobby: this.lobbyView(), battle: this.battle ? this.battleView() : this.replayView(), results: this.results, paused: this.paused, pauseReason: this.pauseReason,
       heroes: this.playerList.map(p => ({ ...this.publicPlayer(p), pet: activePetIcon(p), streak: this.streakView(p).days, xp: p.xp, xpNext: xpForLevel(p.level), kills: p.stats.kills, duelWins: p.stats.duelWins, dungeons: p.stats.dungeons, legendaries: p.stats.legendaries, achievements: p.achievements.length })),
       legendaries: this.history.legendaries.slice(0, 5), feed: this.history.feed.slice(0, 8), pendingQuests: this.pendingQuests().length,
-      family: this.familyView(), worldBoss: this.worldBossView(), campaign: this.campaignView(), tournament: this.tournamentView(), today: this.todayView(), familyGoal: this.familyGoalView(), mini: this.miniView(), party: this.partyView() };
+      family: this.familyView(), worldBoss: this.worldBossView(), campaign: this.campaignView(), tournament: this.tournamentView(), today: this.todayView(), familyGoal: this.familyGoalView(), mini: this.miniView(), party: this.partyView(), event: this.eventView() };
   }
   playerState(p) {
     const b = this.battle; const f = b && b.fighters.find(x => x.id === p.id);
@@ -1315,7 +1328,7 @@ export class Game {
       dm: this.isParent(p) && b && b.mode === 'dungeon' && !b.over ? { mobs: this.dmMobs(), players: this.run.players.map(id => this.publicPlayer(this.players[id])) } : null,
       replay: this.replay ? { mode: this.replay.mode, names: this.replay.names } : null, hasReplay: !!(this.history.lastReplay && this.history.lastReplay.frames.length),
       battle: b ? { ...this.battleView(), me: f ? { hand: f.hand.map(id => cardById[id]), mana: f.mana, maxMana: f.maxMana, hp: f.hp, maxHp: f.maxHp, alive: f.alive, move: f.move, shield: f.shield, quiz: f.quiz && !f.move ? { kind: f.quiz.kind, q: f.quiz.q, choices: f.quiz.choices } : null, hint: p.simple && !f.move ? this.hintFor(f) : null } : null } : null,
-      closing: this.closingView(p), done: this.doneView(p), challenges: this.challengesView(p), familyGoal: this.familyGoalView(), mini: this.miniView(p), party: this.partyView(), quests: this.settings.questsEnabled ? this.questsFor(p) : [], pendingQuests: this.isParent(p) ? this.pendingQuests() : [], pendingCoupons: this.isParent(p) ? this.pendingCoupons() : [],
+      closing: this.closingView(p), done: this.doneView(p), challenges: this.challengesView(p), familyGoal: this.familyGoalView(), mini: this.miniView(p), party: this.partyView(), event: this.eventView(), quests: this.settings.questsEnabled ? this.questsFor(p) : [], pendingQuests: this.isParent(p) ? this.pendingQuests() : [], pendingCoupons: this.isParent(p) ? this.pendingCoupons() : [],
       daily: this.dailyFor(p), tournament: this.tournamentView(), worldBoss: { ...this.worldBossView(), mine: (this.worldBoss().dmg[p.id] || 0) }, family: this.familyView(),
       customCards: this.customCardsOf(p), pendingCards: this.isParent(p) ? this.pendingCards() : [], cardTemplates: CARD_TEMPLATES, tvOnline: this.tvOnline(),
     };

@@ -139,7 +139,7 @@
     if (state.battle && !state.battle.replay) return h + '<div class="card">Бій уже йде без тебе. Зачекай, поки закінчиться.</div>' + battleSpectator();
     if (state.replay) h += '<div class="card">📼 На ТБ іде повтор: ' + esc(state.replay.names.join(', ')) + (me.isParent ? ' <button class="btn-sm" id="replay-stop">Зупинити</button>' : '') + '</div>';
     if (!me.blocked && !state.battle) h += '<div class="card mini"><h3>Міні-ігри для всіх, хто з телефоном</h3><div class="row"><div class="grow"><b>⚡ Реакція</b><div class="small muted">ТБ скаже «ТИСНИ!», хто швидший — +5 🪙</div></div><button class="btn-sm btn-primary" id="mini-start">Грати</button></div><div class="row" style="margin-top:8px"><div class="grow"><b>🎉 Вечір ігор</b><div class="small muted">Усі три поспіль, очки за місця; чемпіон +15 🪙 і +3 очки сезону</div></div><button class="btn-sm btn-primary" id="party-start">Грати</button></div><div class="row" style="margin-top:8px"><div class="grow"><b>🧩 Пам\'ять</b><div class="small muted">ТБ показує 4 кольори, повтори на телефоні швидше за всіх — +5 🪙</div></div><button class="btn-sm btn-primary" id="memory-start">Грати</button></div><div class="row" style="margin-top:8px"><div class="grow"><b>🧠 Бліц</b><div class="small muted">5 прикладів чи слів за віком, хто більше й швидше — +5 🪙, усе йде в розумні відповіді</div></div><button class="btn-sm btn-primary" id="quiz-start">Грати</button></div></div>';
-    h += worldBossHtml(); h += goalHtml(); h += giftHtml();
+    h += eventHtml(); h += worldBossHtml(); h += goalHtml(); h += giftHtml();
     var lob = state.lobby;
     var raidOf = {}; (lob.raids || []).forEach(function (r) { raidOf[r.id] = r; });
     var dungeons = content.dungeons.filter(function (d) { return !d.practice; }).map(function (d) { var r = raidOf[d.id]; return '<option value="' + d.id + '"' + (lob.dungeonId === d.id ? ' selected' : '') + (r && !r.available ? ' disabled' : '') + '>' + d.icon + ' ' + esc(d.name) + ' (рівень ' + d.level + ')' + (r && !r.available ? ' 🔒' : '') + '</option>'; }).join('');
@@ -222,6 +222,10 @@
     var me = state.me, s = me.streak || { days: 0 }, g = me.gift || {};
     return '<div class="card gift"><h3>🎁 Щоденний подарунок <span class="small muted">· 🔥 серія ' + s.days + (s.days ? ' дн.' : '') + (s.best > 1 ? ' · рекорд ' + s.best : '') + '</span></h3>' +
       (g.claimed ? '<div class="ok-text">Забрано! Завтра знову: грай щодня, і подарунок росте.</div>' : '<div class="row"><button class="btn-sm btn-blue" id="gift">Забрати +' + g.gold + ' 🪙' + (g.item ? ' + предмет' : '') + '</button><span class="small muted">7 днів поспіль = рідкісний предмет</span></div>') + '</div>';
+  }
+  function eventHtml() {
+    var e = state.event || {}; if (e.today) return '<div class="card evt"><h3>' + esc(e.today.icon) + ' Сьогодні: ' + esc(e.today.name) + '</h3><div class="small">' + esc(e.today.text) + '</div></div>';
+    if (e.tomorrow) return '<div class="card evt soon"><div class="small muted">' + esc(e.tomorrow.icon) + ' Завтра <b>' + esc(e.tomorrow.name) + '</b>: ' + esc(e.tomorrow.text) + '</div></div>'; return '';
   }
   function worldBossHtml() {
     var w = state.worldBoss; if (!w) return '';

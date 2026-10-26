@@ -1012,3 +1012,25 @@ test('фора в дуелі слабшому й «друге дихання» �
   const won = (g.results.winners || []).includes('Олександр');
   assert.equal(g.players[b.id].lossStreak, won ? 0 : 4);
 });
+
+test('події тижня: п’ятниця золото ×2, субота бос ×2, неділя сімейний досвід, анонс на завтра', () => {
+  const fri = makeGame(Date.UTC(2026, 9, 30, 15, 0)); // п'ятниця 30.10
+  assert.equal(fri.eventToday().id, 'gold_fri');
+  assert.equal(fri.eventView().tomorrow.id, 'boss_sat');
+  const a = fri.createPlayer({ name: 'Віктор', classId: 'warrior', age: 10, pin: '1111' });
+  const b = fri.createPlayer({ name: 'Олександр', classId: 'mage', age: 7, pin: '2222' });
+  const g0 = fri.players[a.id].gold + fri.players[b.id].gold;
+  fri.setMode(a, { mode: 'duel' }); fri.join(a); fri.join(b); fri.ready(a, true); fri.ready(b, true);
+  let guard = 0; while (fri.battle && guard++ < 200) { fri.move(a, { attack: 'head', blocks: ['chest', 'belt'], cards: [] }); if (fri.battle && !fri.battle.over) fri.fire('round'); if (fri.battle) fri.fire('round'); }
+  assert.equal(fri.players[a.id].gold + fri.players[b.id].gold - g0, 32, 'дуель: (12+4)×2');
+  assert.ok(fri.tvState().event.today && fri.playerState(a).event.today.id === 'gold_fri');
+  const sat = makeGame(Date.UTC(2026, 9, 31, 15, 0));
+  assert.equal(sat.eventToday().id, 'boss_sat'); assert.equal(sat.eventView().tomorrow.id, 'family_sun');
+  const c = sat.createPlayer({ name: 'Віктор', classId: 'warrior', age: 10, pin: '1111' });
+  const hit = sat.hitWorldBoss([c.id], 30);
+  assert.equal(hit.hit, 60);
+  assert.ok(sat.digest().text.includes('Завтра Сімейна неділя'));
+  const mon = makeGame(); assert.equal(mon.eventToday(), null); assert.equal(mon.eventView().today, null);
+  const tue = makeGame(Date.UTC(2026, 9, 27, 15, 0)); assert.equal(tue.eventView().tomorrow.id, 'smart_wed');
+  const wed = makeGame(Date.UTC(2026, 9, 28, 15, 0)); assert.equal(wed.miniGold(), 10);
+});
