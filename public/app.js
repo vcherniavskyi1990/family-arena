@@ -133,7 +133,7 @@
     if (state.tournament && !state.battle) h += tournamentHtml(state.tournament);
     if (state.battle && !state.battle.replay) return h + '<div class="card">Бій уже йде без тебе. Зачекай, поки закінчиться.</div>' + battleSpectator();
     if (state.replay) h += '<div class="card">📼 На ТБ іде повтор: ' + esc(state.replay.names.join(', ')) + (me.isParent ? ' <button class="btn-sm" id="replay-stop">Зупинити</button>' : '') + '</div>';
-    h += worldBossHtml(); h += giftHtml();
+    h += worldBossHtml(); h += goalHtml(); h += giftHtml();
     var lob = state.lobby;
     var raidOf = {}; (lob.raids || []).forEach(function (r) { raidOf[r.id] = r; });
     var dungeons = content.dungeons.filter(function (d) { return !d.practice; }).map(function (d) { var r = raidOf[d.id]; return '<option value="' + d.id + '"' + (lob.dungeonId === d.id ? ' selected' : '') + (r && !r.available ? ' disabled' : '') + '>' + d.icon + ' ' + esc(d.name) + ' (рівень ' + d.level + ')' + (r && !r.available ? ' 🔒' : '') + '</option>'; }).join('');
@@ -181,6 +181,11 @@
     if (c.outgoing.length) return c.outgoing.map(function (x) { return '<div class="card chal"><div class="row"><div class="grow">⏳ Чекаємо, чи <b>' + esc(x.to.name) + '</b> прийме виклик <span class="small muted">(ще ' + x.left + ' с)</span></div><button class="btn-sm" data-chal="' + esc(x.id) + '">Забрати</button></div></div>'; }).join('');
     if (!c.targets.length) return '';
     return '<div class="card chal"><h3>⚔️ Кинути виклик</h3><div class="small muted">Телефон суперника задзижчить, ТБ оголосить. Прийняв — обоє вже в лобі дуелі.</div><div class="row wrap">' + c.targets.map(function (t) { return '<button class="btn-sm" data-to="' + esc(t.id) + '">' + esc(t.icon) + ' ' + esc(t.name) + '</button>'; }).join('') + '</div></div>';
+  }
+  function goalHtml() {
+    var g = state.familyGoal; if (!g) return '';
+    return '<div class="card goal' + (g.done ? ' ok' : '') + '"><h3>🎯 Ціль сім\'ї на тиждень</h3><div><b>' + g.n + ' ' + esc(g.kindName) + '</b> разом → <b>' + esc(g.reward) + '</b></div>' +
+      (g.done ? '<div class="ok-text">Досягнуто! Нагорода ваша 🎉</div>' : '<div class="bar green"><i style="width:' + g.pct + '%"></i></div><div class="small muted">' + esc(g.icon) + ' ' + g.progress + ' з ' + g.n + ' · ще ' + g.daysLeft + ' дн.</div>') + '</div>';
   }
   function giftHtml() {
     var me = state.me, s = me.streak || { days: 0 }, g = me.gift || {};
@@ -389,6 +394,11 @@
     h += '<div class="card"><h3>На ТБ</h3><button class="btn-block" id="replay" ' + (state.hasReplay && !state.battle ? '' : 'disabled') + '>📼 Повтор останнього бою на ТБ</button></div>';
     h += '<div class="card"><h3>Сезон</h3><div class="small muted">Зараз: ' + esc(state.season.name) + '. Закриття: лідер стає чемпіоном сезону (титул, +100 🪙), очки обнуляються.</div><input id="season-name" placeholder="Назва нового сезону (необов’язково)"><button class="btn-block btn-red" id="season-end">🏁 Закрити сезон</button></div>';
     h += '<div class="card"><h3>📊 Звіт тижня</h3>' + (ui.report ? reportHtml(ui.report) : '<div class="small muted">Хвилини, бої, справи й розумні відповіді кожної дитини по днях.</div>') + '<div class="row" style="margin-top:8px"><button class="btn-sm" data-report="0">Цей тиждень</button><button class="btn-sm" data-report="1">Минулий</button></div></div>';
+    var fg = state.familyGoal;
+    h += '<div class="card"><h3>🎯 Ціль сім\'ї на тиждень</h3><div class="small muted">Діти збирають разом, ти даєш справжню нагороду (кіно, піца, похід). Досягли: оголошення на ТБ і +30 🪙 кожному.</div>' +
+      (fg ? '<div style="margin:6px 0">Зараз: <b>' + fg.n + ' ' + esc(fg.kindName) + '</b> → ' + esc(fg.reward) + ' (' + fg.progress + ' з ' + fg.n + (fg.done ? ', досягнуто' : '') + ')</div>' : '') +
+      '<div class="row" style="margin-top:6px"><select id="fg-kind" class="grow"><option value="quests">🧹 справ по дому</option><option value="smart">🧠 розумних відповідей</option><option value="wins">🏆 перемог</option><option value="battles">⚔️ боїв</option></select><input id="fg-n" type="number" min="1" max="500" value="' + (fg ? fg.n : 15) + '" style="width:70px"></div>' +
+      '<input id="fg-reward" placeholder="Нагорода: кіно у вихідні, піца…" maxlength="80" value="' + (fg ? esc(fg.reward) : '') + '"><div class="row"><button class="btn-primary grow" id="fg-save">Поставити ціль</button>' + (fg ? '<button class="btn-sm" id="fg-del">Прибрати</button>' : '') + '</div></div>';
     var cpl = (state.me.coupons && state.me.coupons.list) || [];
     h += '<div class="card"><h3>🎟 Купони бажань</h3><div class="small muted">Що діти можуть купити за золото. Виконуєш сам, відмічаєш у «Квестах».</div>' + cpl.map(function (c, i) { return '<div class="row small" style="padding:4px 0"><span class="ic">' + esc(c.icon) + '</span><div class="grow">' + esc(c.name) + ' · ' + c.price + ' 🪙</div><button class="btn-sm" data-cdel="' + i + '">✕</button></div>'; }).join('') +
       '<div class="row" style="margin-top:6px"><input id="cp-icon" placeholder="🎟" maxlength="4" style="width:56px"><input id="cp-name" class="grow" placeholder="Назва бажання" maxlength="60"><input id="cp-price" type="number" placeholder="🪙" min="1" max="5000" style="width:72px"></div><button class="btn-sm" id="cp-add" style="margin-top:6px">➕ Додати купон</button></div>';
@@ -441,6 +451,9 @@
     on('[data-cdone]', function (el) { act('/admin/coupon/done', { orderId: el.dataset.cdone }, '✅ Виконано'); });
     on('[data-crefund]', function (el) { act('/admin/coupon/done', { orderId: el.dataset.crefund, refund: true }, '↩️ Золото повернуто'); });
     on('[data-cdel]', function (el) { var l = state.me.coupons.list.slice(); l.splice(parseInt(el.dataset.cdel, 10), 1); act('/admin/coupons', { coupons: l }, 'Купон прибрано'); });
+    var fk = $('#fg-kind'); if (fk && state.familyGoal) fk.value = state.familyGoal.kind;
+    on('#fg-save', function () { act('/admin/goal', { goal: { kind: $('#fg-kind').value, n: +$('#fg-n').value, reward: $('#fg-reward').value } }, '🎯 Ціль поставлено'); });
+    on('#fg-del', function () { act('/admin/goal', { goal: null }, 'Ціль прибрано'); });
     var ca = $('#cp-add'); if (ca) ca.onclick = function () { var l = state.me.coupons.list.slice(); l.push({ icon: $('#cp-icon').value || '🎟', name: $('#cp-name').value, price: parseInt($('#cp-price').value, 10) }); act('/admin/coupons', { coupons: l }, 'Купон додано'); };
     var sb = $('#status'); if (sb) sb.onclick = function () { api('/admin/status').then(function (r) { ui.status = r; render(); }).catch(function (e) { toast(e.message, 3000); }); };
     on('[data-report]', function (el) { api('/admin/report?back=' + el.dataset.report).then(function (r) { ui.report = r; render(); }).catch(function (e) { toast(e.message, 3000); }); });

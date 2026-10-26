@@ -857,3 +857,30 @@ test('виклик на дуель: телефон → телефон, прий�
   // заблокованому (ліміт) не кинеш і він не ціль
   g.addMinutes(b, 500); assert.throws(() => g.challenge(a, b.id), /B:/); assert.equal(g.challengesView(a).targets.length, 1);
 });
+
+test('ціль сім’ї на тиждень: прогрес, досягнення, нагорода, бекап', () => {
+  const g = makeGame();
+  const dad = g.createPlayer({ name: 'Тато', classId: 'warrior', age: 40, pin: '1234', role: 'admin' });
+  const a = g.createPlayer({ name: 'A', classId: 'rogue', age: 10, pin: '1111' }); const b = g.createPlayer({ name: 'B', classId: 'mage', age: 7, pin: '2222' });
+  assert.equal(g.familyGoalView(), null);
+  assert.throws(() => g.setFamilyGoal(a, { kind: 'quests', n: 3, reward: 'Кіно' }), /батьки/);
+  assert.throws(() => g.setFamilyGoal(dad, { kind: 'quests', n: 3, reward: '' }), /нагороду/);
+  assert.throws(() => g.setFamilyGoal(dad, { kind: 'xx', n: 3, reward: 'Кіно' }), /вид/);
+  const v = g.setFamilyGoal(dad, { kind: 'quests', n: 3, reward: 'Кіно у вихідні' });
+  assert.equal(v.progress, 0); assert.equal(v.done, false); assert.equal(v.kindName, 'справ по дому');
+  g.questDone(a, 'bed'); g.questApprove(dad, a.id, 'bed');
+  g.questDone(b, 'bed'); g.questApprove(dad, b.id, 'bed');
+  assert.equal(g.familyGoalView().progress, 2); assert.equal(g.familyGoalView().pct, 67);
+  const goldA = g.players[a.id].gold;
+  g.logDay(dad.id, { quests: 5 }); assert.equal(g.familyGoalView().progress, 2, 'справи батьків не рахуються');
+  g.questDone(a, 'toys'); g.questApprove(dad, a.id, 'toys');
+  const fg = g.familyGoalView(); assert.equal(fg.done, true); assert.equal(fg.progress, 3);
+  assert.ok(g.players[a.id].gold >= goldA + 12 + 30, '+30 золота за ціль (завдання дня можуть додати ще)'); assert.match(g.announce.text, /досягнуто/);
+  g.questDone(b, 'toys'); g.questApprove(dad, b.id, 'toys'); assert.equal(g.checkFamilyGoal(), false, 'нагорода раз на тиждень'); assert.equal(g.familyGoalView().progress, 3, 'прогрес не вище цілі');
+  assert.match(g.digest().text, /Ціль сім'ї виконано/);
+  assert.ok(g.tvState().familyGoal.done && g.playerState(a).familyGoal.done);
+  // старий бекап без цілі
+  const bk = g.backup(); delete bk.history.familyGoal; bk.settings.familyGoal = undefined; g.restore(dad, bk); assert.ok(g.history.familyGoal);
+  g.updateSettings({ familyGoal: { kind: 'wins', n: 1, reward: 'x' } }); assert.notEqual((g.settings.familyGoal || {}).kind, 'wins', 'лише через setFamilyGoal');
+  g.setFamilyGoal(dad, null); assert.equal(g.familyGoalView(), null);
+});

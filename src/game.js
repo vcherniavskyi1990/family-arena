@@ -45,7 +45,10 @@ const WORLD_BOSS = { duelWin: 30, duelLoss: 10, dungeonBase: 40, dungeonPerLevel
 const DEFAULT_SETTINGS = {
   bedtime: '21:30', wakeup: '07:00', limitWeekday: 45, limitWeekend: 90, roundSeconds: ROUND_SECONDS,
   questsEnabled: true, season: 'Сезон 1: Перші кроки', tz: 'Europe/Kyiv', smartCards: true, raidAnyDay: false,
+  familyGoal: null,   // ціль сім'ї на тиждень: {kind: quests|smart|wins|battles, n, reward} або null
 };
+const GOAL_KINDS = { quests: ['справ по дому', '🧹'], smart: ['розумних відповідей', '🧠'], wins: ['перемог', '🏆'], battles: ['боїв', '⚔️'] };
+const GOAL_GOLD = 30;   // золото кожній дитині, коли ціль сім'ї досягнуто
 
 export const hashPin = (pin, salt) => createHash('sha256').update(`${salt}:${pin}`).digest('hex');
 
@@ -68,7 +71,8 @@ export class Game {
     if (!this.history.family) this.history.family = { achievements: [] };
     if (!this.history.worldBoss) this.history.worldBoss = null;
     if (!this.history.days) this.history.days = {};
-    if (!this.history.questLog) this.history.questLog = [];   // зараховані справи: {day, pid, qid, at} (тиждень на телефоні, «сьогодні» на ТБ)
+    if (!this.history.questLog) this.history.questLog = [];
+    if (!this.history.familyGoal) this.history.familyGoal = { week: null, done: false };   // чи вже зараховано ціль сім'ї цього тижня   // зараховані справи: {day, pid, qid, at} (тиждень на телефоні, «сьогодні» на ТБ)
     if (!this.history.coupons) this.history.coupons = [];   // замовлення купонів: {id, pid, couponId, name, icon, price, at, status: pending|done|refunded}
     if (!this.settings.coupons) { this.settings.coupons = DEFAULT_COUPONS.map(c => ({ ...c })); this.store.set('settings', this.settings); }
     if (!this.history.campaign) this.history.campaign = { chapter: 0, runs: 0, done: [] };   // сюжетна кампанія: chapter = індекс наступного розділу   // журнал по днях для звіту тижня: {день: {гравець: {minutes, battles, wins, quests, smart, kills}}}
@@ -196,6 +200,43 @@ export class Game {
     for (const k of Object.keys(patch)) r[k] = (r[k] || 0) + patch[k];
     const keys = Object.keys(this.history.days).sort(); if (keys.length > 60) for (const k of keys.slice(0, keys.length - 60)) delete this.history.days[k];
     this.store.save('history');
+    this.checkFamilyGoal();
+  }
+  // ---------- ціль сім'ї на тиждень: батьки ставлять число й справжню нагороду, діти збирають разом ----------
+  setFamilyGoal(parent, goal) {
+    if (!this.isParent(parent)) throw err('лише батьки', 403);
+    if (!goal) { this.settings.familyGoal = null; this.store.set('settings', this.settings); this.emit(); return null; }
+    const kind = String(goal.kind || 'quests'); if (!GOAL_KINDS[kind]) throw err('вид цілі');
+    const n = Math.round(Number(goal.n)); if (!(n >= 1 && n <= 500)) throw err('число від 1 до 500');
+    const reward = String(goal.reward || '').trim().slice(0, 80); if (!reward) throw err('напиши нагороду');
+    this.settings.familyGoal = { kind, n, reward }; this.history.familyGoal = { week: this.weekKey(), done: false };
+    this.store.set('settings', this.settings); this.store.save('history');
+    this.feed(`🎯 Ціль сім'ї на тиждень: ${n} ${GOAL_KINDS[kind][0]} → ${reward}`); this.emit();
+    return this.familyGoalView();
+  }
+  familyGoalProgress() {
+    const g = this.settings.familyGoal; if (!g) return 0;
+    const start = new Date(this.weekKey() + 'T12:00:00Z'); let sum = 0;
+    for (let i = 0; i < 7; i++) { const d = new Date(start); d.setUTCDate(d.getUTCDate() + i); const day = this.history.days[d.toISOString().slice(0, 10)] || {}; for (const [pid, r] of Object.entries(day)) if (this.players[pid] && !this.isParent(this.players[pid])) sum += r[g.kind] || 0; }
+    return sum;
+  }
+  familyGoalView() {
+    const g = this.settings.familyGoal; if (!g) return null;
+    const fg = this.history.familyGoal; const week = this.weekKey(); const progress = this.familyGoalProgress();
+    const end = new Date(week + 'T12:00:00Z'); end.setUTCDate(end.getUTCDate() + 7);
+    return { kind: g.kind, kindName: GOAL_KINDS[g.kind][0], icon: GOAL_KINDS[g.kind][1], n: g.n, reward: g.reward, progress: Math.min(progress, g.n), pct: Math.min(100, Math.round(100 * progress / g.n)), done: fg.week === week && fg.done, daysLeft: Math.max(0, Math.ceil((end.getTime() - this.now()) / 86400000)) };
+  }
+  checkFamilyGoal() {
+    const g = this.settings.familyGoal; if (!g) return false;
+    const week = this.weekKey(); const fg = this.history.familyGoal;
+    if (fg.week !== week) { fg.week = week; fg.done = false; }
+    if (fg.done || this.familyGoalProgress() < g.n) return false;
+    fg.done = true; const kids = this.playerList.filter(p => !this.isParent(p));
+    for (const p of kids) p.gold += GOAL_GOLD;
+    this.store.save('players'); this.store.save('history');
+    this.announce = { text: `🎯 Ціль сім'ї досягнуто: ${g.n} ${GOAL_KINDS[g.kind][0]}! Нагорода: ${g.reward}`, by: 'Арена', at: this.now() };
+    this.feed(`👨‍👩‍👦 Ціль сім'ї досягнуто (${g.n} ${GOAL_KINDS[g.kind][0]}): ${g.reward}! +${GOAL_GOLD} золота кожному`);
+    return true;
   }
   /** «Сьогодні зроблено» для ТБ: лише діти з активністю за день (бої, перемоги, справи з назвами, розумні відповіді, хвилини). null, якщо день порожній. */
   todayView() {
@@ -926,6 +967,7 @@ export class Game {
     const fam = feed.filter(f => f.text.startsWith('👨‍👩‍👦')); for (const f of fam.slice(0, 2)) lines.push(f.text);
     const wb = this.worldBossView(); lines.push(wb.killed ? `${wb.icon} Бос тижня «${wb.name}» повалений!` : `${wb.icon} Бос тижня «${wb.name}»: ${wb.pct} % здоров’я, ${wb.daysLeft} дн. до нового.`);
     const quests = feed.filter(f => f.text.startsWith('✅')).length; if (quests) lines.push(`Справ по дому зараховано: ${quests}.`);
+    const fg = this.familyGoalView(); if (fg) lines.push(fg.done ? `🎯 Ціль сім'ї виконано: ${fg.reward}!` : `🎯 Ціль сім'ї: ${fg.progress} з ${fg.n} ${fg.kindName} → ${fg.reward} (ще ${fg.daysLeft} дн.).`);
     const pend = this.pendingQuests().length + this.pendingCards().length; if (pend) lines.push(`⏳ Чекають підтвердження батьків: ${pend}.`);
     const pc = this.pendingCoupons(); if (pc.length) lines.push(`🎟 Куплені бажання чекають: ${pc.map(o => `${o.name}: ${o.icon} ${o.title}`).join('; ')}.`);
     const streaks = this.playerList.filter(p => !this.isParent(p) && this.streakView(p).days >= 2).map(p => `${p.name} ${this.streakView(p).days}`); if (streaks.length) lines.push(`🔥 Серії днів: ${streaks.join(', ')}.`);
@@ -1025,6 +1067,7 @@ export class Game {
     if (this.history.worldBoss === undefined) this.history.worldBoss = null;
     if (!Array.isArray(this.history.coupons)) this.history.coupons = [];
     if (!Array.isArray(this.history.questLog)) this.history.questLog = [];
+    if (!this.history.familyGoal) this.history.familyGoal = { week: null, done: false };
     for (const c of this.history.customCards) if (c.approved) this.registerCard(c);
     if (data.settings) { this.settings = { ...DEFAULT_SETTINGS, ...data.settings }; }
     if (!Array.isArray(this.settings.coupons)) this.settings.coupons = DEFAULT_COUPONS.map(c => ({ ...c }));
@@ -1063,7 +1106,7 @@ export class Game {
     return { phase, closing: this.closingView(), ceremony: this.ceremony && this.now() - this.ceremony.at < CEREMONY_MS ? this.ceremony : null, season: this.settings.season, seasonN: sv.n, seasonTop: sv.top.slice(0, 5), pastSeasons: sv.past.slice(0, 3), quiet, now: this.now(), announce: this.announce, lobby: this.lobbyView(), battle: this.battle ? this.battleView() : this.replayView(), results: this.results, paused: this.paused, pauseReason: this.pauseReason,
       heroes: this.playerList.map(p => ({ ...this.publicPlayer(p), pet: activePetIcon(p), streak: this.streakView(p).days, xp: p.xp, xpNext: xpForLevel(p.level), kills: p.stats.kills, duelWins: p.stats.duelWins, dungeons: p.stats.dungeons, legendaries: p.stats.legendaries, achievements: p.achievements.length })),
       legendaries: this.history.legendaries.slice(0, 5), feed: this.history.feed.slice(0, 8), pendingQuests: this.pendingQuests().length,
-      family: this.familyView(), worldBoss: this.worldBossView(), campaign: this.campaignView(), tournament: this.tournamentView(), today: this.todayView() };
+      family: this.familyView(), worldBoss: this.worldBossView(), campaign: this.campaignView(), tournament: this.tournamentView(), today: this.todayView(), familyGoal: this.familyGoalView() };
   }
   playerState(p) {
     const b = this.battle; const f = b && b.fighters.find(x => x.id === p.id);
@@ -1077,7 +1120,7 @@ export class Game {
       dm: this.isParent(p) && b && b.mode === 'dungeon' && !b.over ? { mobs: this.dmMobs(), players: this.run.players.map(id => this.publicPlayer(this.players[id])) } : null,
       replay: this.replay ? { mode: this.replay.mode, names: this.replay.names } : null, hasReplay: !!(this.history.lastReplay && this.history.lastReplay.frames.length),
       battle: b ? { ...this.battleView(), me: f ? { hand: f.hand.map(id => cardById[id]), mana: f.mana, maxMana: f.maxMana, hp: f.hp, maxHp: f.maxHp, alive: f.alive, move: f.move, shield: f.shield, quiz: f.quiz && !f.move ? { kind: f.quiz.kind, q: f.quiz.q, choices: f.quiz.choices } : null, hint: p.simple && !f.move ? this.hintFor(f) : null } : null } : null,
-      closing: this.closingView(p), done: this.doneView(p), challenges: this.challengesView(p), quests: this.settings.questsEnabled ? this.questsFor(p) : [], pendingQuests: this.isParent(p) ? this.pendingQuests() : [], pendingCoupons: this.isParent(p) ? this.pendingCoupons() : [],
+      closing: this.closingView(p), done: this.doneView(p), challenges: this.challengesView(p), familyGoal: this.familyGoalView(), quests: this.settings.questsEnabled ? this.questsFor(p) : [], pendingQuests: this.isParent(p) ? this.pendingQuests() : [], pendingCoupons: this.isParent(p) ? this.pendingCoupons() : [],
       daily: this.dailyFor(p), tournament: this.tournamentView(), worldBoss: { ...this.worldBossView(), mine: (this.worldBoss().dmg[p.id] || 0) }, family: this.familyView(),
       customCards: this.customCardsOf(p), pendingCards: this.isParent(p) ? this.pendingCards() : [], cardTemplates: CARD_TEMPLATES, tvOnline: this.tvOnline(),
     };
@@ -1087,7 +1130,7 @@ export class Game {
   }
   allowedCards(p) { return allowedCards(p.class, p.collection); }
   dungeonList() { return DUNGEONS.map(d => ({ ...d, ...this.raidStatus(d.id) })); }
-  updateSettings(patch) { for (const k of Object.keys(DEFAULT_SETTINGS)) if (patch[k] !== undefined) this.settings[k] = patch[k]; this.store.set('settings', this.settings); this.emit(); }
+  updateSettings(patch) { for (const k of Object.keys(DEFAULT_SETTINGS)) if (patch[k] !== undefined && k !== 'familyGoal') this.settings[k] = patch[k]; this.store.set('settings', this.settings); this.emit(); }
 
   // ---------- таймери й розсилка ----------
   setTimer(name, ms, fn) {
