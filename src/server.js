@@ -10,7 +10,7 @@ import { Store } from './store.js';
 import { Game, err } from './game.js';
 import { Avatars } from './avatar.js';
 
-export const VERSION = '0.43.0';
+export const VERSION = '0.44.0';
 const PUBLIC = new URL('../public/', import.meta.url);
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.ico': 'image/x-icon', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' };
 
@@ -206,6 +206,8 @@ export function createApp({ dataDir, avatars: avatarsOpt, baseUrl, alertToken = 
     if (path === '/season') { need(); return send(200, game.seasonView()); }
     if (path === '/me/card' && req.method === 'POST') { const c = game.createCustomCard(need(), body); return ok({ card: { ...c } }); }
     if (path === '/admin/card/approve' && req.method === 'POST') { return ok({ card: game.approveCustomCard(parent(), body.id, body.approve !== false) }); }
+    if (path === '/me/mob' && req.method === 'POST') { const m = game.createCustomMob(need(), body); return ok({ mob: { ...m } }); }
+    if (path === '/admin/mob/approve' && req.method === 'POST') { return ok({ mob: game.approveCustomMob(parent(), body.id, body.approve !== false) }); }
     if (path === '/dm' && req.method === 'POST') { return ok(game.dmAction(parent(), body)); }
 
     // --- квести ---

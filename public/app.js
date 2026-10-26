@@ -5,7 +5,7 @@
   var app = $('#app');
   var token = localStorage.getItem('arena.token') || null;
   var content = null, state = null, es = null, tab = localStorage.getItem('arena.tab') || 'arena';
-  var ui = { sound: (function () { try { return localStorage.getItem('arena.sound') === '1'; } catch (e) { return false; } })(), move: { attack: null, blocks: [], cards: [], target: null }, sent: false, craftSel: [], deck: null, pick: null, pin: '', loginPlayer: null, setup: false, heroView: 'gear', avatarCands: null, timerId: null };
+  var ui = { sound: (function () { try { return localStorage.getItem('arena.sound') === '1'; } catch (e) { return false; } })(), move: { attack: null, blocks: [], cards: [], target: null }, sent: false, craftSel: [], deck: null, pick: null, pin: '', loginPlayer: null, setup: false, heroView: 'gear', avatarCands: null, timerId: null, mobPts: { str: 4, hp: 4, trick: 2 } };
   var RAR = { common: 'Звичайний', uncommon: 'Незвичайний', rare: 'Рідкісний', epic: 'Епічний', legendary: 'Легендарний' };
   var STAT = { atk: 'удар', def: 'захист', hp: 'здоров’я', mana: 'мана', crit: 'крит' };
 
@@ -285,7 +285,7 @@
   function myTeam() { var f = state.battle.fighters.filter(function (x) { return x.id === state.me.id; })[0]; return f ? f.team : 0; }
   function cardOf(key) { var id = key.split('#')[0]; return content.cards.filter(function (c) { return c.id === id; })[0] || { cost: 0 }; }
   function fighterRow(f, sel, clickable) {
-    return '<div class="fighter ' + (sel ? 'sel' : '') + (f.alive ? '' : ' dead') + '" ' + (clickable && f.alive ? 'data-target="' + f.id + '"' : '') + '>' + avatarHtml(f) + '<div class="grow"><div class="small"><b>' + esc(f.name) + '</b>' + (f.kind === 'boss' ? ' 👑' : '') + (f.raged ? ' 😡' : '') + (f.fora ? ' 🤝+' + f.fora + '%' : '') + (f.secondWind ? ' 💨' : '') + (f.poison ? ' ☠️' : '') + (f.stunned ? ' 💫' : '') + (f.shield ? ' 🛡' + f.shield : '') + (f.minions.length ? ' ' + f.minions.map(function (x) { return x.icon; }).join('') : '') + (f.ready && f.kind === 'player' ? ' ✅' : '') + '</div><div class="bar ' + (f.team !== myTeam() ? 'red' : '') + '"><i style="width:' + (100 * f.hp / f.maxHp) + '%"></i></div></div><div class="small">' + f.hp + '</div></div>';
+    return '<div class="fighter ' + (sel ? 'sel' : '') + (f.alive ? '' : ' dead') + '" ' + (clickable && f.alive ? 'data-target="' + f.id + '"' : '') + '>' + avatarHtml(f) + '<div class="grow"><div class="small"><b>' + esc(f.name) + '</b>' + (f.kind === 'boss' ? ' 👑' : '') + (f.raged ? ' 😡' : '') + (f.fora ? ' 🤝+' + f.fora + '%' : '') + (f.secondWind ? ' 💨' : '') + (f.custom && f.author ? ' 👾' : '') + (f.poison ? ' ☠️' : '') + (f.stunned ? ' 💫' : '') + (f.shield ? ' 🛡' + f.shield : '') + (f.minions.length ? ' ' + f.minions.map(function (x) { return x.icon; }).join('') : '') + (f.ready && f.kind === 'player' ? ' ✅' : '') + '</div><div class="bar ' + (f.team !== myTeam() ? 'red' : '') + '"><i style="width:' + (100 * f.hp / f.maxHp) + '%"></i></div></div><div class="small">' + f.hp + '</div></div>';
   }
   function moveSummary(mv) { if (!mv) return ''; return 'Удар: ' + content.zoneNames[mv.attack] + ' · блок: ' + mv.blocks.map(function (z) { return content.zoneNames[z]; }).join(', ') + (mv.cards && mv.cards.length ? ' · карти: ' + mv.cards.map(function (id) { return cardOf(id).name; }).join(', ') : ''); }
   function describeEvent(e) {
@@ -364,7 +364,21 @@
     var h = head() + '<div class="row"><b>Колода: ' + ui.deck.length + '/20</b><button class="btn-sm btn-primary right" id="savedeck" ' + (ui.deck.length === 20 ? '' : 'disabled') + '>Зберегти</button><button class="btn-sm" id="resetdeck">Скинути</button></div><div class="row" style="margin:6px 0"><button class="btn-sm btn-blue" id="autodeck">✨ Зібрати за мене</button><span class="small muted">найкращі карти зі знайдених, з розумною кривою мани</span></div><div class="small muted">Тисни на карту: + в колоду, до 2 однакових. Рідкісні карти відкриваються з босів.</div>';
     h += '<div class="deckgrid">' + ui.allowed.map(function (c) { var n = count[c.id] || 0; return '<div class="dcard ' + (n ? 'in' : '') + '" data-dc="' + c.id + '"><div>' + (c.image ? '<img class="cimg" src="' + esc(c.image) + '" alt="">' : esc(c.icon)) + ' <b class="r-' + c.rarity + '">' + esc(c.name) + '</b> <span class="muted">(' + c.cost + ')</span></div><div class="muted">' + esc(c.text) + '</div><div>' + (n ? '✅ ×' + n : '') + '</div></div>'; }).join('') + '</div>';
     h += customCardsHtml();
+    h += customMobsHtml();
     return h;
+  }
+  function customMobsHtml() {
+    var mine = state.customMobs || [], all = state.mobs || [], pts = ui.mobPts, total = state.mobPoints || 10, left = total - pts.str - pts.hp - pts.trick;
+    var h = '<div class="card"><h3>👾 Свої монстри (' + mine.length + '/2)</h3><div class="small muted">Намалюй монстра, сфотографуй, дай ім’я і розділи ' + total + ' очок: сила, здоров’я, хитрість. Батьки підтвердять, і він чекатиме всю сім’ю в підземеллях.</div>';
+    h += mine.map(function (m) { return '<div class="row small" style="padding:4px 0">' + (m.image ? '<img class="cimg" src="' + esc(m.image) + '" alt="">' : '<span>👾</span>') + '<div class="grow"><b>' + esc(m.name) + '</b> <span class="muted">' + m.level + ' рів. · 💪' + m.pts.str + ' ❤️' + m.pts.hp + ' 🦊' + m.pts.trick + (m.approved ? ' · переміг ' + (m.won || 0) + ', подоланий ' + (m.beaten || 0) : '') + '</span></div><span>' + (m.approved ? '✅' : '⏳') + '</span></div>'; }).join('');
+    if (mine.length < 2) {
+      h += '<input id="cm-name" placeholder="Ім’я монстра" maxlength="24">';
+      h += [['str', '💪 Сила'], ['hp', '❤️ Здоров’я'], ['trick', '🦊 Хитрість']].map(function (k) { return '<div class="row" style="padding:3px 0"><div class="grow">' + k[1] + '</div><button class="btn-sm" data-mobpt="' + k[0] + '|-1">−</button><b style="min-width:24px;text-align:center">' + pts[k[0]] + '</b><button class="btn-sm" data-mobpt="' + k[0] + '|1">+</button></div>'; }).join('');
+      h += '<div class="small muted">' + (left ? 'Лишилось очок: ' + left : 'Усі очки розділено') + '</div><input type="file" id="cm-file" accept="image/*" class="file"><button class="btn-primary btn-block" id="cm-go" ' + (left ? 'disabled' : '') + '>👾 Створити монстра</button>';
+    }
+    var others = all.filter(function (m) { return !mine.some(function (x) { return x.id === m.id; }); });
+    if (others.length) h += '<div class="small" style="margin-top:8px"><b>Монстри сім’ї:</b> ' + others.map(function (m) { return (m.image ? '<img class="cimg" src="' + esc(m.image) + '" alt="">' : '👾 ') + esc(m.name) + ' <span class="muted">(' + esc(m.author) + ', ' + m.level + ' рів.)</span>'; }).join(' · ') + '</div>';
+    return h + '</div>';
   }
   function customCardsHtml() {
     var me = state.me, mine = state.customCards || [], t = state.cardTemplates || {};
@@ -390,6 +404,7 @@
     var me = state.me, h = head();
     if (me.isParent && state.pendingQuests.length) h += '<div class="card warn"><h3>Чекають підтвердження</h3>' + state.pendingQuests.map(function (q) { return '<div class="q"><span class="ic">' + esc(q.quest.icon) + '</span><div class="grow"><b>' + esc(q.name) + '</b>: ' + esc(q.quest.name) + (q.photo ? '<div><a href="' + esc(q.photo) + '" target="_blank"><img class="qimg" src="' + esc(q.photo) + '" alt="фото"></a></div>' : '<div class="small muted">без фото</div>') + '</div><button class="btn-sm btn-green" data-approve="' + q.pid + '|' + q.quest.id + '">✅</button><button class="btn-sm" data-reject="' + q.pid + '|' + q.quest.id + '">✕</button></div>'; }).join('') + '</div>';
     if (me.isParent && state.pendingCoupons && state.pendingCoupons.length) h += '<div class="card warn"><h3>🎟 Куплені бажання</h3>' + state.pendingCoupons.map(function (o) { return '<div class="q"><span class="ic">' + esc(o.icon) + '</span><div class="grow"><b>' + esc(o.name) + '</b>: ' + esc(o.title) + ' <span class="small muted">' + o.price + ' 🪙 · ' + fmtAt(o.at) + '</span></div><button class="btn-sm btn-green" data-cdone="' + esc(o.id) + '" title="Виконано">✅</button><button class="btn-sm" data-crefund="' + esc(o.id) + '" title="Повернути золото">↩️</button></div>'; }).join('') + '</div>';
+    if (me.isParent && state.pendingMobs && state.pendingMobs.length) h += '<div class="card warn"><h3>👾 Нові монстри дітей</h3>' + state.pendingMobs.map(function (m) { return '<div class="q">' + (m.image ? '<img class="cimg" src="' + esc(m.image) + '" alt="">' : '<span class="ic">👾</span>') + '<div class="grow"><b>' + esc(m.author) + '</b>: «' + esc(m.name) + '» <span class="small muted">' + m.level + ' рів. · 💪' + m.pts.str + ' ❤️' + m.pts.hp + ' 🦊' + m.pts.trick + '</span></div><button class="btn-sm btn-green" data-mobok="' + m.id + '">✅</button><button class="btn-sm" data-mobno="' + m.id + '">✕</button></div>'; }).join('') + '</div>';
     if (me.isParent && state.pendingCards && state.pendingCards.length) h += '<div class="card warn"><h3>🖍️ Нові карти дітей</h3>' + state.pendingCards.map(function (c) { return '<div class="q">' + (c.image ? '<img class="cimg" src="' + esc(c.image) + '" alt="">' : '<span class="ic">🖍️</span>') + '<div class="grow"><b>' + esc(c.author) + '</b>: «' + esc(c.name) + '» <span class="small muted">' + esc(c.text) + '</span></div><button class="btn-sm btn-green" data-cardok="' + c.id + '">✅</button><button class="btn-sm" data-cardno="' + c.id + '">✕</button></div>'; }).join('') + '</div>';
     if (state.daily && state.daily.length) h += '<div class="card"><h3>📅 Завдання дня</h3>' + state.daily.map(function (t) { return '<div class="q ' + (t.done ? 'done' : '') + '"><span class="ic">' + esc(t.icon) + '</span><div class="grow"><b>' + esc(t.name) + '</b><div class="small muted">' + (t.done ? 'виконано' : t.progress + ' з ' + t.n) + ' · +' + t.gold + ' 🪙, +' + t.xp + ' досвіду</div><div class="bar xp"><i style="width:' + Math.round(100 * Math.min(1, t.progress / t.n)) + '%"></i></div></div><span>' + (t.done ? '✅' : '') + '</span></div>'; }).join('') + '</div>';
     h += '<h3>Справи на сьогодні</h3><div class="small muted">Зробив — сфотографуй результат («📷 Зробив») або натисни ✓ без фото. Батьки підтвердять, і впаде скриня + 10 хвилин гри.</div>';
@@ -535,6 +550,15 @@
     on('#autodeck', function () { act('/me/deck/auto', {}, '✨ Колоду зібрано й збережено').then(function (r) { ui.deck = r.deck.slice(); render(); }); });
     on('[data-cardok]', function (el) { act('/admin/card/approve', { id: el.dataset.cardok, approve: true }, 'Карта в грі!'); });
     on('[data-cardno]', function (el) { act('/admin/card/approve', { id: el.dataset.cardno, approve: false }, 'Відхилено'); });
+    on('[data-mobok]', function (el) { act('/admin/mob/approve', { id: el.dataset.mobok, approve: true }, 'Монстр у грі!'); });
+    on('[data-mobno]', function (el) { act('/admin/mob/approve', { id: el.dataset.mobno, approve: false }, 'Відхилено'); });
+    on('[data-mobpt]', function (el) { var a = el.dataset.mobpt.split('|'), k = a[0], d = +a[1], p = ui.mobPts, tot = state.mobPoints || 10, sum = p.str + p.hp + p.trick; if (d > 0 && sum >= tot) return; if (p[k] + d < 0 || p[k] + d > tot) return; p[k] += d; render(); });
+    on('#cm-go', function (el) {
+      var name = $('#cm-name').value, f = $('#cm-file').files[0], p = ui.mobPts;
+      el.disabled = true;
+      var go = function (image, mime) { act('/me/mob', { name: name, image: image, mime: mime, str: p.str, hp: p.hp, trick: p.trick }, state.me.isParent ? 'Монстр у грі' : 'Надіслано батькам').then(function () { render(); }).catch(function () { el.disabled = false; }); };
+      if (f) shrink(f, function (b64, mime) { go(b64, mime); }, 512); else go(null, null);
+    });
     on('#cc-go', function (el) {
       var name = $('#cc-name').value, tpl = $('#cc-tpl').value, f = $('#cc-file').files[0];
       el.disabled = true;
