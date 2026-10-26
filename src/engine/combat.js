@@ -17,7 +17,7 @@ export function fighterFromPlayer(player, rng) {
   const maxHp = Math.round((cls.hp + (lvl - 1) * 6 + (eq.hp || 0)) * h.hp);
   const deck = rng.shuffle(player.deck && player.deck.length ? player.deck : []);
   const f = {
-    id: player.id, name: player.name, icon: player.icon || cls.icon, avatar: player.avatar || null, team: 0, kind: 'player', pet: player.pet || null,
+    id: player.id, name: player.name, icon: player.icon || cls.icon, avatar: player.avatar || null, team: 0, kind: 'player', pet: player.pet || null, frame: player.cosmetics && player.cosmetics.frame || null, cry: player.cry || null,
     class: cls.id, level: lvl,
     maxHp, hp: maxHp,
     atk: Math.round((cls.atk + (lvl - 1) * 1 + (eq.atk || 0)) * h.dmg), def: cls.def + (eq.def || 0),
@@ -270,7 +270,7 @@ function hurt(b, from, to, dmg, ev, kind, extra = {}) {
 /** Публічний вигляд бійця (без руки й колоди). */
 export function publicFighter(f) {
   return {
-    id: f.id, name: f.name, icon: f.icon, avatar: f.avatar, team: f.team, kind: f.kind, class: f.class, level: f.level, pet: f.pet || null,
+    id: f.id, name: f.name, icon: f.icon, avatar: f.avatar, team: f.team, kind: f.kind, class: f.class, level: f.level, pet: f.pet || null, frame: f.frame || null, cry: f.cry || null,
     hp: f.hp, maxHp: f.maxHp, mana: f.mana, maxMana: f.maxMana, shield: f.shield, alive: f.alive, raged: !!f.raged,
     minions: f.minions.map(m => ({ name: m.name, icon: m.icon, atk: m.atk })), ready: !!f.move,
     poison: !!f.effects.poison, stunned: !!f.effects.stunned, buff: f.buffs.reduce((s, x) => s + x.atk, 0), handSize: f.hand.length,

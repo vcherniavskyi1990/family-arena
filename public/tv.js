@@ -5,7 +5,7 @@
   var state = null, prev = null, es = null, shownRound = 0, queue = [], playing = false, roomShown = null, audio = null, timerId = null;
   var ZONE = { head: 'голова', chest: 'груди', belt: 'пояс', legs: 'ноги' };
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
-  function av(p, cls) { return '<div class="' + (cls || 'av') + '">' + (p.avatar ? '<img src="' + esc(p.avatar) + '">' : esc(p.icon || '🙂')) + (p.pet ? '<span class="pet">' + esc(p.pet) + '</span>' : '') + '</div>'; }
+  function av(p, cls) { return '<div class="' + (cls || 'av') + (p.frame ? ' fr-' + p.frame : '') + '">' + (p.avatar ? '<img src="' + esc(p.avatar) + '">' : esc(p.icon || '🙂')) + (p.pet ? '<span class="pet">' + esc(p.pet) + '</span>' : '') + '</div>'; }
   function connect() {
     if (es) es.close();
     es = new EventSource('/api/events?tv=1');
@@ -139,6 +139,7 @@
       case 'dodge': floatText(e.who, 'повз!', 'miss'); say('💨 ' + who + ' ухилився від ' + by); break;
       case 'absorb': floatText(e.who, '🛡 −' + e.v, 'block'); wait = 250; break;
       case 'dmg': flash(e.who, 'hit'); floatText(e.who, '−' + e.v, e.crit ? 'crit' : ''); setHp(e.who, e.hp);
+        if (e.crit && e.by) { var cf = (state.battle && state.battle.fighters || []).filter(function (x) { return x.id === e.by; })[0]; if (cf && cf.cry) floatText(e.by, '«' + cf.cry + '»', 'cry'); }
         say((e.crit ? '💥 <b>КРИТ!</b> ' : '⚔️ ') + by + ' → ' + who + ': <b>−' + e.v + '</b>' + (e.zone ? ' у ' + ZONE[e.zone] : '') + (e.kind === 'poison' ? ' (отрута)' : e.kind === 'minion' ? ' (' + esc(e.minion) + ')' : e.kind === 'explode' ? ' (вибух!)' : ''));
         beep(e.crit ? 180 : 240, e.crit ? 220 : 100, 'square', e.crit ? 0.09 : 0.05); if (e.crit) wait = 800; break;
       case 'heal': flash(e.who, 'healed'); floatText(e.who, '+' + e.v, 'heal'); say('💚 ' + who + ' +' + e.v + ' здоров’я'); beep(700, 150, 'sine'); break;

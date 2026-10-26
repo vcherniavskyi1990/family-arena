@@ -7,9 +7,10 @@ import { makeRng } from './engine/rng.js';
 import { createBattle, fighterFromPlayer, fighterFromMob, submitMove, resolveRound, publicFighter, alive, enemiesOf, MAX_CARDS_PER_TURN } from './engine/combat.js';
 import { newPlayer, addXp, xpForLevel, equipmentBonus, genItem, genCard, equip, unequip, craft, checkAchievements, setDeck, sellPrice, genPet, grantPet, petView, petOf, activePetIcon } from './engine/progress.js';
 import { makeQuiz, checkQuiz } from './engine/quiz.js';
-import { CLASSES, CARDS, DUNGEONS, QUESTS, ACHIEVEMENTS, DAILY, FAMILY, WORLDBOSS, PETS, CAMPAIGN, ITEMS, petById, ZONES, ZONE_NAMES, classById, dungeonById, mobById, questById, cardById, starterDeck, allowedCards } from './engine/content.js';
+import { CLASSES, CARDS, DUNGEONS, QUESTS, ACHIEVEMENTS, DAILY, FAMILY, WORLDBOSS, PETS, CAMPAIGN, COSMETICS, ITEMS, petById, ZONES, ZONE_NAMES, classById, dungeonById, mobById, questById, cardById, starterDeck, allowedCards } from './engine/content.js';
 
 export const ROUND_SECONDS = 30;
+const cryText = (id) => { const c = COSMETICS.cries.find(x => x.id === id); return c ? c.text : null; };
 const RESULTS_SECONDS = 25;
 const ROOM_HEAL = 0.3;
 const REPLAY_FRAMES = 80;
@@ -98,7 +99,7 @@ export class Game {
   // ---------- гравці й вхід ----------
   get playerList() { return Object.values(this.players); }
   publicPlayer(p) {
-    return { id: p.id, name: p.name, class: p.class, className: classById[p.class].name, icon: p.icon || classById[p.class].icon, avatar: p.avatar, title: p.title, level: p.level, role: p.role, age: p.age, simple: !!p.simple };
+    return { id: p.id, name: p.name, class: p.class, className: classById[p.class].name, icon: p.icon || classById[p.class].icon, avatar: p.avatar, title: p.title, level: p.level, role: p.role, age: p.age, simple: !!p.simple, frame: p.cosmetics ? p.cosmetics.frame : null, cry: p.cosmetics ? cryText(p.cosmetics.cry) : null };
   }
   createPlayer({ name, classId, age, pin, role }) {
     if (!name || !name.trim()) throw err('Потрібне ім’я');
@@ -238,7 +239,7 @@ export class Game {
   }
   startMatch() {
     const t = this.tournament; const m = t.matches[t.current];
-    const fighters = (list) => list.map(id => { const p = this.players[id]; return fighterFromPlayer({ ...p, bonus: equipmentBonus(p), icon: this.publicPlayer(p).icon, pet: activePetIcon(p) }, this.rng); });
+    const fighters = (list) => list.map(id => { const p = this.players[id]; return fighterFromPlayer({ ...p, bonus: equipmentBonus(p), icon: this.publicPlayer(p).icon, pet: activePetIcon(p), cry: this.publicPlayer(p).cry }, this.rng); });
     this.seed = (this.seed * 7919 + 13) % 2147483647; this.rng = makeRng(this.seed);
     this.run = { mode: 'duel', players: [m.a, m.b], tournament: t.current, startedAt: this.now(), frames: [] };
     this.battle = createBattle({ teams: [fighters([m.a]), fighters([m.b])], seed: this.seed, mode: 'duel' });
@@ -277,7 +278,7 @@ export class Game {
     this.stopReplay();
     const ids = Object.keys(this.lobby.players);
     if (this.lobby.mode === 'tournament') { this.tournament = null; return this.startTournament(ids); }
-    const fighters = (list) => list.map(id => { const p = this.players[id]; return fighterFromPlayer({ ...p, bonus: equipmentBonus(p), icon: this.publicPlayer(p).icon, pet: activePetIcon(p) }, this.rng); });
+    const fighters = (list) => list.map(id => { const p = this.players[id]; return fighterFromPlayer({ ...p, bonus: equipmentBonus(p), icon: this.publicPlayer(p).icon, pet: activePetIcon(p), cry: this.publicPlayer(p).cry }, this.rng); });
     this.seed = (this.seed * 7919 + 13) % 2147483647; this.rng = makeRng(this.seed);
     if (this.lobby.mode === 'duel') {
       const t0 = ids.filter(id => this.lobby.players[id].team === 0), t1 = ids.filter(id => this.lobby.players[id].team === 1);
@@ -476,6 +477,26 @@ export class Game {
   craft(p, ids) { const out = craft(p, ids, this.rng); if (typeof out === 'string') throw err(out); this.store.save('players'); if (out.rarity === 'legendary') this.feed(`🔧 ${p.name} скрафтив легендарку: ${out.name}!`); checkAchievements(p); this.emit(); return out; }
   sell(p, itemId) { const it = p.inventory.find(i => i.id === itemId); if (!it) throw err('немає предмета'); p.inventory = p.inventory.filter(i => i.id !== itemId); const g = sellPrice(it); p.gold += g; this.store.save('players'); this.emit(); return g; }
   /** Магазин: скриня за золото (рідкість випадкова, трохи краща за звичайну). */
+  /** Косметика за золото: рамки аватара (видно на ТБ) і бойовий клич (на ТБ при криті). */
+  cosmeticsView(p) {
+    const c = p.cosmetics || { owned: [], frame: null, cry: null };
+    return { frames: COSMETICS.frames.map(f => ({ ...f, owned: c.owned.includes('frame:' + f.id), active: c.frame === f.id })),
+      cries: COSMETICS.cries.map(x => ({ ...x, owned: c.owned.includes('cry:' + x.id), active: c.cry === x.id })), frame: c.frame, cry: c.cry };
+  }
+  buyCosmetic(p, key) {
+    if (!p.cosmetics) p.cosmetics = { owned: [], frame: null, cry: null };
+    const [kind, id] = String(key).split(':'); const def = kind === 'frame' ? COSMETICS.frames.find(x => x.id === id) : kind === 'cry' ? COSMETICS.cries.find(x => x.id === id) : null;
+    if (!def) throw err('немає такого'); if (p.cosmetics.owned.includes(key)) throw err('уже є');
+    if (p.gold < def.price) throw err('не вистачає золота');
+    p.gold -= def.price; p.cosmetics.owned.push(key); p.cosmetics[kind] = id;
+    this.store.save('players'); this.emit(); return this.cosmeticsView(p);
+  }
+  setCosmetic(p, { frame, cry }) {
+    if (!p.cosmetics) p.cosmetics = { owned: [], frame: null, cry: null };
+    if (frame !== undefined) { if (frame !== null && !p.cosmetics.owned.includes('frame:' + frame)) throw err('не куплено'); p.cosmetics.frame = frame; }
+    if (cry !== undefined) { if (cry !== null && !p.cosmetics.owned.includes('cry:' + cry)) throw err('не куплено'); p.cosmetics.cry = cry; }
+    this.store.save('players'); this.emit(); return this.cosmeticsView(p);
+  }
   buyChest(p, kind) {
     const price = { common: 40, rare: 150 }[kind]; if (!price) throw err('немає такої скрині');
     if (p.gold < price) throw err('не вистачає золота');
@@ -804,7 +825,7 @@ export class Game {
     const inLobby = this.lobby.players[p.id];
     const tv = this.tvState(); const sv = { ...this.seasonView(), phase: tv.phase };
     return {
-      me: { ...this.publicPlayer(p), xp: p.xp, xpNext: xpForLevel(p.level), gold: p.gold, deck: p.deck, collection: p.collection, inventory: p.inventory, equipment: p.equipment, bonus: equipmentBonus(p), pets: petView(p), stats: p.stats, achievements: p.achievements,
+      me: { ...this.publicPlayer(p), xp: p.xp, xpNext: xpForLevel(p.level), gold: p.gold, deck: p.deck, collection: p.collection, inventory: p.inventory, equipment: p.equipment, bonus: equipmentBonus(p), pets: petView(p), cosmetics: this.cosmeticsView(p), stats: p.stats, achievements: p.achievements,
         minutesToday: this.minutesToday(p), limit: this.limitFor(p), blocked: this.blockedReason(p), isParent: this.isParent(p), avatarPending: p.avatarPending || null,
         seasonPoints: this.history.season.points[p.id] || 0, seasonRank: sv.top.findIndex(x => x.id === p.id) + 1 },
       phase: sv.phase, season: { n: sv.n, name: sv.name, top: sv.top.slice(0, 5) }, lobby: this.lobbyView(), inLobby: !!inLobby, results: this.results, paused: this.paused, pauseReason: this.pauseReason,
