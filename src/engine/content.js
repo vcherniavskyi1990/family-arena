@@ -18,6 +18,7 @@ export const CAMPAIGN = load('campaign');
 export const COSMETICS = load('cosmetics');
 export const MUTATORS = load('mutators');
 export const EVENTS = load('events');
+export const ENVELOPES = load('envelopes');
 export const petById = Object.fromEntries(PETS.map(p => [p.id, p]));
 
 export const cardById = Object.fromEntries(CARDS.map(c => [c.id, c]));

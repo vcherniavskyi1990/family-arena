@@ -1,20 +1,103 @@
 {
   "frames": [
-    { "id": "wood", "name": "Дерев’яна рамка", "icon": "🪵", "price": 30, "color": "#a0714f", "glow": "" },
-    { "id": "ice", "name": "Крижана рамка", "icon": "🧊", "price": 60, "color": "#4aa3ff", "glow": "#4aa3ff88" },
-    { "id": "creeper", "name": "Рамка Кріпера", "icon": "💚", "price": 90, "color": "#1eff00", "glow": "#1eff0066" },
-    { "id": "fire", "name": "Вогняна рамка", "icon": "🔥", "price": 110, "color": "#ff8000", "glow": "#ff8000aa" },
-    { "id": "gold", "name": "Золота рамка", "icon": "👑", "price": 160, "color": "#f1c40f", "glow": "#f1c40faa" },
-    { "id": "rainbow", "name": "Веселкова рамка", "icon": "🌈", "price": 250, "color": "rainbow", "glow": "#ffffff66" }
+    {
+      "id": "wood",
+      "name": "Дерев’яна рамка",
+      "icon": "🪵",
+      "price": 30,
+      "color": "#a0714f",
+      "glow": ""
+    },
+    {
+      "id": "ice",
+      "name": "Крижана рамка",
+      "icon": "🧊",
+      "price": 60,
+      "color": "#4aa3ff",
+      "glow": "#4aa3ff88"
+    },
+    {
+      "id": "creeper",
+      "name": "Рамка Кріпера",
+      "icon": "💚",
+      "price": 90,
+      "color": "#1eff00",
+      "glow": "#1eff0066"
+    },
+    {
+      "id": "fire",
+      "name": "Вогняна рамка",
+      "icon": "🔥",
+      "price": 110,
+      "color": "#ff8000",
+      "glow": "#ff8000aa"
+    },
+    {
+      "id": "gold",
+      "name": "Золота рамка",
+      "icon": "👑",
+      "price": 160,
+      "color": "#f1c40f",
+      "glow": "#f1c40faa"
+    },
+    {
+      "id": "rainbow",
+      "name": "Веселкова рамка",
+      "icon": "🌈",
+      "price": 250,
+      "color": "rainbow",
+      "glow": "#ffffff66"
+    },
+    {
+      "id": "family",
+      "name": "Родинна рамка",
+      "icon": "💌",
+      "price": 0,
+      "envelope": "env_80",
+      "color": "#ff7eb6",
+      "glow": "#ff7eb688"
+    }
   ],
   "cries": [
-    { "id": "boom", "text": "Бумм!", "price": 20 },
-    { "id": "creeper", "text": "Шшшш… Кріпер!", "price": 25 },
-    { "id": "cake", "text": "Торт — мій!", "price": 25 },
-    { "id": "horde", "text": "За Орду!", "price": 40 },
-    { "id": "leeroy", "text": "Лірой Дженкінс!", "price": 50 },
-    { "id": "gandalf", "text": "Ти не пройдеш!", "price": 50 },
-    { "id": "pain", "text": "Зараз буде боляче!", "price": 40 },
-    { "id": "gg", "text": "GG, легко!", "price": 60 }
+    {
+      "id": "boom",
+      "text": "Бумм!",
+      "price": 20
+    },
+    {
+      "id": "creeper",
+      "text": "Шшшш… Кріпер!",
+      "price": 25
+    },
+    {
+      "id": "cake",
+      "text": "Торт — мій!",
+      "price": 25
+    },
+    {
+      "id": "horde",
+      "text": "За Орду!",
+      "price": 40
+    },
+    {
+      "id": "leeroy",
+      "text": "Лірой Дженкінс!",
+      "price": 50
+    },
+    {
+      "id": "gandalf",
+      "text": "Ти не пройдеш!",
+      "price": 50
+    },
+    {
+      "id": "pain",
+      "text": "Зараз буде боляче!",
+      "price": 40
+    },
+    {
+      "id": "gg",
+      "text": "GG, легко!",
+      "price": 60
+    }
   ]
 }
