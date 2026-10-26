@@ -212,5 +212,48 @@
     "rageAt": 0.35,
     "heal": 15,
     "text": "Лікується від замерзлих душ."
+  },
+  {
+    "id": "raid_titan",
+    "name": "Титан Безладу",
+    "icon": "🗿",
+    "boss": true,
+    "hp": 700,
+    "atk": 20,
+    "def": 5,
+    "xp": 600,
+    "gold": 250,
+    "level": 6,
+    "lootChance": 1,
+    "rageAt": 0.4,
+    "summonEvery": 3,
+    "summons": [
+      "zombie",
+      "skeleton"
+    ],
+    "aoe": true,
+    "text": "Кожні 3 раунди кличе підмогу з розкиданих речей. На 40 % лютує і б'є всіх."
+  },
+  {
+    "id": "raid_dragon",
+    "name": "Прадавній дракон",
+    "icon": "🐲",
+    "boss": true,
+    "hp": 1100,
+    "atk": 26,
+    "def": 7,
+    "xp": 1000,
+    "gold": 400,
+    "level": 10,
+    "lootChance": 1,
+    "rageAt": 0.35,
+    "summonEvery": 4,
+    "summons": [
+      "blaze",
+      "blaze"
+    ],
+    "aoe": true,
+    "heal": 10,
+    "text": "Дихає вогнем на всіх у люті, кожні 4 раунди кличе блейзів."
   }
 ]

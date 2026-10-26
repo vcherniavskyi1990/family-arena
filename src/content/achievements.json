@@ -188,5 +188,25 @@
       "stat": "seasonWins",
       "gte": 1
     }
+  },
+  {
+    "id": "raid_1",
+    "name": "Рейдер",
+    "icon": "🗿",
+    "title": "Рейдер",
+    "cond": {
+      "stat": "raids",
+      "gte": 1
+    }
+  },
+  {
+    "id": "raid_5",
+    "name": "Гроза титанів",
+    "icon": "🏔️",
+    "title": "Гроза титанів",
+    "cond": {
+      "stat": "raids",
+      "gte": 5
+    }
   }
 ]

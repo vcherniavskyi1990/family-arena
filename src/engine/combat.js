@@ -226,6 +226,12 @@ export function resolveRound(b) {
     if (f.effects.poison) { hurt(b, f, f, f.effects.poison.v, ev, 'poison'); if (--f.effects.poison.turns <= 0) delete f.effects.poison; }
     if (f.mob && mobById[f.mob].heal && f.alive && f.hp < f.maxHp) { const v = mobById[f.mob].heal; f.hp = Math.min(f.maxHp, f.hp + v); ev.push({ t: 'heal', who: f.id, by: f.id, v }); }
     if (f.mob && mobById[f.mob].rageAt && !f.raged && f.hp <= f.maxHp * mobById[f.mob].rageAt) { f.raged = true; ev.push({ t: 'rage', who: f.id, name: f.name }); }
+    if (f.mob && mobById[f.mob].summonEvery && b.round % mobById[f.mob].summonEvery === 0 && f.alive) {
+      const ids = mobById[f.mob].summons || [];
+      const extra = ids.map((id, i) => fighterFromMob(id, 100 + b.round * 10 + i, b.meta && b.meta.scale ? b.meta.scale : 1));
+      for (const x of extra) { x.team = f.team; b.fighters.push(x); }
+      if (extra.length) ev.push({ t: 'reinforce', who: f.id, names: extra.map(x => x.name), icons: extra.map(x => x.icon) });
+    }
     f.effects.stunned = false; f.effects.untouchable = false;
     f.buffs = f.buffs.map(x => ({ ...x, turns: x.turns - 1 })).filter(x => x.turns > 0);
     f.shield = Math.min(f.shield, 30);

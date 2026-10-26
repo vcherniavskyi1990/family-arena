@@ -1,10 +1,158 @@
 [
-  { "id": "kitchen_caves", "name": "Кухонні печери", "icon": "🍳", "level": 1, "text": "Хтось не помив посуд, і там завелись зомбі.",
-    "rooms": [["zombie", "zombie"], ["skeleton", "spider"], ["slime", "zombie", "skeleton"]], "boss": "boss_ravager" },
-  { "id": "wardrobe_shadows", "name": "Гардеробна тіней", "icon": "🧥", "level": 3, "text": "За куртками щось шарудить.",
-    "rooms": [["creeper", "noob"], ["murloc", "murloc", "spider"], ["enderman", "witch"], ["gnoll", "blaze"]], "boss": "boss_wither" },
-  { "id": "bathroom_kraken", "name": "Ванна кракена", "icon": "🛁", "level": 5, "text": "Злив булькає підозріло.",
-    "rooms": [["murloc", "murloc", "murloc"], ["blaze", "enderman"], ["hacker", "witch"], ["gnoll", "gnoll", "creeper"]], "boss": "boss_ender_dragon" },
-  { "id": "balcony_citadel", "name": "Цитадель на балконі", "icon": "🏰", "level": 8, "text": "Король-ліч оселився між велосипедами.",
-    "rooms": [["hacker", "hacker"], ["enderman", "enderman", "blaze"], ["gnoll", "witch", "witch"], ["hacker", "blaze", "enderman"], ["gnoll", "gnoll", "gnoll"]], "boss": "boss_lich_king" }
+ {
+  "id": "kitchen_caves",
+  "name": "Кухонні печери",
+  "icon": "🍳",
+  "level": 1,
+  "text": "Хтось не помив посуд, і там завелись зомбі.",
+  "rooms": [
+   [
+    "zombie",
+    "zombie"
+   ],
+   [
+    "skeleton",
+    "spider"
+   ],
+   [
+    "slime",
+    "zombie",
+    "skeleton"
+   ]
+  ],
+  "boss": "boss_ravager"
+ },
+ {
+  "id": "wardrobe_shadows",
+  "name": "Гардеробна тіней",
+  "icon": "🧥",
+  "level": 3,
+  "text": "За куртками щось шарудить.",
+  "rooms": [
+   [
+    "creeper",
+    "noob"
+   ],
+   [
+    "murloc",
+    "murloc",
+    "spider"
+   ],
+   [
+    "enderman",
+    "witch"
+   ],
+   [
+    "gnoll",
+    "blaze"
+   ]
+  ],
+  "boss": "boss_wither"
+ },
+ {
+  "id": "bathroom_kraken",
+  "name": "Ванна кракена",
+  "icon": "🛁",
+  "level": 5,
+  "text": "Злив булькає підозріло.",
+  "rooms": [
+   [
+    "murloc",
+    "murloc",
+    "murloc"
+   ],
+   [
+    "blaze",
+    "enderman"
+   ],
+   [
+    "hacker",
+    "witch"
+   ],
+   [
+    "gnoll",
+    "gnoll",
+    "creeper"
+   ]
+  ],
+  "boss": "boss_ender_dragon"
+ },
+ {
+  "id": "balcony_citadel",
+  "name": "Цитадель на балконі",
+  "icon": "🏰",
+  "level": 8,
+  "text": "Король-ліч оселився між велосипедами.",
+  "rooms": [
+   [
+    "hacker",
+    "hacker"
+   ],
+   [
+    "enderman",
+    "enderman",
+    "blaze"
+   ],
+   [
+    "gnoll",
+    "witch",
+    "witch"
+   ],
+   [
+    "hacker",
+    "blaze",
+    "enderman"
+   ],
+   [
+    "gnoll",
+    "gnoll",
+    "gnoll"
+   ]
+  ],
+  "boss": "boss_lich_king"
+ },
+ {
+  "id": "raid_titan",
+  "name": "Рейд: Титан Безладу",
+  "icon": "🗿",
+  "level": 4,
+  "raid": true,
+  "minPlayers": 2,
+  "scalePerPlayer": 0.5,
+  "text": "Сімейний рейд вихідного дня. Усі разом проти титана з розкиданих іграшок. Епічний лут кожному, шанс на легендарку.",
+  "rooms": [
+   [
+    "zombie",
+    "zombie",
+    "skeleton"
+   ]
+  ],
+  "boss": "raid_titan",
+  "rewards": {
+   "minRarity": "epic",
+   "legendaryChance": 0.25
+  }
+ },
+ {
+  "id": "raid_dragon",
+  "name": "Рейд: Прадавній дракон",
+  "icon": "🐲",
+  "level": 9,
+  "raid": true,
+  "minPlayers": 2,
+  "scalePerPlayer": 0.5,
+  "text": "Для сім'ї високого рівня. Дракон спить під балконом, і його краще не будити без лікаря.",
+  "rooms": [
+   [
+    "blaze",
+    "enderman",
+    "witch"
+   ]
+  ],
+  "boss": "raid_dragon",
+  "rewards": {
+   "minRarity": "epic",
+   "legendaryChance": 0.4
+  }
+ }
 ]

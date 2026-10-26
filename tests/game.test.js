@@ -199,3 +199,60 @@ test('повтор останнього бою на ТБ: кадри йдуть 
   assert.equal(g.replay, null);
   assert.equal(g.tvState().phase, 'idle');
 });
+
+test('рейд: лише у вихідні, мінімум двоє, епічний лут кожному, раз на тиждень', () => {
+  const g = makeGame(Date.UTC(2026, 9, 24, 10, 0)); // субота 13:00 Київ
+  const dad = g.createPlayer({ name: 'Тато', classId: 'warrior', age: 40, pin: '1234', role: 'admin' });
+  const a = g.createPlayer({ name: 'Віктор', classId: 'healer', age: 10, pin: '1111' });
+  assert.ok(g.lobbyView().raids.length >= 2);
+  g.setMode(dad, { dungeonId: 'raid_titan' });
+  g.join(dad); g.ready(dad, true);
+  assert.equal(g.battle, null, 'рейд не стартує з одним гравцем');
+  g.join(a); g.ready(a, true);
+  assert.ok(g.battle, 'рейд почався з двома');
+  assert.equal(g.battle.meta.raid, true);
+  // бос рейду має кликати підмогу; дамо команді читерські хп, щоб дійти до боса
+  let guard = 0, reinforced = false;
+  while (g.battle && guard++ < 400) {
+    for (const f of g.battle.fighters) if (f.kind === 'player') f.hp = f.maxHp;
+    g.fire('round');
+    if (g.lastRound && g.lastRound.events.some(e => e.t === 'reinforce')) reinforced = true;
+  }
+  assert.ok(reinforced, 'бос кликав підмогу');
+  assert.equal(g.results.raid, true);
+  assert.equal(g.results.won, true);
+  const mine = g.results.loot.filter(l => l.pid === a.id && l.item);
+  assert.ok(mine.some(l => ['epic', 'legendary'].includes(l.item.rarity)), 'епічний лут');
+  assert.equal(g.players[a.id].stats.raids, 1);
+  assert.ok(g.players[a.id].achievements.includes('raid_1'));
+  g.fire('results');
+  assert.throws(() => g.setMode(dad, { dungeonId: 'raid_titan' }), /цього тижня/);
+  // понеділок: рейд знову є, але лише у вихідні, доки батьки не дозволять
+  g.advance(2 * 24 * 3600 * 1000);
+  assert.throws(() => g.setMode(dad, { dungeonId: 'raid_titan' }), /вихідні/);
+  g.updateSettings({ raidAnyDay: true });
+  g.setMode(dad, { dungeonId: 'raid_titan' });
+});
+
+test('тато-ведучий: підмога, зцілення, лють, скарб, слово', () => {
+  const g = makeGame();
+  const dad = g.createPlayer({ name: 'Тато', classId: 'warrior', age: 40, pin: '1234', role: 'admin' });
+  const a = g.createPlayer({ name: 'Віктор', classId: 'archer', age: 10, pin: '1111' });
+  assert.throws(() => g.dmAction(a, { kind: 'heal' }), /батьки/);
+  g.dmAction(dad, { kind: 'say', text: 'Увага, зараз буде страшно' });
+  assert.equal(g.tvState().announce.text, 'Увага, зараз буде страшно');
+  assert.throws(() => g.dmAction(dad, { kind: 'heal' }), /не йде/);
+  g.join(a); g.ready(a, true);
+  assert.ok(g.battle);
+  const n = g.battle.fighters.length;
+  g.dmAction(dad, { kind: 'spawn', mobId: 'creeper' });
+  assert.equal(g.battle.fighters.length, n + 1);
+  assert.equal(g.battle.fighters[n].team, 1);
+  const f = g.battle.fighters.find(x => x.id === a.id); f.hp = 10;
+  g.dmAction(dad, { kind: 'heal' }); assert.equal(f.hp, 35);
+  assert.throws(() => g.dmAction(dad, { kind: 'rage' }), /боса/);
+  g.dmAction(dad, { kind: 'treasure', playerId: a.id });
+  assert.equal(g.run.loot.length, 1);
+  assert.ok(g.playerState(dad).dm.mobs.length > 5);
+  assert.equal(g.playerState(a).dm, null);
+});
