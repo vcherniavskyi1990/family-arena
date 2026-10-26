@@ -378,6 +378,30 @@ test('друзі в гостях: герой на вечір, без очок с
   assert.throws(() => { for (let i = 0; i < 4; i++) g.createGuest(dad, { name: 'Гість' + i }); }, /не більше/);
 });
 
+test('автобій: хід робиться сам, раунд закривається швидше, дитина може змінити', () => {
+  const g = makeGame();
+  const dad = g.createPlayer({ name: 'Тато', classId: 'warrior', role: 'parent', pin: '0000' });
+  const a = g.createPlayer({ name: 'Сашко', classId: 'mage', age: 7, pin: '2222' });
+  g.updatePlayer(a.id, { auto: true });
+  assert.equal(g.publicPlayer(a).auto, true);
+  g.setMode(dad, { mode: 'duel' }); g.join(dad); g.join(a); g.ready(dad, true); g.ready(a, true);
+  const f = g.battle.fighters.find(x => x.id === a.id);
+  assert.ok(f.move && f.move.auto, 'хід зроблено сам');
+  assert.equal(a.stats.autoMoves, 1);
+  const st = g.playerState(a); assert.ok(st.battle.me.hint && st.battle.me.auto && st.battle.me.move.auto);
+  assert.ok(g.tvState().battle.fighters.find(x => x.id === a.id).auto);
+  assert.ok(g.roundEnds - g.now() > 8000, 'тато ходить сам, раунд повний');
+  // дитина змінює хід
+  g.move(a, { attack: 'legs', blocks: ['head', 'chest'], cards: [] });
+  assert.equal(f.move.attack, 'legs'); assert.ok(!f.move.auto);
+  // коли всі на автобої, раунд коротший
+  g.updatePlayer(dad.id, { auto: true });
+  g.fire('round'); if (g.battle) g.fire('round');
+  if (g.battle && !g.battle.over) assert.ok(g.roundEnds - g.now() <= 8000, 'усі ходи сам: 8 с');
+  let guard = 0; while (g.battle && guard++ < 400) g.fire('round');
+  assert.ok(g.history.battles.length === 1);
+});
+
 test('тривога з дому: пауза і відбій', () => {
   const g = makeGame();
   const a = g.createPlayer({ name: 'Віктор', classId: 'archer', age: 10, pin: '1111' });

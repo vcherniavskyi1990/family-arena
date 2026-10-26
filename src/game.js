@@ -59,7 +59,8 @@ const CEREMONY_MS = 40000;   // церемонія закриття сезону
 const GIFT = { base: 10, perDay: 5, maxDays: 7, itemEvery: 7 };
 const WELCOME = { afterDays: 3, gold: 20 };
 const RECORDS = { bigHit: { name: 'Найсильніший удар', icon: '💥' }, runKills: { name: 'Найбільше ворогів за похід', icon: '⚔️' }, longDuel: { name: 'Найдовша дуель', icon: '🥊' }, streak: { name: 'Найдовша серія днів', icon: '🔥' } };
-const BOOK_MOMENTS = 80;   // «з поверненням» після паузи: золото і збережена серія
+const BOOK_MOMENTS = 80;
+const AUTO_ROUND_MS = 8000;  // коли всі ходи зробив автобій, раунд закривається за 8 с   // «з поверненням» після паузи: золото і збережена серія
 const PET_DROP = 0.35;   // шанс вихованця за пройдене підземелля
 const WORLD_BOSS = { duelWin: 30, duelLoss: 10, dungeonBase: 40, dungeonPerLevel: 15, dungeonPerKill: 3, dungeonLoss: 10, smartMult: 2, gold: 40 };
 
@@ -149,7 +150,7 @@ export class Game {
   // ---------- гравці й вхід ----------
   get playerList() { return Object.values(this.players); }
   publicPlayer(p) {
-    return { id: p.id, name: p.name, class: p.class, className: classById[p.class].name, icon: p.icon || classById[p.class].icon, avatar: p.avatar, title: p.title, level: p.level, role: p.role, age: p.age, simple: !!p.simple, frame: p.cosmetics ? p.cosmetics.frame : null, cry: p.cosmetics ? cryText(p.cosmetics.cry) : null };
+    return { id: p.id, name: p.name, class: p.class, className: classById[p.class].name, icon: p.icon || classById[p.class].icon, avatar: p.avatar, title: p.title, level: p.level, role: p.role, age: p.age, simple: !!p.simple, auto: !!p.auto, frame: p.cosmetics ? p.cosmetics.frame : null, cry: p.cosmetics ? cryText(p.cosmetics.cry) : null };
   }
   createPlayer({ name, classId, age, pin, role }) {
     if (!name || !name.trim()) throw err('Потрібне ім’я');
@@ -188,6 +189,7 @@ export class Game {
     if (patch.pin) { if (!/^\d{4}$/.test(String(patch.pin))) throw err('PIN: 4 цифри'); p.pinHash = hashPin(patch.pin, p.id); for (const [t, v] of Object.entries(this.tokens)) if (v.playerId === id) delete this.tokens[t]; this.store.save('tokens'); }
     if (patch.class && classById[patch.class] && p.level <= 3) { p.class = patch.class; p.deck = starterDeck(patch.class); }
     if (patch.simple !== undefined) p.simple = !!patch.simple;
+    if (patch.auto !== undefined) p.auto = !!patch.auto;
     this.store.save('players'); this.emit();
     return p;
   }
@@ -683,7 +685,17 @@ export class Game {
     if (this.paused) return;
     this.roundEnds = this.now() + this.settings.roundSeconds * 1000;
     if (this.settings.smartCards) for (const f of this.battle.fighters) if (f.kind === 'player' && f.alive) f.quiz = makeQuiz(this.rng, this.players[f.id] ? this.players[f.id].age : null);
-    this.setTimer('round', this.settings.roundSeconds * 1000, () => this.resolve());
+    // автобій: хід робиться сам за порадою, гравець може змінити його, поки раунд не закрито
+    let autoAll = true;
+    for (const f of this.battle.fighters) {
+      if (f.kind !== 'player' || !f.alive) continue;
+      const p = this.players[f.id]; if (!p || !p.auto) { autoAll = false; continue; }
+      const h = this.hintFor(f); if (!h) { autoAll = false; continue; }
+      if (!submitMove(this.battle, f.id, { target: h.target, attack: h.attack, blocks: h.blocks, cards: h.cards })) { f.move.auto = true; p.stats.autoMoves = (p.stats.autoMoves || 0) + 1; }
+    }
+    const ms = autoAll ? Math.min(AUTO_ROUND_MS, this.settings.roundSeconds * 1000) : this.settings.roundSeconds * 1000;
+    this.roundEnds = this.now() + ms;
+    this.setTimer('round', ms, () => this.resolve());
     this.emit();
   }
   move(p, mv) {
@@ -1504,12 +1516,12 @@ export class Game {
     const tv = this.tvState(); const sv = { ...this.seasonView(), phase: tv.phase };
     return {
       me: { ...this.publicPlayer(p), xp: p.xp, xpNext: xpForLevel(p.level), gold: p.gold, deck: p.deck, collection: p.collection, inventory: p.inventory, equipment: p.equipment, bonus: equipmentBonus(p), pets: petView(p), cosmetics: this.cosmeticsView(p), streak: this.streakView(p), gift: this.giftView(p), coupons: this.couponsView(p), stats: p.stats, achievements: p.achievements,
-        minutesToday: this.minutesToday(p), limit: this.limitFor(p), blocked: this.blockedReason(p), isParent: this.isParent(p), avatarPending: p.avatarPending || null,
+        minutesToday: this.minutesToday(p), limit: this.limitFor(p), blocked: this.blockedReason(p), isParent: this.isParent(p), auto: !!p.auto, avatarPending: p.avatarPending || null,
         seasonPoints: this.history.season.points[p.id] || 0, seasonRank: sv.top.findIndex(x => x.id === p.id) + 1 },
       phase: sv.phase, season: { n: sv.n, name: sv.name, daysLeft: sv.daysLeft, days: sv.days, top: sv.top.slice(0, 5) }, lobby: this.lobbyView(), inLobby: !!inLobby, results: this.results, paused: this.paused, pauseReason: this.pauseReason,
       dm: this.isParent(p) && b && b.mode === 'dungeon' && !b.over ? { mobs: this.dmMobs(), players: this.run.players.map(id => this.publicPlayer(this.players[id])) } : null,
       replay: this.replay ? { mode: this.replay.mode, names: this.replay.names } : null, hasReplay: !!(this.history.lastReplay && this.history.lastReplay.frames.length),
-      battle: b ? { ...this.battleView(), me: f ? { hand: f.hand.map(id => cardById[id]), mana: f.mana, maxMana: f.maxMana, hp: f.hp, maxHp: f.maxHp, alive: f.alive, move: f.move, shield: f.shield, quiz: f.quiz && !f.move ? { kind: f.quiz.kind, q: f.quiz.q, choices: f.quiz.choices } : null, hint: p.simple && !f.move ? this.hintFor(f) : null } : null } : null,
+      battle: b ? { ...this.battleView(), me: f ? { hand: f.hand.map(id => cardById[id]), mana: f.mana, maxMana: f.maxMana, hp: f.hp, maxHp: f.maxHp, alive: f.alive, move: f.move, shield: f.shield, quiz: f.quiz && !f.move ? { kind: f.quiz.kind, q: f.quiz.q, choices: f.quiz.choices } : null, hint: (p.simple || p.auto) && (!f.move || f.move.auto) ? this.hintFor(f) : null, auto: !!p.auto } : null } : null,
       closing: this.closingView(p), done: this.doneView(p), challenges: this.challengesView(p), familyGoal: this.familyGoalView(), mini: this.miniView(p), party: this.partyView(), event: this.eventView(), envelopes: this.envelopesView(), welcome: this.welcomeView(p), quests: this.settings.questsEnabled ? this.questsFor(p) : [], pendingQuests: this.pendingFor(p), guests: this.isParent(p) ? this.guestsView() : [], pendingCoupons: this.isParent(p) ? this.pendingCoupons() : [],
       daily: this.dailyFor(p), tournament: this.tournamentView(), worldBoss: { ...this.worldBossView(), mine: (this.worldBoss().dmg[p.id] || 0) }, family: this.familyView(),
       customCards: this.customCardsOf(p), pendingCards: this.isParent(p) ? this.pendingCards() : [], cardTemplates: CARD_TEMPLATES, tvOnline: this.tvOnline(),
