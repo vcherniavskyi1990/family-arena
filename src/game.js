@@ -359,16 +359,22 @@ export class Game {
     m.phase = 'done'; m.endAt = this.now();
     if (m.kind === 'quiz') {
       m.ranking = Object.entries(m.prog).filter(([pid, x]) => this.players[pid] && x.i > 0).sort((a, b) => b[1].correct - a[1].correct || (a[1].doneAt || Infinity) - (b[1].doneAt || Infinity)).map(([pid, x]) => ({ id: pid, name: this.players[pid].name, correct: x.correct, ms: x.doneAt ? x.doneAt - m.at : null }));
-      for (const r of m.ranking) if (r.correct) { const p = this.players[r.id]; p.stats.smart = (p.stats.smart || 0) + r.correct; this.logDay(r.id, { smart: r.correct }); }
+      for (const r of m.ranking) { const p = this.players[r.id]; p.stats.minis = (p.stats.minis || 0) + 1; if (r.correct === QUIZ_N) p.stats.quizPerfect = (p.stats.quizPerfect || 0) + 1; if (r.correct) { p.stats.smart = (p.stats.smart || 0) + r.correct; this.logDay(r.id, { smart: r.correct }); } }
       if (m.ranking.length && m.ranking[0].correct) { const w = this.players[m.ranking[0].id]; w.gold += MINI_GOLD; w.stats.quiz = (w.stats.quiz || 0) + 1; this.feed(`🧠 Бліц: ${w.name} найрозумніший (${m.ranking[0].correct} з ${QUIZ_N}), +${MINI_GOLD} золота`); }
-      this.store.save('players'); this.emit();
+      this.afterMini(m.ranking.map(r => r.id)); this.store.save('players'); this.emit();
       this.setTimer('mini-clear', MINI_SHOW_MS, () => { this.mini = null; this.emit(); });
       return;
     }
     m.ranking = Object.entries(m.taps).filter(([pid]) => this.players[pid]).sort((a, b) => a[1] - b[1]).map(([pid, ms]) => ({ id: pid, name: this.players[pid].name, ms }));
-    if (m.ranking.length) { const w = this.players[m.ranking[0].id]; w.gold += MINI_GOLD; w.stats.reaction = (w.stats.reaction || 0) + 1; this.store.save('players'); this.feed(`⚡ Реакція: ${w.name} найшвидший (${m.ranking[0].ms} мс), +${MINI_GOLD} золота`); }
-    this.emit();
+    for (const r of m.ranking) this.players[r.id].stats.minis = (this.players[r.id].stats.minis || 0) + 1;
+    if (m.ranking.length) { const w = this.players[m.ranking[0].id]; w.gold += MINI_GOLD; w.stats.reaction = (w.stats.reaction || 0) + 1; this.feed(`⚡ Реакція: ${w.name} найшвидший (${m.ranking[0].ms} мс), +${MINI_GOLD} золота`); }
+    this.afterMini(m.ranking.map(r => r.id)); this.store.save('players'); this.emit();
     this.setTimer('mini-clear', MINI_SHOW_MS, () => { this.mini = null; this.emit(); });
+  }
+  /** Після міні-гри: досягнення й завдання дня учасникам, рядки в хроніку. */
+  afterMini(ids) {
+    for (const id of ids) { const p = this.players[id]; if (!p) continue; for (const a of checkAchievements(p)) this.feed(`🏅 ${p.name}: досягнення «${a.name}»${a.title ? `, титул «${a.title}»` : ''}`); this.checkDaily(p); }
+    this.checkFamily();
   }
   miniView(p = null) {
     const m = this.mini; if (!m) return null;
@@ -407,6 +413,7 @@ export class Game {
     if (this.battle) throw err('бій уже йде, зачекай');
     if (!['duel'].includes(this.lobby.mode)) this.setMode(from, { mode: 'duel' });
     this.join(from); this.join(to); this.lobby.players[from.id].team = 0; this.lobby.players[to.id].team = 1;
+    for (const x of [from, to]) { x.stats.challenges = (x.stats.challenges || 0) + 1; for (const a of checkAchievements(x)) this.feed(`🏅 ${x.name}: досягнення «${a.name}»${a.title ? `, титул «${a.title}»` : ''}`); } this.store.save('players');
     this.announce = { text: `🔥 ${to.name} приймає виклик ${from.name}! Дуель у лобі`, by: 'Арена', at: this.now() };
     this.feed(`🔥 ${to.name} прийняв виклик ${from.name}`); this.emit();
     return { accepted: true };
