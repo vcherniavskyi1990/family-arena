@@ -84,7 +84,7 @@
       return;
     }
     app.innerHTML = '<div class="screen"><h1>⚔️ Родинна арена</h1><div class="muted">' + esc(pl.season || '') + '</div><h3>Хто ти?</h3><div class="players">' +
-      pl.players.map(function (p) { return '<div class="card" data-id="' + p.id + '">' + avatarHtml(p) + '<div><b>' + esc(p.name) + '</b></div><div class="small muted">' + esc(p.className) + ' · ' + p.level + ' рів.</div></div>'; }).join('') + '</div>' +
+      pl.players.map(function (p) { return '<div class="card" data-id="' + p.id + '">' + avatarHtml(p) + '<div><b>' + esc(p.name) + '</b></div><div class="small muted">' + (p.role === 'guest' ? '👋 гість' : esc(p.className)) + ' · ' + p.level + ' рів.</div></div>'; }).join('') + '</div>' +
       '<p class="muted small" style="margin-top:20px">Нового гравця додають батьки у своєму меню.</p></div>';
     app.querySelectorAll('.players .card').forEach(function (c) { c.onclick = function () { ui.loginPlayer = pl.players.filter(function (p) { return p.id === c.dataset.id; })[0]; ui.pin = ''; renderLogin(pl); }; });
   }
