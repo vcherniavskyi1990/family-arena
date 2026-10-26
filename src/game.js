@@ -662,7 +662,7 @@ export class Game {
       const cands = ids.map((id, i) => mobById[id].boss ? -1 : i).filter(i => i >= 0);
       const at = cands[(this.seed + r.room) % cands.length]; const cm = own[(this.seed + r.room) % own.length];
       ids[at] = cm.id; r.customMobs = r.customMobs || []; if (!r.customMobs.includes(cm.id)) r.customMobs.push(cm.id);
-      this.feed(`👾 Монстр ${cm.author} «${cm.name}» вийшов назустріч!`);
+      this.feed(`👾 «${cm.name}», монстр від гравця ${cm.author}, вийшов назустріч!`);
     }
     const mobs = ids.map((m, i) => fighterFromMob(m, i, mobById[m].boss ? scale * 1.1 : scale));
     const heal = mut && mut.fullHeal ? 1 : ROOM_HEAL;
@@ -841,7 +841,7 @@ export class Game {
       }
     } else {
       const winners = b.fighters.filter(f => f.team === b.winner).map(f => f.id);
-      this.setRecord('longDuel', b.round, null, `${r.players.map(id => this.players[id].name).join(' проти ')}: ${b.round} раундів`);
+      this.setRecord('longDuel', b.round, null, `${r.players.map(id => this.players[id].name).join(' і ')}: ${b.round} раундів`);
       for (const pid of r.players) {
         const p = this.players[pid]; const f = b.fighters.find(x => x.id === pid); const won = winners.includes(pid);
         p.stats.duels += 1; if (won) p.stats.duelWins += 1; p.lossStreak = won ? 0 : (p.lossStreak || 0) + 1;
@@ -894,6 +894,14 @@ export class Game {
   equip(p, itemId) { const e = equip(p, itemId); if (e) throw err(e); this.store.save('players'); this.emit(); }
   unequip(p, slot) { const e = unequip(p, slot); if (e) throw err(e); this.store.save('players'); this.emit(); }
   craft(p, ids) { const out = craft(p, ids, this.rng); if (typeof out === 'string') throw err(out); this.store.save('players'); if (out.rarity === 'legendary') this.feed(`🔧 ${p.name} скрафтив легендарку: ${out.name}!`); checkAchievements(p); this.emit(); return out; }
+  /** Продати всі предмети не вище рідкості (common/uncommon) одним натиском: сумка не розростається до сотні рядків. */
+  sellJunk(p, upTo = 'uncommon') {
+    const order = ['common', 'uncommon', 'rare', 'epic', 'legendary']; const max = order.indexOf(upTo); if (max < 0) throw err('рідкість');
+    const junk = p.inventory.filter(i => order.indexOf(i.rarity) <= max); if (!junk.length) throw err('нема чого продавати');
+    let gold = 0; for (const it of junk) gold += sellPrice(it);
+    p.inventory = p.inventory.filter(i => order.indexOf(i.rarity) > max); p.gold += gold; this.store.save('players'); this.emit();
+    return { sold: junk.length, gold };
+  }
   sell(p, itemId) { const it = p.inventory.find(i => i.id === itemId); if (!it) throw err('немає предмета'); p.inventory = p.inventory.filter(i => i.id !== itemId); const g = sellPrice(it); p.gold += g; this.store.save('players'); this.emit(); return g; }
   /** Магазин: скриня за золото (рідкість випадкова, трохи краща за звичайну). */
   /** Косметика за золото: рамки аватара (видно на ТБ) і бойовий клич (на ТБ при криті). */
@@ -1231,7 +1239,7 @@ export class Game {
     if (approve) {
       m.approved = true; this.registerMob(m);
       this.feed(`👾 ${m.author} намалював монстра «${m.name}» (${m.level} рів.): він тепер чекає в підземеллях!`); this.moment('👾', `${m.author} намалював монстра «${m.name}»`, m.owner);
-      this.announce = { text: `👾 Новий монстр від ${m.author}: «${m.name}»!`, by: 'Арена', at: this.now() };
+      this.announce = { text: `👾 ${m.author} намалював монстра «${m.name}»!`, by: 'Арена', at: this.now() };
     } else {
       this.history.customMobs = this.history.customMobs.filter(x => x.id !== id);
       if (m.image && this.cardsDir) { const f = join(this.cardsDir, m.image.split('/').pop()); if (existsSync(f)) unlinkSync(f); }

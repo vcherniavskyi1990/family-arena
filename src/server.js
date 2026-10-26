@@ -10,7 +10,7 @@ import { Store } from './store.js';
 import { Game, err } from './game.js';
 import { Avatars } from './avatar.js';
 
-export const VERSION = '0.48.0';
+export const VERSION = '0.49.0';
 const PUBLIC = new URL('../public/', import.meta.url);
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.ico': 'image/x-icon', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' };
 
@@ -153,6 +153,7 @@ export function createApp({ dataDir, avatars: avatarsOpt, baseUrl, alertToken = 
     if (path === '/me/equip' && req.method === 'POST') { game.equip(need(), body.itemId); return ok(); }
     if (path === '/me/unequip' && req.method === 'POST') { game.unequip(need(), body.slot); return ok(); }
     if (path === '/me/craft' && req.method === 'POST') { return ok({ item: game.craft(need(), body.itemIds || []) }); }
+    if (path === '/me/sell-junk' && req.method === 'POST') { return ok(game.sellJunk(need(), body.upTo || 'uncommon')); }
     if (path === '/me/sell' && req.method === 'POST') { return ok({ gold: game.sell(need(), body.itemId) }); }
     if (path === '/me/chest' && req.method === 'POST') { return ok({ item: game.buyChest(need(), body.kind) }); }
     if (path === '/me/cosmetic/buy' && req.method === 'POST') { return ok({ cosmetics: game.buyCosmetic(need(), body.key) }); }

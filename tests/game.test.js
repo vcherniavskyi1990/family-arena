@@ -433,6 +433,18 @@ test('кампанія 2: відкривається після першої, р
   g.setMode(dad, { mode: 'campaign', book: 1 }); assert.equal(g.campaignView().of, 8); assert.equal(g.campaignView().book, 1);
 });
 
+test('продати прості: сумка чиститься одним натиском, рідкісне лишається', () => {
+  const g = makeGame();
+  const a = g.createPlayer({ name: 'Віктор', classId: 'archer', age: 10, pin: '1111' });
+  const p = g.players[a.id]; p.inventory = [];
+  const mk = (r, i) => ({ id: 'it' + i, name: 'Річ ' + i, slot: 'weapon', rarity: r, level: 1, stats: { atk: 1 } });
+  p.inventory.push(mk('common', 1), mk('uncommon', 2), mk('rare', 3), mk('legendary', 4), mk('common', 5));
+  const gold = p.gold; const r = g.sellJunk(p);
+  assert.equal(r.sold, 3); assert.ok(r.gold > 0); assert.equal(p.gold, gold + r.gold);
+  assert.deepEqual(p.inventory.map(i => i.rarity), ['rare', 'legendary']);
+  assert.throws(() => g.sellJunk(p), /нема чого/);
+});
+
 test('тривога з дому: пауза і відбій', () => {
   const g = makeGame();
   const a = g.createPlayer({ name: 'Віктор', classId: 'archer', age: 10, pin: '1111' });

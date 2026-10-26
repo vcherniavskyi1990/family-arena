@@ -326,7 +326,8 @@
       h += '<div class="card small">Бонуси: ' + (statLine(me.bonus) || 'немає') + '</div>';
       h += '<div class="card small"><span class="stat">⚔️ вбито ' + me.stats.kills + '</span><span class="stat">👑 босів ' + me.stats.bossKills + '</span><span class="stat">🏰 підземель ' + me.stats.dungeons + '</span><span class="stat">🥊 дуелей ' + me.stats.duelWins + '/' + me.stats.duels + '</span><span class="stat">💥 критів ' + me.stats.crits + '</span><span class="stat">🛡 блоків ' + me.stats.blocks + '</span><span class="stat">🟠 легендарок ' + me.stats.legendaries + '</span><span class="stat">✅ справ ' + me.stats.quests + '</span></div>';
     } else if (ui.heroView === 'bag') {
-      h += '<div class="row"><button class="btn-sm ' + (ui.craft ? 'btn-blue' : '') + '" id="craftmode">🔧 Крафт: 3 однакові → 1 краще</button></div>';
+      var junkN = me.inventory.filter(function (i) { return i.rarity === 'common' || i.rarity === 'uncommon'; }).length;
+      h += '<div class="row wrap"><button class="btn-sm ' + (ui.craft ? 'btn-blue' : '') + '" id="craftmode">🔧 Крафт: 3 однакові → 1 краще</button>' + (junkN >= 5 ? '<button class="btn-sm" id="selljunk">🪙 Продати прості (' + junkN + ')</button>' : '') + '</div>';
       if (ui.craft) h += '<div class="small muted">Обери 3 предмети однієї рідкості (' + ui.craftSel.length + '/3)</div>' + (ui.craftSel.length === 3 ? '<button class="btn-green btn-block" id="craft">🔨 Скрафтити</button>' : '');
       h += me.inventory.length ? me.inventory.slice().sort(function (a, b) { return rarIdx(b.rarity) - rarIdx(a.rarity); }).map(function (it) { return itemHtml(it, { sel: ui.craftSel.indexOf(it.id) >= 0, btns: ui.craft ? '' : '<button class="btn-sm btn-green" data-equip="' + it.id + '">Вдягти</button><button class="btn-sm" data-sell="' + it.id + '">🪙</button>' }); }).join('') : '<div class="muted">Порожньо. Лут падає в підземеллях і з квестів.</div>';
     } else if (ui.heroView === 'shop') {
@@ -553,6 +554,7 @@
     on('[data-pet]', function (el) { act('/me/pet', { petId: el.dataset.pet || null }).then(function () { toast(el.dataset.pet ? '🐾 Вихованець із тобою' : '🐾 Відпочиває'); }); });
     on('[data-unequip]', function (el) { act('/me/unequip', { slot: el.dataset.unequip }); });
     on('[data-equip]', function (el) { act('/me/equip', { itemId: el.dataset.equip }, 'Вдягнуто'); });
+    on('#selljunk', function () { if (confirm('Продати всі звичайні й незвичайні предмети із сумки? Вдягнуте лишається.')) act('/me/sell-junk', { upTo: 'uncommon' }).then(function (r) { toast('Продано ' + r.sold + ', +' + r.gold + ' 🪙', 3000); }); });
     on('[data-sell]', function (el) { if (confirm('Продати предмет за золото?')) act('/me/sell', { itemId: el.dataset.sell }).then(function (r) { toast('+' + r.gold + ' 🪙'); }); });
     on('#craftmode', function () { ui.craft = !ui.craft; ui.craftSel = []; render(); });
     on('.item[data-id]', function (el) { if (!ui.craft) return; var id = el.dataset.id, i = ui.craftSel.indexOf(id); if (i >= 0) ui.craftSel.splice(i, 1); else if (ui.craftSel.length < 3) ui.craftSel.push(id); render(); });
