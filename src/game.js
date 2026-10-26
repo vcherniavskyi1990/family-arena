@@ -558,21 +558,32 @@ export class Game {
   // ---------- квести-справи ----------
   questsFor(p) {
     const day = this.kyiv().day;
-    if (!p.quests || p.quests.day !== day) p.quests = { day, state: {} };
+    if (!p.quests || p.quests.day !== day) { if (p.quests && p.quests.photos) for (const q of Object.keys(p.quests.photos)) this.questPhotoDrop(p, q); p.quests = { day, state: {} }; }
     return QUESTS.map(q => ({ ...q, state: p.quests.state[q.id] || 'open' }));
   }
-  questDone(p, qid) {
+  /** «Зробив»: з фото-доказом (jpg/png base64, до 2 МБ, лежить у cardsDir як /cards/q_…) або без. */
+  questDone(p, qid, { image, mime } = {}) {
     if (!questById[qid]) throw err('немає квесту');
     this.questsFor(p);
     if (p.quests.state[qid] === 'approved') throw err('уже зараховано');
+    if (image && this.cardsDir) {
+      const buf = Buffer.from(String(image), 'base64'); if (buf.length > 2e6) throw err('фото завелике');
+      const ext = /png/.test(mime || '') ? 'png' : 'jpg'; const name = `q_${p.id}_${qid}_${this.kyiv().day}.${ext}`;
+      mkdirSync(this.cardsDir, { recursive: true }); writeFileSync(join(this.cardsDir, name), buf);
+      if (!p.quests.photos) p.quests.photos = {}; p.quests.photos[qid] = `/cards/${name}`;
+    }
     p.quests.state[qid] = 'pending'; this.store.save('players'); this.emit();
+  }
+  questPhotoDrop(p, qid) {
+    const url = p.quests && p.quests.photos && p.quests.photos[qid]; if (!url) return;
+    delete p.quests.photos[qid]; if (this.cardsDir) { try { unlinkSync(join(this.cardsDir, url.replace('/cards/', ''))); } catch (e) { /* нема файлу */ } }
   }
   questApprove(parent, pid, qid, approve = true) {
     if (!this.isParent(parent)) throw err('лише батьки', 403);
     const p = this.players[pid]; if (!p) throw err('немає гравця');
     const q = questById[qid]; if (!q) throw err('немає квесту');
     this.questsFor(p);
-    if (!approve) { p.quests.state[qid] = 'open'; this.store.save('players'); this.emit(); return null; }
+    if (!approve) { p.quests.state[qid] = 'open'; this.questPhotoDrop(p, qid); this.store.save('players'); this.emit(); return null; }
     p.quests.state[qid] = 'approved';
     p.gold += q.gold; const ev = addXp(p, q.xp); p.stats.quests += 1; this.addSeasonPoints(pid, SEASON_POINTS.quest); this.logDay(pid, { quests: 1 });
     const it = genItem(this.rng, p.level, null, q.chest); p.inventory.push(it);
@@ -585,7 +596,7 @@ export class Game {
   }
   pendingQuests() {
     const out = [];
-    for (const p of this.playerList) { this.questsFor(p); for (const [qid, st] of Object.entries(p.quests.state)) if (st === 'pending') out.push({ pid: p.id, name: p.name, quest: questById[qid] }); }
+    for (const p of this.playerList) { this.questsFor(p); for (const [qid, st] of Object.entries(p.quests.state)) if (st === 'pending') out.push({ pid: p.id, name: p.name, quest: questById[qid], photo: p.quests.photos && p.quests.photos[qid] || null }); }
     return out;
   }
 

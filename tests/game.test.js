@@ -585,3 +585,23 @@ test('косметика: купити за золото, надіти, видн
   assert.equal(f.frame, 'wood'); assert.equal(f.cry, 'Бумм!');
   assert.equal(g.tvState().heroes.find(h => h.id === a.id).frame, 'wood');
 });
+
+test('справа з фото: батьки бачать фото, відмова прибирає файл', async () => {
+  const { existsSync, mkdtempSync: mk } = await import('node:fs');
+  const dir = mk(join(tmpdir(), 'arena-q-'));
+  const g = new Game({ store: new Store(mk(join(tmpdir(), 'arena-'))), now: () => Date.UTC(2026, 9, 26, 15, 0), realTimers: false, seed: 11, cardsDir: join(dir, 'cards') });
+  const dad = g.createPlayer({ name: 'Тато', classId: 'warrior', age: 40, pin: '1234', role: 'parent' });
+  const a = g.createPlayer({ name: 'Віктор', classId: 'warrior', age: 10, pin: '1111' });
+  const p = g.players[a.id];
+  const png = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex').toString('base64');
+  g.questDone(p, 'bed', { image: png, mime: 'image/png' });
+  const pend = g.pendingQuests();
+  assert.equal(pend.length, 1); assert.ok(pend[0].photo && pend[0].photo.startsWith('/cards/q_'));
+  assert.ok(existsSync(join(dir, 'cards', pend[0].photo.replace('/cards/', ''))));
+  assert.throws(() => g.questDone(p, 'toys', { image: 'A'.repeat(3e6), mime: 'image/jpeg' }), /завелике/);
+  g.questApprove(dad, a.id, 'bed', false);
+  assert.equal(g.pendingQuests().length, 0); assert.ok(!existsSync(join(dir, 'cards', pend[0].photo.replace('/cards/', ''))));
+  g.questDone(p, 'bed');
+  assert.equal(g.pendingQuests()[0].photo, null);
+  assert.ok(g.questApprove(dad, a.id, 'bed').item);
+});
