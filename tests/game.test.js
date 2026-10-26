@@ -907,3 +907,27 @@ test('міні-гра «Реакція»: чекай, тисни, фальста
   g.fire('mini-clear'); g.join(a); g.join(b); g.setMode(a, { mode: 'duel' }); g.ready(a, true); g.ready(b, true);
   if (g.battle) assert.throws(() => g.startMini(a), /бій/);
 });
+
+test('міні-гра «Бліц»: свої питання за віком, рейтинг за правильними й часом, розумні відповіді в статистику', () => {
+  const g = makeGame();
+  const dad = g.createPlayer({ name: 'Тато', classId: 'warrior', age: 40, pin: '1234', role: 'admin' });
+  const a = g.createPlayer({ name: 'A', classId: 'rogue', age: 10, pin: '1111' }); const b = g.createPlayer({ name: 'B', classId: 'mage', age: 7, pin: '2222' });
+  assert.throws(() => g.startMini(a, 'xx'), /яка гра/);
+  const v = g.startMini(a, 'quiz'); assert.equal(v.kind, 'quiz'); assert.equal(v.phase, 'go'); assert.equal(v.n, 5); assert.ok(v.me.q && v.me.q.choices.length === 3);
+  assert.throws(() => g.tapMini(a), /не йде/);
+  // A відповідає все правильно, B дві правильні й три ні
+  for (let i = 0; i < 5; i++) { const q = g.mini.qs[a.id][i]; g.advance(1000); g.answerMini(a, q.a); }
+  assert.equal(g.miniView(a).me.done, true); assert.equal(g.miniView(a).me.correct, 5);
+  assert.equal(g.miniView().phase, 'go', 'раніше 15 с не закриваємо, інші можуть зайти');
+  const bv = g.answerMini(b, 'xx'); assert.equal(bv.me.i, 1); assert.equal(bv.me.correct, 0);
+  for (let i = 1; i < 5; i++) { const q = g.mini.qs[b.id][i]; g.answerMini(b, i < 3 ? q.a : 'xx'); }
+  assert.equal(g.miniView().phase, 'go'); g.advance(12000); g.fire('mini-min');
+  assert.equal(g.miniView().phase, 'done', 'після 15 с і всі готові = підсумки');
+  const r = g.miniView().ranking; assert.deepEqual(r.map(x => x.name), ['A', 'B']); assert.equal(r[0].correct, 5); assert.equal(r[1].correct, 2);
+  assert.equal(g.players[a.id].stats.smart, 5); assert.equal(g.players[b.id].stats.smart, 2); assert.equal(g.players[a.id].stats.quiz, 1);
+  assert.equal(g.todayView().kids.find(k => k.name === 'B').smart, 2);
+  g.fire('mini-clear'); assert.equal(g.miniView(), null);
+  // ліміт часу закриває гру з тим, що є
+  g.startMini(b, 'quiz'); g.answerMini(b, g.mini.qs[b.id][0].a); g.fire('mini-end'); assert.equal(g.miniView().phase, 'done'); assert.equal(g.miniView().ranking[0].ms, null);
+  assert.ok(g.tvState().mini.players.length === 1);
+});

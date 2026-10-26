@@ -63,6 +63,13 @@
   var ceremonyTimer = null;
   function showMini(m, pm) {
     var h;
+    if (m.kind === 'quiz') {
+      if (m.phase === 'done') h = '<div class="banner mini done"><div class="big">🧠 Бліц: хто найрозумніший</div>' + (m.ranking.length ? '<div class="rank">' + m.ranking.map(function (r, i) { return '<div><span class="pl">' + (['🥇', '🥈', '🥉'][i] || (i + 1)) + '</span> <b>' + esc(r.name) + '</b><span class="ms">✅ ' + r.correct + ' з ' + m.n + (r.ms !== null ? ' · ' + Math.round(r.ms / 1000) + ' с' : '') + '</span></div>'; }).join('') + '</div>' : '<div class="sub">Ніхто не відповів 😅</div>') + '</div>';
+      else h = '<div class="banner mini quiz"><div class="big">🧠 БЛІЦ · ' + m.n + ' питань</div><div class="sub">Запустив ' + esc(m.by) + '. Питання на телефонах, у кожного свої за віком · ще ' + m.left + ' с</div><div class="rank">' + (m.players.length ? m.players.map(function (p) { return '<div><b>' + esc(p.name) + '</b><span class="ms">' + (p.done ? '✅ готово · ' : '') + p.i + '/' + m.n + ' · правильних ' + p.correct + '</span></div>'; }).join('') : '<div class="sub">Чекаємо перших відповідей…</div>') + '</div></div>';
+      overlay.innerHTML = h; overlay.className = 'on'; introUntil = Date.now() + 2000;
+      if (m.phase === 'done' && (!pm || pm.phase !== 'done')) { beep(523, 120, 'triangle', 0.08); setTimeout(function () { beep(784, 200, 'triangle', 0.08); }, 150); }
+      return;
+    }
     if (m.phase === 'wait') h = '<div class="banner mini wait"><div class="big">⚡ РЕАКЦІЯ</div><div class="sub">Запустив ' + esc(m.by) + '. Тримай палець над кнопкою…</div><div class="go">ЧЕКАЙ</div></div>';
     else if (m.phase === 'go') h = '<div class="banner mini go"><div class="go">ТИСНИ!</div><div class="sub">натиснули: ' + m.tapped + '</div></div>';
     else h = '<div class="banner mini done"><div class="big">⚡ Хто найшвидший</div>' + (m.ranking.length ? '<div class="rank">' + m.ranking.map(function (r, i) { return '<div><span class="pl">' + ['🥇', '🥈', '🥉', '4', '5', '6'][i] + '</span> <b>' + esc(r.name) + '</b><span class="ms">' + r.ms + ' мс</span></div>'; }).join('') + '</div>' : '<div class="sub">Ніхто не встиг за 3 с 😅</div>') + (m.faults.length ? '<div class="sub">Фальстарт: ' + esc(m.faults.join(', ')) + '</div>' : '') + '</div>';
