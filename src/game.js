@@ -4,7 +4,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { mkdirSync, writeFileSync, unlinkSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { makeRng } from './engine/rng.js';
-import { createBattle, fighterFromPlayer, fighterFromMob, submitMove, resolveRound, publicFighter, alive } from './engine/combat.js';
+import { createBattle, fighterFromPlayer, fighterFromMob, submitMove, resolveRound, publicFighter, alive, enemiesOf, MAX_CARDS_PER_TURN } from './engine/combat.js';
 import { newPlayer, addXp, xpForLevel, equipmentBonus, genItem, genCard, equip, unequip, craft, checkAchievements, setDeck, sellPrice } from './engine/progress.js';
 import { makeQuiz, checkQuiz } from './engine/quiz.js';
 import { CLASSES, CARDS, DUNGEONS, QUESTS, ACHIEVEMENTS, DAILY, FAMILY, ITEMS, ZONES, ZONE_NAMES, classById, dungeonById, mobById, questById, cardById, starterDeck, allowedCards } from './engine/content.js';
@@ -39,6 +39,7 @@ export class Game {
     this.now = now;
     this.realTimers = realTimers;
     this.players = store.get('players', () => ({}));
+    this.migratePlayers();
     this.tokens = store.get('tokens', () => ({}));
     this.settings = { ...DEFAULT_SETTINGS, ...store.get('settings', () => ({})) };
     this.history = store.get('history', () => ({ battles: [], legendaries: [], feed: [] }));
@@ -59,10 +60,37 @@ export class Game {
     this.rng = makeRng(this.seed);
   }
 
+  /** Старі збережені гравці після оновлення гри: додати поля, яких не було. */
+  migratePlayers() {
+    const tpl = newPlayer({ id: 'x', name: 'x', classId: 'warrior', pinHash: '' });
+    let changed = false;
+    for (const p of Object.values(this.players)) {
+      if (p.simple === undefined) { p.simple = !!(p.age && p.age <= 8); changed = true; }
+      for (const k of Object.keys(tpl)) if (p[k] === undefined) { p[k] = JSON.parse(JSON.stringify(tpl[k])); changed = true; }
+      for (const k of Object.keys(tpl.stats)) if (p.stats[k] === undefined) { p.stats[k] = k === 'level' ? p.level : 0; changed = true; }
+      if (!classById[p.class]) { p.class = 'warrior'; p.deck = starterDeck('warrior'); changed = true; }
+      if (!Array.isArray(p.deck) || p.deck.length !== 20 || p.deck.some(id => !cardById[id])) { p.deck = starterDeck(p.class); changed = true; }
+    }
+    if (changed) this.store.save('players');
+  }
+  /** Порада для простого режиму: кого бити, куди, що блокувати, які карти. */
+  hintFor(f) {
+    const b = this.battle; if (!b || !f || !f.alive) return null;
+    const enemies = enemiesOf(b, f); if (!enemies.length) return null;
+    const target = enemies.slice().sort((a, c) => a.hp - c.hp)[0];
+    const rng = makeRng(b.seed + b.round * 31 + f.id.length);
+    const attack = rng.chance(0.5) ? 'head' : rng.pick(ZONES);
+    const blocks = rng.shuffle(ZONES).slice(0, 2);
+    const cards = []; let mana = f.mana;
+    for (const id of f.hand) { const c = cardById[id]; if (!c || cards.length >= MAX_CARDS_PER_TURN) continue; if (c.type === 'heal' && f.hp > f.maxHp * 0.6) continue; if (c.cost <= mana) { mana -= c.cost; cards.push(id); } }
+    const words = { head: 'у голову', chest: 'у груди', belt: 'у пояс', legs: 'у ноги' };
+    return { target: target.id, attack, blocks, cards, text: `Бий ${target.name} ${words[attack]}, закрий ${ZONE_NAMES[blocks[0]].toLowerCase()} і ${ZONE_NAMES[blocks[1]].toLowerCase()}${cards.length ? ', зіграй ' + cards.map(id => cardById[id].name).join(' і ') : ''}.` };
+  }
+
   // ---------- гравці й вхід ----------
   get playerList() { return Object.values(this.players); }
   publicPlayer(p) {
-    return { id: p.id, name: p.name, class: p.class, className: classById[p.class].name, icon: p.icon || classById[p.class].icon, avatar: p.avatar, title: p.title, level: p.level, role: p.role, age: p.age };
+    return { id: p.id, name: p.name, class: p.class, className: classById[p.class].name, icon: p.icon || classById[p.class].icon, avatar: p.avatar, title: p.title, level: p.level, role: p.role, age: p.age, simple: !!p.simple };
   }
   createPlayer({ name, classId, age, pin, role }) {
     if (!name || !name.trim()) throw err('Потрібне ім’я');
@@ -97,6 +125,7 @@ export class Game {
     if (patch.role && ['kid', 'parent', 'admin'].includes(patch.role)) p.role = patch.role;
     if (patch.pin) { if (!/^\d{4}$/.test(String(patch.pin))) throw err('PIN: 4 цифри'); p.pinHash = hashPin(patch.pin, p.id); for (const [t, v] of Object.entries(this.tokens)) if (v.playerId === id) delete this.tokens[t]; this.store.save('tokens'); }
     if (patch.class && classById[patch.class] && p.level <= 3) { p.class = patch.class; p.deck = starterDeck(patch.class); }
+    if (patch.simple !== undefined) p.simple = !!patch.simple;
     this.store.save('players'); this.emit();
     return p;
   }
@@ -616,7 +645,7 @@ export class Game {
       phase: sv.phase, season: { n: sv.n, name: sv.name, top: sv.top.slice(0, 5) }, lobby: this.lobbyView(), inLobby: !!inLobby, results: this.results, paused: this.paused, pauseReason: this.pauseReason,
       dm: this.isParent(p) && b && b.mode === 'dungeon' && !b.over ? { mobs: this.dmMobs(), players: this.run.players.map(id => this.publicPlayer(this.players[id])) } : null,
       replay: this.replay ? { mode: this.replay.mode, names: this.replay.names } : null, hasReplay: !!(this.history.lastReplay && this.history.lastReplay.frames.length),
-      battle: b ? { ...this.battleView(), me: f ? { hand: f.hand.map(id => cardById[id]), mana: f.mana, maxMana: f.maxMana, hp: f.hp, maxHp: f.maxHp, alive: f.alive, move: f.move, shield: f.shield, quiz: f.quiz && !f.move ? { kind: f.quiz.kind, q: f.quiz.q, choices: f.quiz.choices } : null } : null } : null,
+      battle: b ? { ...this.battleView(), me: f ? { hand: f.hand.map(id => cardById[id]), mana: f.mana, maxMana: f.maxMana, hp: f.hp, maxHp: f.maxHp, alive: f.alive, move: f.move, shield: f.shield, quiz: f.quiz && !f.move ? { kind: f.quiz.kind, q: f.quiz.q, choices: f.quiz.choices } : null, hint: p.simple && !f.move ? this.hintFor(f) : null } : null } : null,
       quests: this.settings.questsEnabled ? this.questsFor(p) : [], pendingQuests: this.isParent(p) ? this.pendingQuests() : [],
       daily: this.dailyFor(p), family: this.familyView(),
       customCards: this.customCardsOf(p), pendingCards: this.isParent(p) ? this.pendingCards() : [], cardTemplates: CARD_TEMPLATES, tvOnline: this.tvOnline(),

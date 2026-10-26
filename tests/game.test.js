@@ -5,10 +5,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store } from '../src/store.js';
 import { Game } from '../src/game.js';
+globalThis.__storeMod = { Store };
 
 function makeGame(ts = Date.UTC(2026, 9, 26, 15, 0)) { // 18:00 Київ, понеділок
   let now = ts;
-  const g = new Game({ store: new Store(mkdtempSync(join(tmpdir(), 'arena-'))), now: () => now, realTimers: false });
+  const g = new Game({ store: new Store(mkdtempSync(join(tmpdir(), 'arena-'))), now: () => now, realTimers: false, seed: 11 });
   g.advance = (ms) => { now += ms; };
   return g;
 }
@@ -354,4 +355,35 @@ test('дайджест дня: текст для бота і профіль ге
   const h = g.heroProfile(a.id);
   assert.equal(h.name, 'Віктор'); assert.ok(h.daily.length === 3); assert.ok(h.seasonRank >= 1);
   assert.equal(g.heroProfile('nope'), null);
+});
+
+test('міграція старих гравців: відсутні поля додаються, колода лагодиться', () => {
+  const { Store } = globalThis.__storeMod || {};
+  const dir = mkdtempSync(join(tmpdir(), 'mig-'));
+  const st = new Store(dir);
+  st.set('players', { p1: { id: 'p1', name: 'Старий', class: 'warrior', role: 'kid', age: 7, pinHash: 'x', level: 3, xp: 10, gold: 5, deck: ['stone_strike', 'nope'], inventory: [], equipment: {}, achievements: [], stats: { kills: 2 } , quests: {}, playedToday: { day: null, minutes: 0 } },
+    p2: { id: 'p2', name: 'Дивний', class: 'ninja', role: 'kid', pinHash: 'y', level: 1, xp: 0, gold: 0, deck: [], inventory: [], equipment: {}, achievements: [], stats: {}, quests: {}, playedToday: { day: null, minutes: 0 } } });
+  st.flushAll && st.flushAll();
+  const g = new Game({ store: new Store(dir), now: () => Date.UTC(2026, 9, 26, 15, 0), realTimers: false });
+  const p1 = g.players.p1, p2 = g.players.p2;
+  assert.equal(p1.deck.length, 20); assert.equal(p1.stats.smart, 0); assert.equal(p1.stats.kills, 2); assert.equal(p1.stats.level, 3);
+  assert.equal(p1.simple, true, '7 років: простий режим увімкнено');
+  assert.equal(p2.class, 'warrior'); assert.deepEqual(p2.collection, []);
+  JSON.stringify(g.playerState(p1)); JSON.stringify(g.tvState());
+});
+
+test('простий режим: порада на хід і кнопка «як радить»', () => {
+  const g = makeGame();
+  const dad = g.createPlayer({ name: 'Тато', classId: 'warrior', age: 40, pin: '1234', role: 'admin' });
+  const kid = g.createPlayer({ name: 'Олександр', classId: 'mage', age: 7, pin: '2222' });
+  assert.equal(g.players[kid.id].simple, true); assert.equal(g.players[dad.id].simple, false);
+  g.setMode(dad, { mode: 'duel' }); g.join(dad); g.join(kid); g.ready(dad, true); g.ready(kid, true);
+  const st = g.playerState(kid);
+  assert.ok(st.battle.me.hint && st.battle.me.hint.text.length > 10, 'є порада');
+  assert.equal(g.playerState(dad).battle.me.hint, null);
+  const h = st.battle.me.hint;
+  g.move(kid, { target: h.target, attack: h.attack, blocks: h.blocks, cards: h.cards });
+  assert.ok(g.battle.fighters.find(f => f.id === kid.id).move);
+  g.updatePlayer(kid.id, { simple: false });
+  assert.equal(g.players[kid.id].simple, false);
 });
