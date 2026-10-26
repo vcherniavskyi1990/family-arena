@@ -287,7 +287,7 @@ export function publicFighter(f) {
   return {
     id: f.id, name: f.name, icon: f.icon, avatar: f.avatar, team: f.team, kind: f.kind, class: f.class, level: f.level, pet: f.pet || null, frame: f.frame || null, cry: f.cry || null,
     hp: f.hp, maxHp: f.maxHp, mana: f.mana, maxMana: f.maxMana, shield: f.shield, alive: f.alive, raged: !!f.raged, fora: f.fora || 0, secondWind: !!f.secondWind, custom: !!f.custom, author: f.author || null,
-    minions: f.minions.map(m => ({ name: m.name, icon: m.icon, atk: m.atk })), ready: !!f.move,
+    minions: f.minions.map(m => ({ name: m.name, icon: m.icon, atk: m.atk })), ready: !!f.move, auto: !!(f.move && f.move.auto),
     poison: !!f.effects.poison, stunned: !!f.effects.stunned, buff: f.buffs.reduce((s, x) => s + x.atk, 0), handSize: f.hand.length,
   };
 }
