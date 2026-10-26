@@ -291,6 +291,34 @@ test('свої карти: дитина створює, батько підтв�
   assert.ok(g.lastRound.events.some(e => e.t === 'card' && e.card === c.id && e.name === 'Крипер-бум'));
 });
 
+test('майстерня мобів: дитина малює монстра, батько підтверджує, він виходить у підземеллі', () => {
+  const g = makeGame();
+  const dad = g.createPlayer({ name: 'Тато', classId: 'warrior', role: 'parent', pin: '0000' });
+  const a = g.createPlayer({ name: 'Віктор', classId: 'archer', age: 10, pin: '1111' });
+  assert.throws(() => g.createCustomMob(a, { name: 'Жук', str: 5, hp: 5, trick: 5 }), /рівно 10/);
+  const m = g.createCustomMob(a, { name: 'Жук-гризун', str: 4, hp: 4, trick: 2 });
+  assert.equal(m.approved, false); assert.equal(g.pendingMobs().length, 1);
+  assert.equal(g.customMobs().length, 0, 'до підтвердження в підземеллях нема');
+  g.approveCustomMob(dad, m.id, true);
+  assert.equal(g.customMobs().length, 1); assert.ok(m.level >= 1 && m.hp > 30 && m.atk > 5);
+  assert.ok(g.playerState(dad).mobs.some(x => x.author === 'Віктор' && x.name === 'Жук-гризун'));
+  // другий можна, третій ні
+  g.createCustomMob(a, { name: 'Слимак', str: 0, hp: 10, trick: 0 });
+  assert.throws(() => g.createCustomMob(a, { name: 'Третій', str: 10, hp: 0, trick: 0 }), /не більше/);
+  // у першій кімнаті підземелля один моб замінений на свого
+  g.setMode(dad, { mode: 'dungeon', dungeonId: 'kitchen_caves' }); g.join(dad); g.join(a); g.ready(dad, true); g.ready(a, true);
+  const f = g.battle.fighters.find(x => x.custom);
+  assert.ok(f, 'свій монстр у кімнаті'); assert.equal(f.author, 'Віктор');
+  assert.ok(g.tvState().battle.fighters.some(x => x.team === 1 && x.name === f.name));
+  let guard = 0;
+  while (g.battle && guard++ < 400) g.fire('round');
+  const cm = g.history.customMobs.find(x => x.id === f.mob);
+  assert.ok((cm.beaten || 0) + (cm.won || 0) >= 1, 'рахунок зустрічей ведеться');
+  // відхилений зникає
+  const m2 = g.pendingMobs()[0]; g.approveCustomMob(dad, m2.id, false);
+  assert.equal(g.history.customMobs.length, 1);
+});
+
 test('тривога з дому: пауза і відбій', () => {
   const g = makeGame();
   const a = g.createPlayer({ name: 'Віктор', classId: 'archer', age: 10, pin: '1111' });

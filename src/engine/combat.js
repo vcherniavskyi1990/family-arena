@@ -58,7 +58,7 @@ export function fighterFromMob(mobId, index, scale = 1) {
   const m = mobById[mobId];
   const maxHp = Math.round(m.hp * scale);
   return {
-    id: `${mobId}#${index}`, name: m.name, icon: m.icon, team: 1, kind: m.boss ? 'boss' : 'mob', mob: m.id,
+    id: `${mobId}#${index}`, name: m.name, icon: m.icon, avatar: m.image || null, team: 1, kind: m.boss ? 'boss' : 'mob', mob: m.id, custom: !!m.custom, author: m.author || null,
     level: m.level, maxHp, hp: maxHp, atk: Math.round(m.atk * scale), def: m.def,
     crit: m.crit || 0.05, dodge: m.dodge || 0.03, spell: 1, healMult: 1,
     maxMana: 0, mana: 0, deck: [], hand: [], discard: [], shield: 0, buffs: [], minions: [], effects: {},
@@ -286,7 +286,7 @@ function hurt(b, from, to, dmg, ev, kind, extra = {}) {
 export function publicFighter(f) {
   return {
     id: f.id, name: f.name, icon: f.icon, avatar: f.avatar, team: f.team, kind: f.kind, class: f.class, level: f.level, pet: f.pet || null, frame: f.frame || null, cry: f.cry || null,
-    hp: f.hp, maxHp: f.maxHp, mana: f.mana, maxMana: f.maxMana, shield: f.shield, alive: f.alive, raged: !!f.raged, fora: f.fora || 0, secondWind: !!f.secondWind,
+    hp: f.hp, maxHp: f.maxHp, mana: f.mana, maxMana: f.maxMana, shield: f.shield, alive: f.alive, raged: !!f.raged, fora: f.fora || 0, secondWind: !!f.secondWind, custom: !!f.custom, author: f.author || null,
     minions: f.minions.map(m => ({ name: m.name, icon: m.icon, atk: m.atk })), ready: !!f.move,
     poison: !!f.effects.poison, stunned: !!f.effects.stunned, buff: f.buffs.reduce((s, x) => s + x.atk, 0), handSize: f.hand.length,
   };
