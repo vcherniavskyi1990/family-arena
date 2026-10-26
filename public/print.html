@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Родинна арена: картки гравців</title>
+<style>
+  body { font-family: "Segoe UI", Roboto, Arial, sans-serif; margin: 20px; color: #111; background: #fff; }
+  h1 { font-size: 22px; } .hint { color: #555; font-size: 14px; margin-bottom: 16px; }
+  .cards { display: flex; flex-wrap: wrap; }
+  .card { width: 260px; border: 2px dashed #999; border-radius: 16px; padding: 14px; margin: 0 14px 14px 0; text-align: center; page-break-inside: avoid; }
+  .card img { width: 200px; height: 200px; } .card .n { font-size: 22px; font-weight: 800; margin-top: 6px; } .card .c { color: #555; font-size: 14px; }
+  .card .ic { font-size: 40px; }
+  @media print { .hint, button { display: none; } body { margin: 0; } }
+</style>
+</head>
+<body>
+<h1>⚔️ Родинна арена: картки гравців</h1>
+<div class="hint">Роздрукуй, виріж, поклади біля ТБ: дитина сканує свою картку й одразу вводить PIN. <button onclick="window.print()">Друк</button></div>
+<div class="cards" id="cards">Завантажую…</div>
+<script>
+  fetch('/api/players').then(function (r) { return r.json(); }).then(function (pl) {
+    var el = document.getElementById('cards');
+    if (!pl.players.length) { el.textContent = 'Ще немає гравців.'; return; }
+    el.innerHTML = pl.players.map(function (p) {
+      return '<div class="card"><div class="ic">' + (p.avatar ? '<img src="' + p.avatar + '" style="width:64px;height:64px;border-radius:12px">' : p.icon) + '</div><img src="/qr.svg?dark=1&p=' + encodeURIComponent(p.id) + '" alt="QR"><div class="n">' + p.name.replace(/[<>&]/g, '') + '</div><div class="c">' + p.className + ' · ' + p.level + ' рів. · скануй і введи PIN</div></div>';
+    }).join('');
+  });
+</script>
+</body>
+</html>
