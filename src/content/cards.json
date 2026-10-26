@@ -709,5 +709,148 @@
     "value": 24,
     "aoe": true,
     "text": "24 шкоди всім, усі пропускають удар. Легендарна."
+  },
+  {
+    "id": "icicle",
+    "name": "Бурулька",
+    "icon": "🧊",
+    "class": "all",
+    "cost": 1,
+    "rarity": "common",
+    "type": "stun",
+    "value": 3,
+    "text": "3 шкоди, ворог пропускає удар."
+  },
+  {
+    "id": "honey_jar",
+    "name": "Банка меду",
+    "icon": "🍯",
+    "class": "all",
+    "cost": 3,
+    "rarity": "uncommon",
+    "type": "heal",
+    "value": 18,
+    "text": "+18 здоров'я."
+  },
+  {
+    "id": "trident",
+    "name": "Тризуб",
+    "icon": "🔱",
+    "class": "all",
+    "cost": 4,
+    "rarity": "rare",
+    "type": "damage",
+    "value": 22,
+    "text": "22 шкоди."
+  },
+  {
+    "id": "totem",
+    "name": "Тотем безсмертя",
+    "icon": "🗿",
+    "class": "all",
+    "cost": 4,
+    "rarity": "rare",
+    "type": "shield",
+    "value": 20,
+    "text": "Щит на 20."
+  },
+  {
+    "id": "meteor",
+    "name": "Метеор",
+    "icon": "☄️",
+    "class": "mage",
+    "cost": 5,
+    "rarity": "epic",
+    "type": "damage",
+    "value": 20,
+    "spell": true,
+    "aoe": true,
+    "text": "20 шкоди всім ворогам."
+  },
+  {
+    "id": "avenging_wrath",
+    "name": "Гнів месника",
+    "icon": "😇",
+    "class": "paladin",
+    "cost": 3,
+    "rarity": "uncommon",
+    "type": "buff",
+    "value": 8,
+    "text": "+8 до удару на 2 ходи."
+  },
+  {
+    "id": "rapid_fire",
+    "name": "Швидкий постріл",
+    "icon": "🏹",
+    "class": "archer",
+    "cost": 2,
+    "rarity": "uncommon",
+    "type": "damage",
+    "value": 11,
+    "critBonus": 0.25,
+    "text": "11 шкоди, крит +25%."
+  },
+  {
+    "id": "shadow_step",
+    "name": "Крок у тінь",
+    "icon": "🌑",
+    "class": "rogue",
+    "cost": 4,
+    "rarity": "rare",
+    "type": "damage",
+    "value": 20,
+    "pierce": true,
+    "text": "20 шкоди крізь блок."
+  },
+  {
+    "id": "nano_swarm",
+    "name": "Нано-рій",
+    "icon": "🛠️",
+    "class": "engineer",
+    "cost": 3,
+    "rarity": "uncommon",
+    "type": "heal",
+    "value": 12,
+    "aoe": true,
+    "text": "+12 здоров'я всій команді."
+  },
+  {
+    "id": "prayer",
+    "name": "Молитва",
+    "icon": "🙏",
+    "class": "healer",
+    "cost": 2,
+    "rarity": "common",
+    "type": "shield",
+    "value": 10,
+    "aoe": true,
+    "text": "Щит на 10 усій команді."
+  },
+  {
+    "id": "war_drums",
+    "name": "Бойові барабани",
+    "icon": "🥁",
+    "class": "warrior",
+    "cost": 3,
+    "rarity": "uncommon",
+    "type": "buff",
+    "value": 9,
+    "text": "+9 до удару на 2 ходи."
+  },
+  {
+    "id": "creeper_pet",
+    "name": "Ручний крипер",
+    "icon": "💣",
+    "class": "all",
+    "cost": 4,
+    "rarity": "rare",
+    "type": "summon",
+    "minion": {
+      "name": "Крипер",
+      "icon": "💣",
+      "hp": 12,
+      "atk": 9
+    },
+    "text": "Крипер (12 здоров'я, 9 удар) б'є щоходу."
   }
 ]
