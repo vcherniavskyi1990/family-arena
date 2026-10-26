@@ -25,7 +25,12 @@ export const CARD_TEMPLATES = {
   heal: { name: 'Зцілення', cost: 3, type: 'heal', value: 18, text: '+18 здоров’я.' },
   poison: { name: 'Отрута', cost: 2, type: 'poison', value: 5, turns: 3, text: '5 отрути на 3 ходи.' },
 };
-const SEASON_POINTS = { duelWin: 3, duelLoss: 1, dungeonLoss: 1, quest: 1, worldBoss: 5, chapter: 3, champion: 8 };
+const SEASON_POINTS = { duelWin: 3, duelLoss: 1, dungeonLoss: 1, quest: 1, worldBoss: 5, chapter: 3, champion: 8, party: 3 };
+const PARTY_GAMES = ['reaction', 'memory', 'quiz'];   // «Вечір ігор»: три міні-гри поспіль
+const PARTY_NAMES = { reaction: '⚡ Реакція', memory: '🧩 Пам\'ять', quiz: '🧠 Бліц' };
+const PARTY_POINTS = [3, 2, 1];   // очки за місця в кожній грі
+const PARTY_GOLD = 15;   // чемпіону вечора
+const PARTY_SHOW_MS = 12000;
 const TOURNAMENT_MIN = 3, TOURNAMENT_MAX = 4;
 /** Бос тижня: спільне здоров’я на всю сім’ю; кожен бій відколює шматок. Нагорода, коли впав. */
 const DEFAULT_COUPONS = [
@@ -88,6 +93,7 @@ export class Game {
     if (!this.history.campaign) this.history.campaign = { chapter: 0, runs: 0, done: [] };   // сюжетна кампанія: chapter = індекс наступного розділу   // журнал по днях для звіту тижня: {день: {гравець: {minutes, battles, wins, quests, smart, kills}}}
     for (const c of this.history.customCards) if (c.approved) this.registerCard(c);
     this.announce = null;
+    this.party = null;   // «Вечір ігор»: {by, i, points:{pid: n}, phase: run|done, ranking}
     this.mini = null;   // міні-гра «Реакція»: {phase: wait|go|done, by, at, goAt, taps:{pid: ms}, faults:{pid: true}, ranking}
     this.challenges = [];   // виклики на дуель (лише в пам'яті): {id, from, to, at}
     this.replay = null;
@@ -338,6 +344,48 @@ export class Game {
     this.emit();
     return this.miniView(p);
   }
+  // ---------- «Вечір ігор»: Реакція → Пам'ять → Бліц, очки за місця, чемпіон вечора ----------
+  startParty(p) {
+    if (this.party) throw err('вечір ігор уже йде');
+    if (this.battle) throw err('бій уже йде, зачекай');
+    if (this.mini && this.mini.phase !== 'done') throw err('міні-гра вже йде');
+    this.party = { by: p.id, i: 0, points: {}, phase: 'run', at: this.now(), ranking: [] };
+    this.clearTimer('mini-clear'); this.mini = null;
+    try { this.startMini(p, PARTY_GAMES[0]); } catch (e) { this.party = null; throw e; }
+    this.announce = { text: `🎉 Вечір ігор! ${PARTY_GAMES.map(k => PARTY_NAMES[k]).join(' → ')}. Чемпіон +${PARTY_GOLD} золота`, by: 'Арена', at: this.now() };
+    this.feed(`🎉 ${p.name} відкриває вечір ігор`); this.emit();
+    return this.partyView();
+  }
+  /** Після кожної міні-гри: очки за місця; далі наступна гра або фінал вечора. */
+  finishMini() {
+    const m = this.mini, pt = this.party;
+    if (!pt || pt.phase !== 'run') { this.setTimer('mini-clear', MINI_SHOW_MS, () => { this.mini = null; this.emit(); }); return; }
+    m.ranking.forEach((r, i) => { if (m.kind === 'quiz' && !r.correct) return; pt.points[r.id] = (pt.points[r.id] || 0) + (PARTY_POINTS[i] || 0); });
+    pt.i += 1;
+    if (pt.i < PARTY_GAMES.length) {
+      this.setTimer('mini-clear', MINI_SHOW_MS, () => { this.mini = null; const by = this.players[pt.by]; try { this.startMini(by, PARTY_GAMES[pt.i]); } catch (e) { this.feed(`🎉 Вечір ігор зупинено: ${e.message}`); this.party = null; this.emit(); } });
+      return;
+    }
+    pt.ranking = Object.entries(pt.points).filter(([pid]) => this.players[pid]).sort((a, b) => b[1] - a[1]).map(([pid, points]) => ({ id: pid, name: this.players[pid].name, points }));
+    if (pt.ranking.length) {
+      const w = this.players[pt.ranking[0].id]; w.gold += PARTY_GOLD; w.stats.parties = (w.stats.parties || 0) + 1; this.addSeasonPoints(w.id, SEASON_POINTS.party);
+      this.feed(`🎉 Чемпіон вечора ігор: ${w.name} (${pt.ranking[0].points} очок), +${PARTY_GOLD} золота, +${SEASON_POINTS.party} очки сезону`);
+      for (const a of checkAchievements(w)) this.feed(`🏅 ${w.name}: досягнення «${a.name}»${a.title ? `, титул «${a.title}»` : ''}`);
+      this.store.save('players');
+    }
+    this.setTimer('mini-clear', MINI_SHOW_MS, () => {
+      this.mini = null; pt.phase = 'done'; pt.doneAt = this.now();
+      if (pt.ranking.length) this.announce = { text: `🎉 Чемпіон вечора ігор: ${pt.ranking[0].name}!`, by: 'Арена', at: this.now() };
+      this.emit();
+      this.setTimer('party-clear', PARTY_SHOW_MS, () => { this.party = null; this.emit(); });
+    });
+  }
+  partyView() {
+    const pt = this.party; if (!pt) return null;
+    const name = id => this.players[id] ? this.players[id].name : '?';
+    const standings = Object.entries(pt.points).filter(([pid]) => this.players[pid]).sort((a, b) => b[1] - a[1]).map(([pid, points]) => ({ name: name(pid), points }));
+    return { by: name(pt.by), i: pt.i, of: PARTY_GAMES.length, games: PARTY_GAMES.map(k => PARTY_NAMES[k]), current: pt.i < PARTY_GAMES.length ? PARTY_NAMES[PARTY_GAMES[pt.i]] : null, phase: pt.phase, standings, ranking: pt.ranking, champion: pt.ranking.length ? pt.ranking[0].name : null, at: pt.at };
+  }
   /** «Бліц»: у кожного свої питання за віком; відповідь рухає далі, після QUIZ_N — готово. */
   quizFor(p) {
     const m = this.mini; if (!m.qs[p.id]) { m.qs[p.id] = Array.from({ length: QUIZ_N }, () => makeQuiz(this.rng, p.age)); m.prog[p.id] = { i: 0, correct: 0, doneAt: null }; }
@@ -398,14 +446,14 @@ export class Game {
       for (const r of m.ranking) { const p = this.players[r.id]; p.stats.minis = (p.stats.minis || 0) + 1; if (r.correct === QUIZ_N) p.stats.quizPerfect = (p.stats.quizPerfect || 0) + 1; if (r.correct) { p.stats.smart = (p.stats.smart || 0) + r.correct; this.logDay(r.id, { smart: r.correct }); } }
       if (m.ranking.length && m.ranking[0].correct) { const w = this.players[m.ranking[0].id]; w.gold += MINI_GOLD; w.stats.quiz = (w.stats.quiz || 0) + 1; this.feed(`🧠 Бліц: ${w.name} найрозумніший (${m.ranking[0].correct} з ${QUIZ_N}), +${MINI_GOLD} золота`); }
       this.afterMini(m.ranking.map(r => r.id)); this.store.save('players'); this.emit();
-      this.setTimer('mini-clear', MINI_SHOW_MS, () => { this.mini = null; this.emit(); });
+      this.finishMini();
       return;
     }
     m.ranking = Object.entries(m.taps).filter(([pid]) => this.players[pid]).sort((a, b) => a[1] - b[1]).map(([pid, ms]) => ({ id: pid, name: this.players[pid].name, ms }));
     for (const r of m.ranking) this.players[r.id].stats.minis = (this.players[r.id].stats.minis || 0) + 1;
     if (m.ranking.length) { const w = this.players[m.ranking[0].id]; w.gold += MINI_GOLD; if (m.kind === 'memory') { w.stats.memory = (w.stats.memory || 0) + 1; this.feed(`🧩 Пам'ять: ${w.name} найуважніший (${(m.ranking[0].ms / 1000).toFixed(1)} с), +${MINI_GOLD} золота`); } else { w.stats.reaction = (w.stats.reaction || 0) + 1; this.feed(`⚡ Реакція: ${w.name} найшвидший (${m.ranking[0].ms} мс), +${MINI_GOLD} золота`); } }
     this.afterMini(m.ranking.map(r => r.id)); this.store.save('players'); this.emit();
-    this.setTimer('mini-clear', MINI_SHOW_MS, () => { this.mini = null; this.emit(); });
+    this.finishMini();
   }
   /** Після міні-гри: досягнення й завдання дня учасникам, рядки в хроніку. */
   afterMini(ids) {
@@ -1242,7 +1290,7 @@ export class Game {
     return { phase, closing: this.closingView(), ceremony: this.ceremony && this.now() - this.ceremony.at < CEREMONY_MS ? this.ceremony : null, season: this.settings.season, seasonN: sv.n, seasonTop: sv.top.slice(0, 5), pastSeasons: sv.past.slice(0, 3), quiet, now: this.now(), announce: this.announce, lobby: this.lobbyView(), battle: this.battle ? this.battleView() : this.replayView(), results: this.results, paused: this.paused, pauseReason: this.pauseReason,
       heroes: this.playerList.map(p => ({ ...this.publicPlayer(p), pet: activePetIcon(p), streak: this.streakView(p).days, xp: p.xp, xpNext: xpForLevel(p.level), kills: p.stats.kills, duelWins: p.stats.duelWins, dungeons: p.stats.dungeons, legendaries: p.stats.legendaries, achievements: p.achievements.length })),
       legendaries: this.history.legendaries.slice(0, 5), feed: this.history.feed.slice(0, 8), pendingQuests: this.pendingQuests().length,
-      family: this.familyView(), worldBoss: this.worldBossView(), campaign: this.campaignView(), tournament: this.tournamentView(), today: this.todayView(), familyGoal: this.familyGoalView(), mini: this.miniView() };
+      family: this.familyView(), worldBoss: this.worldBossView(), campaign: this.campaignView(), tournament: this.tournamentView(), today: this.todayView(), familyGoal: this.familyGoalView(), mini: this.miniView(), party: this.partyView() };
   }
   playerState(p) {
     const b = this.battle; const f = b && b.fighters.find(x => x.id === p.id);
@@ -1256,7 +1304,7 @@ export class Game {
       dm: this.isParent(p) && b && b.mode === 'dungeon' && !b.over ? { mobs: this.dmMobs(), players: this.run.players.map(id => this.publicPlayer(this.players[id])) } : null,
       replay: this.replay ? { mode: this.replay.mode, names: this.replay.names } : null, hasReplay: !!(this.history.lastReplay && this.history.lastReplay.frames.length),
       battle: b ? { ...this.battleView(), me: f ? { hand: f.hand.map(id => cardById[id]), mana: f.mana, maxMana: f.maxMana, hp: f.hp, maxHp: f.maxHp, alive: f.alive, move: f.move, shield: f.shield, quiz: f.quiz && !f.move ? { kind: f.quiz.kind, q: f.quiz.q, choices: f.quiz.choices } : null, hint: p.simple && !f.move ? this.hintFor(f) : null } : null } : null,
-      closing: this.closingView(p), done: this.doneView(p), challenges: this.challengesView(p), familyGoal: this.familyGoalView(), mini: this.miniView(p), quests: this.settings.questsEnabled ? this.questsFor(p) : [], pendingQuests: this.isParent(p) ? this.pendingQuests() : [], pendingCoupons: this.isParent(p) ? this.pendingCoupons() : [],
+      closing: this.closingView(p), done: this.doneView(p), challenges: this.challengesView(p), familyGoal: this.familyGoalView(), mini: this.miniView(p), party: this.partyView(), quests: this.settings.questsEnabled ? this.questsFor(p) : [], pendingQuests: this.isParent(p) ? this.pendingQuests() : [], pendingCoupons: this.isParent(p) ? this.pendingCoupons() : [],
       daily: this.dailyFor(p), tournament: this.tournamentView(), worldBoss: { ...this.worldBossView(), mine: (this.worldBoss().dmg[p.id] || 0) }, family: this.familyView(),
       customCards: this.customCardsOf(p), pendingCards: this.isParent(p) ? this.pendingCards() : [], cardTemplates: CARD_TEMPLATES, tvOnline: this.tvOnline(),
     };

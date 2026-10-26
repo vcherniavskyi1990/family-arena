@@ -408,5 +408,15 @@
       "stat": "memory",
       "gte": 1
     }
+  },
+  {
+    "id": "party_1",
+    "name": "Чемпіон вечора",
+    "icon": "🎉",
+    "title": "Душа компанії",
+    "cond": {
+      "stat": "parties",
+      "gte": 1
+    }
   }
 ]

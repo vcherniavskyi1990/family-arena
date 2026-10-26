@@ -30,9 +30,10 @@
     if (state.announce && (!prev || !prev.announce || prev.announce.at !== state.announce.at)) showAnnounce(state.announce);
     var cl = document.getElementById('closing'); if (state.closing) { if (!cl) { cl = document.createElement('div'); cl.id = 'closing'; document.body.appendChild(cl); } cl.textContent = state.closing.text; } else if (cl) cl.remove();
     if (state.ceremony && (!prev || !prev.ceremony || prev.ceremony.at !== state.ceremony.at)) showCeremony(state.ceremony);
-    if (state.mini) showMini(state.mini, prev && prev.mini);
+    if (state.mini) { showMini(state.mini, prev && prev.mini); if (state.party && state.party.phase === 'run') { var bn = overlay.querySelector('.banner'); if (bn) bn.insertAdjacentHTML('afterbegin', '<div class="partyline">🎉 Вечір ігор · гра ' + Math.min(state.party.i + 1, state.party.of) + '/' + state.party.of + (state.party.standings.length ? ' · ' + state.party.standings.map(function (s) { return esc(s.name) + ' ' + s.points; }).join(' · ') : '') + '</div>'); } }
+    else if (state.party && state.party.phase === 'done' && (!prev || !prev.party || prev.party.phase !== 'done')) showParty(state.party);
     if (state.paused) { overlay.className = 'on'; overlay.innerHTML = '<div class="banner pause"><div class="big">⏸ ПАУЗА</div><div class="sub">' + (state.pauseReason === 'alert' ? 'Тривога. Усі в укриття, бій зачекає.' : 'Батьки поставили гру на паузу') + '</div></div>'; }
-    else if (phase !== 'results' && !state.mini && Date.now() > introUntil) overlay.className = '';
+    else if (phase !== 'results' && !state.mini && !(state.party && state.party.phase === 'done') && Date.now() > introUntil) overlay.className = '';
   }
   var introUntil = 0;
   function showAnnounce(a) {
@@ -90,6 +91,12 @@
     overlay.innerHTML = h; overlay.className = 'on'; introUntil = Date.now() + 2000;
     if (m.phase === 'go' && (!pm || pm.phase !== 'go')) beep(880, 150, 'square', 0.08);
     if (m.phase === 'done' && (!pm || pm.phase !== 'done')) { beep(523, 120, 'triangle', 0.08); setTimeout(function () { beep(784, 200, 'triangle', 0.08); }, 150); }
+  }
+  function showParty(pt) {
+    var h = '<div class="banner mini done party"><div class="big">🎉 Вечір ігор: підсумки</div>' + (pt.ranking.length ? '<div class="rank">' + pt.ranking.map(function (r, i) { return '<div><span class="pl">' + (['🥇', '🥈', '🥉'][i] || (i + 1)) + '</span> <b>' + esc(r.name) + '</b><span class="ms">' + r.points + ' оч.</span></div>'; }).join('') + '</div><div class="sub">👑 Чемпіон вечора: <b>' + esc(pt.champion) + '</b> · +15 🪙, +3 очки сезону</div>' : '<div class="sub">Ніхто не брав участі 😅</div>') +
+      '<div class="confetti">' + ['🎉', '🎊', '✨', '🎉', '🎊', '✨', '🎉', '🎊', '✨', '🎉'].map(function (x, i) { return '<span style="left:' + (5 + i * 9) + '%;animation-delay:' + (i * 0.3) + 's">' + x + '</span>'; }).join('') + '</div></div>';
+    overlay.innerHTML = h; overlay.className = 'on'; introUntil = Date.now() + 2000;
+    beep(523, 150, 'triangle', 0.08); setTimeout(function () { beep(659, 150, 'triangle', 0.08); }, 180); setTimeout(function () { beep(784, 250, 'triangle', 0.08); }, 360);
   }
   function showCeremony(c) {
     var pod = c.podium || [], order = [1, 0, 2];
