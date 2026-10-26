@@ -36,6 +36,7 @@ const DEFAULT_COUPONS = [
   { id: 'icecream', name: 'Морозиво', icon: '🍦', price: 100 },
 ];
 const CLOSING_WARN_MIN = 10;
+const CEREMONY_MS = 40000;   // церемонія закриття сезону на ТБ
 const GIFT = { base: 10, perDay: 5, maxDays: 7, itemEvery: 7 };
 const PET_DROP = 0.35;   // шанс вихованця за пройдене підземелля
 const WORLD_BOSS = { duelWin: 30, duelLoss: 10, dungeonBase: 40, dungeonPerLevel: 15, dungeonPerKill: 3, dungeonLoss: 10, smartMult: 2, gold: 40 };
@@ -74,7 +75,7 @@ export class Game {
     this.replay = null;
     this.lobby = { players: {}, mode: 'dungeon', dungeonId: DUNGEONS[0].id };
     this.tournament = null;   // турнір: {players, matches: [{a, b, winner}], current, champion}
-    this.closingWarnedDay = null;
+    this.closingWarnedDay = null; this.ceremony = null;
     if (this.realTimers) { const t = setInterval(() => { try { this.tick(); } catch (e) { console.error('tick', e); } }, 30000); if (t.unref) t.unref(); }
     this.battle = null; this.run = null; this.results = null;
     this.paused = false; this.pauseReason = null;
@@ -806,6 +807,7 @@ export class Game {
     const winner = v.top.find(p => p.points > 0) || null;
     const past = { n: v.n, name: v.name, startedAt: v.startedAt, endedAt: this.now(), winner: winner ? winner.name : null, winnerId: winner ? winner.id : null, top: v.top.slice(0, 5).map(p => ({ name: p.name, points: p.points })) };
     this.history.pastSeasons.push(past);
+    this.ceremony = { ...past, at: this.now(), podium: v.top.slice(0, 3).filter(p => p.points > 0) };
     if (winner) { const p = this.players[winner.id]; p.stats.seasonWins = (p.stats.seasonWins || 0) + 1; p.title = `Чемпіон сезону ${v.n}`; p.gold += 100; checkAchievements(p); this.feed(`🥇 ${p.name}: чемпіон сезону ${v.n} «${v.name}»! +100 золота`); }
     else this.feed(`Сезон ${v.n} «${v.name}» закрито без чемпіона`);
     this.history.season = { n: v.n + 1, startedAt: this.now(), points: {} };
@@ -990,7 +992,7 @@ export class Game {
     const phase = this.battle ? 'battle' : this.replay ? 'replay' : this.results ? 'results' : Object.keys(this.lobby.players).length ? 'lobby' : 'idle';
     const hm = this.kyiv().hm; const quiet = hm < '07:00' || (hm >= '13:00' && hm < '15:00');
     const sv = this.seasonView();
-    return { phase, closing: this.closingView(), season: this.settings.season, seasonN: sv.n, seasonTop: sv.top.slice(0, 5), pastSeasons: sv.past.slice(0, 3), quiet, now: this.now(), announce: this.announce, lobby: this.lobbyView(), battle: this.battle ? this.battleView() : this.replayView(), results: this.results, paused: this.paused, pauseReason: this.pauseReason,
+    return { phase, closing: this.closingView(), ceremony: this.ceremony && this.now() - this.ceremony.at < CEREMONY_MS ? this.ceremony : null, season: this.settings.season, seasonN: sv.n, seasonTop: sv.top.slice(0, 5), pastSeasons: sv.past.slice(0, 3), quiet, now: this.now(), announce: this.announce, lobby: this.lobbyView(), battle: this.battle ? this.battleView() : this.replayView(), results: this.results, paused: this.paused, pauseReason: this.pauseReason,
       heroes: this.playerList.map(p => ({ ...this.publicPlayer(p), pet: activePetIcon(p), streak: this.streakView(p).days, xp: p.xp, xpNext: xpForLevel(p.level), kills: p.stats.kills, duelWins: p.stats.duelWins, dungeons: p.stats.dungeons, legendaries: p.stats.legendaries, achievements: p.achievements.length })),
       legendaries: this.history.legendaries.slice(0, 5), feed: this.history.feed.slice(0, 8), pendingQuests: this.pendingQuests().length,
       family: this.familyView(), worldBoss: this.worldBossView(), campaign: this.campaignView(), tournament: this.tournamentView() };
