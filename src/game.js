@@ -52,6 +52,7 @@ export class Game {
     if (!this.history.customCards) this.history.customCards = [];
     if (!this.history.family) this.history.family = { achievements: [] };
     if (!this.history.worldBoss) this.history.worldBoss = null;
+    if (!this.history.days) this.history.days = {};   // журнал по днях для звіту тижня: {день: {гравець: {minutes, battles, wins, quests, smart, kills}}}
     for (const c of this.history.customCards) if (c.approved) this.registerCard(c);
     this.announce = null;
     this.replay = null;
@@ -165,7 +166,29 @@ export class Game {
     if (left <= 0) return `Ліміт на сьогодні вичерпано (${this.limitFor(p)} хв). Квести можуть додати час!`;
     return null;
   }
-  addMinutes(p, min) { this.minutesToday(p); p.playedToday.minutes += min; this.store.save('players'); }
+  addMinutes(p, min) { this.minutesToday(p); p.playedToday.minutes += min; this.logDay(p.id, { minutes: min }); this.store.save('players'); }
+  /** Запис у журнал дня (звіт тижня для батьків). Лише числа, що додаються. */
+  logDay(pid, patch, day = this.kyiv().day) {
+    const d = this.history.days[day] || (this.history.days[day] = {}); const r = d[pid] || (d[pid] = {});
+    for (const k of Object.keys(patch)) r[k] = (r[k] || 0) + patch[k];
+    const keys = Object.keys(this.history.days).sort(); if (keys.length > 60) for (const k of keys.slice(0, keys.length - 60)) delete this.history.days[k];
+    this.store.save('history');
+  }
+  /** Звіт тижня для батьків: по днях і по дітях (хвилини, бої, перемоги, справи, розумні відповіді). weeks назад: 0 = поточний. */
+  weekReport(back = 0) {
+    const start = new Date(this.weekKey() + 'T12:00:00Z'); start.setUTCDate(start.getUTCDate() - 7 * back);
+    const days = []; for (let i = 0; i < 7; i++) { const d = new Date(start); d.setUTCDate(d.getUTCDate() + i); days.push(d.toISOString().slice(0, 10)); }
+    const kids = this.playerList.filter(p => !this.isParent(p));
+    const sum = (pid, k) => days.reduce((s, day) => s + (((this.history.days[day] || {})[pid] || {})[k] || 0), 0);
+    const players = kids.map(p => ({ id: p.id, name: p.name, level: p.level, minutes: sum(p.id, 'minutes'), battles: sum(p.id, 'battles'), wins: sum(p.id, 'wins'), quests: sum(p.id, 'quests'), smart: sum(p.id, 'smart'), kills: sum(p.id, 'kills'),
+      byDay: days.map(day => ({ day, minutes: ((this.history.days[day] || {})[p.id] || {}).minutes || 0, battles: ((this.history.days[day] || {})[p.id] || {}).battles || 0 })) }));
+    const names = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'];
+    const lines = [`📊 Родинна арена, тиждень з ${days[0]}`];
+    for (const p of players) lines.push(`${p.name} (${p.level} рів.): ${p.minutes} хв, боїв ${p.battles} (перемог ${p.wins}), справ ${p.quests}, розумних відповідей ${p.smart}` + (p.minutes ? `; найбільше ${names[p.byDay.reduce((m, x, i) => x.minutes > p.byDay[m].minutes ? i : m, 0)]}` : ''));
+    if (!players.some(p => p.minutes)) lines.push('Діти цього тижня не грали.');
+    const wb = this.history.worldBoss; if (wb && wb.week === days[0]) lines.push(wb.killed ? '🐲 Бос тижня повалений.' : `🐲 Бос тижня: ${Math.round(100 * wb.hp / wb.maxHp)} % здоров’я.`);
+    return { from: days[0], to: days[6], days, dayNames: names, players, text: lines.join('\n'), limitWeekday: this.settings.limitWeekday, limitWeekend: this.settings.limitWeekend };
+  }
 
   // ---------- лобі ----------
   join(p) {
@@ -253,7 +276,7 @@ export class Game {
     let smart = false;
     if (f && f.quiz && mv && mv.quiz !== undefined && mv.quiz !== null && mv.quiz !== '') {
       smart = checkQuiz(f.quiz, mv.quiz); f.quiz = null;
-      if (smart) { p.stats.smart = (p.stats.smart || 0) + 1; }
+      if (smart) { p.stats.smart = (p.stats.smart || 0) + 1; this.logDay(p.id, { smart: 1 }); }
     }
     const e = submitMove(this.battle, p.id, { ...mv, smart });
     if (e) throw err(e);
@@ -354,6 +377,7 @@ export class Game {
       this.feed(`⚔️ Дуель виграв: ${winners.map(id => this.players[id].name).join(', ')}`);
     }
     this.history.battles.unshift({ mode: r.mode, players: r.players, at: this.now(), won: this.results.won, winners: this.results.winners });
+    for (const pid of r.players) { const p = this.players[pid]; const won = r.mode === 'duel' ? (this.results.winners || []).includes(p.name) : !!this.results.won; const f = (r.team || (this.battle && this.battle.fighters) || []).find(x => x.id === pid); this.logDay(pid, { battles: 1, wins: won ? 1 : 0, kills: f && f.stats ? f.stats.kills : 0 }); }
     this.history.battles = this.history.battles.slice(0, 200);
     this.history.lastReplay = { mode: r.mode, at: this.now(), names: r.players.map(id => this.players[id].name), frames: r.frames || [] };
     this.store.save('players'); this.store.save('history');
@@ -459,7 +483,7 @@ export class Game {
     this.questsFor(p);
     if (!approve) { p.quests.state[qid] = 'open'; this.store.save('players'); this.emit(); return null; }
     p.quests.state[qid] = 'approved';
-    p.gold += q.gold; const ev = addXp(p, q.xp); p.stats.quests += 1; this.addSeasonPoints(pid, SEASON_POINTS.quest);
+    p.gold += q.gold; const ev = addXp(p, q.xp); p.stats.quests += 1; this.addSeasonPoints(pid, SEASON_POINTS.quest); this.logDay(pid, { quests: 1 });
     const it = genItem(this.rng, p.level, null, q.chest); p.inventory.push(it);
     if (it.rarity === 'legendary') { p.stats.legendaries += 1; this.feed(`🟠 ${p.name} отримав легендарку за справу: ${it.name}!`); }
     p.playedToday.minutes = Math.max(0, this.minutesToday(p) - 10); // кожна справа повертає 10 хв гри

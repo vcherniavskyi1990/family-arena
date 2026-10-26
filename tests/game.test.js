@@ -460,3 +460,28 @@ test('вихованці: випадають, дають бонус, повто�
   assert.equal(noPet.pet, null);
   assert.ok(g.players[a.id].achievements.includes('pets_1') || true); // досягнення зараховується після бою
 });
+
+test('звіт тижня для батьків: хвилини, бої, справи, розумні по днях', () => {
+  const g = makeGame();
+  const dad = g.createPlayer({ name: 'Тато', classId: 'warrior', age: 40, pin: '1234', role: 'parent' });
+  const a = g.createPlayer({ name: 'Віктор', classId: 'warrior', age: 10, pin: '1111' });
+  const b = g.createPlayer({ name: 'Саша', classId: 'mage', age: 7, pin: '2222' });
+  g.setMode(a, { mode: 'duel' }); g.join(a); g.join(b); g.ready(a, true); g.ready(b, true);
+  let guard = 0;
+  while (g.battle && guard++ < 200) { g.move(a, { attack: 'head', blocks: ['chest', 'belt'], cards: [] }); if (g.battle && !g.battle.over) g.fire('round'); if (g.battle) g.fire('round'); }
+  g.fire('results');
+  g.questSubmit ? g.questSubmit(a, 'bed') : null;
+  g.questApprove(dad, a.id, 'bed');
+  g.addMinutes(g.players[b.id], 12);
+  const r = g.weekReport(0);
+  assert.equal(r.players.length, 2, 'лише діти');
+  const pa = r.players.find(p => p.id === a.id), pb = r.players.find(p => p.id === b.id);
+  assert.equal(pa.battles, 1); assert.equal(pb.battles, 1); assert.equal(pa.wins + pb.wins, 1);
+  assert.equal(pa.quests, 1); assert.ok(pb.minutes >= 12);
+  assert.equal(r.days.length, 7); assert.ok(r.days.includes(g.kyiv().day));
+  assert.ok(r.text.includes('Віктор') && r.text.includes('справ 1'));
+  // минулий тиждень порожній; журнал не росте понад 60 днів
+  assert.equal(g.weekReport(1).players[0].battles, 0);
+  for (let i = 0; i < 70; i++) g.logDay(a.id, { minutes: 1 }, `2026-01-${String((i % 28) + 1).padStart(2, '0')}`);
+  assert.ok(Object.keys(g.history.days).length <= 60);
+});

@@ -300,10 +300,21 @@
       '<div class="row"><select id="dm-player" class="grow">' + dm.players.map(function (p) { return '<option value="' + p.id + '">' + esc(p.name) + '</option>'; }).join('') + '</select><button class="btn-sm btn-primary" data-dm="treasure">🎁 Скарб</button></div>' +
       '<div class="row"><input id="dm-text" class="grow" placeholder="Слово ведучого на ТБ…" maxlength="120"><button class="btn-sm" data-dm="say">📣</button></div></div>';
   }
+  function reportHtml(r) {
+    if (!r.players.length) return '<div class="muted">Дітей ще немає.</div>';
+    var h = '<div class="small muted">' + esc(r.from) + ' — ' + esc(r.to) + '</div>';
+    r.players.forEach(function (p) {
+      var max = Math.max(r.limitWeekend, r.limitWeekday, 1); p.byDay.forEach(function (d) { if (d.minutes > max) max = d.minutes; });
+      h += '<div class="rep"><b>' + esc(p.name) + '</b> <span class="small muted">' + p.level + ' рів. · ' + p.minutes + ' хв · боїв ' + p.battles + ' (перемог ' + p.wins + ') · справ ' + p.quests + ' · розумних ' + p.smart + '</span><div class="days">' +
+        p.byDay.map(function (d, i) { var lim = (i >= 5 ? r.limitWeekend : r.limitWeekday); return '<div class="day"><div class="col"><i style="height:' + Math.round(100 * d.minutes / max) + '%" class="' + (d.minutes > lim ? 'over' : '') + '"></i></div><div class="small">' + r.dayNames[i] + '</div><div class="small muted">' + (d.minutes || '') + '</div></div>'; }).join('') + '</div></div>';
+    });
+    return h + '<div class="small muted">Стовпчик вище ліміту дня — червоний.</div>';
+  }
   function renderAdmin() {
     var h = head() + (state.dm ? renderDm() : (state.me.isParent ? '<div class="card"><div class="row"><input id="dm-text" class="grow" placeholder="Оголошення на ТБ…" maxlength="120"><button class="btn-sm" data-dm="say">📣</button></div></div>' : '')) + '<div class="card"><h3>Пауза гри</h3><button class="btn-block ' + (state.paused ? 'btn-green' : 'btn-red') + '" id="pause">' + (state.paused ? '▶️ Зняти паузу' : '⏸ Поставити на паузу (тривога)') + '</button></div>';
     h += '<div class="card"><h3>На ТБ</h3><button class="btn-block" id="replay" ' + (state.hasReplay && !state.battle ? '' : 'disabled') + '>📼 Повтор останнього бою на ТБ</button></div>';
     h += '<div class="card"><h3>Сезон</h3><div class="small muted">Зараз: ' + esc(state.season.name) + '. Закриття: лідер стає чемпіоном сезону (титул, +100 🪙), очки обнуляються.</div><input id="season-name" placeholder="Назва нового сезону (необов’язково)"><button class="btn-block btn-red" id="season-end">🏁 Закрити сезон</button></div>';
+    h += '<div class="card"><h3>📊 Звіт тижня</h3>' + (ui.report ? reportHtml(ui.report) : '<div class="small muted">Хвилини, бої, справи й розумні відповіді кожної дитини по днях.</div>') + '<div class="row" style="margin-top:8px"><button class="btn-sm" data-report="0">Цей тиждень</button><button class="btn-sm" data-report="1">Минулий</button></div></div>';
     h += '<div class="card"><h3>Новий гравець</h3>' + playerForm('Додати', true) + '</div>';
     h += '<div class="card"><h3>Гравці</h3>' + (ui.players || []).map(function (p) { return '<div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)">' + avatarHtml(p) + '<div class="grow"><b>' + esc(p.name) + '</b><div class="small muted">' + esc(p.className) + ' · ' + p.level + ' рів. · ' + (p.role === 'kid' ? 'дитина' : 'батьки') + (p.age ? ' · ' + p.age + ' р.' : '') + '</div></div><button class="btn-sm" data-edit="' + p.id + '">✏️</button></div>'; }).join('') + '</div>';
     if (ui.editP) { var p = ui.editP; h += '<div class="card warn"><h3>' + esc(p.name) + '</h3><input id="e-name" value="' + esc(p.name) + '"><input id="e-age" type="number" value="' + (p.age || '') + '" placeholder="Вік"><select id="e-role"><option value="kid" ' + (p.role === 'kid' ? 'selected' : '') + '>Дитина</option><option value="parent" ' + (p.role !== 'kid' ? 'selected' : '') + '>Батьки</option></select><input id="e-pin" type="tel" maxlength="4" placeholder="Новий PIN (порожнє = без змін)"><div class="row"><button class="btn-sm btn-primary" id="e-save">Зберегти</button><button class="btn-sm" id="e-avreset">Скинути аватар</button><button class="btn-sm btn-red" id="e-del">Видалити</button><button class="btn-sm right" id="e-close">✕</button></div></div>'; }
@@ -342,6 +353,7 @@
     on('[data-blk]', function (el) { var z = el.dataset.blk, b = ui.move.blocks, i = b.indexOf(z); if (i >= 0) b.splice(i, 1); else { if (b.length >= 2) b.shift(); b.push(z); } render(); });
     on('[data-card]', function (el) { var k = el.dataset.card, c = ui.move.cards, i = c.indexOf(k); if (i >= 0) c.splice(i, 1); else if (!el.classList.contains('off')) c.push(k); render(); });
     on('#go', function () { var m = ui.move; ui.sent = true; render(); act('/battle/move', { target: m.target, attack: m.attack, blocks: m.blocks, cards: m.cards.map(function (k) { return k.split('#')[0]; }), quiz: m.quiz }).catch(function () { ui.sent = false; render(); }); });
+    on('[data-report]', function (el) { api('/admin/report?back=' + el.dataset.report).then(function (r) { ui.report = r; render(); }).catch(function (e) { toast(e.message, 3000); }); });
     on('[data-hv]', function (el) { ui.heroView = el.dataset.hv; ui.lastChest = null; render(); });
     on('[data-pet]', function (el) { act('/me/pet', { petId: el.dataset.pet || null }).then(function () { toast(el.dataset.pet ? '🐾 Вихованець із тобою' : '🐾 Відпочиває'); }); });
     on('[data-unequip]', function (el) { act('/me/unequip', { slot: el.dataset.unequip }); });
