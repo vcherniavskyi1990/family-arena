@@ -255,5 +255,51 @@
     "aoe": true,
     "heal": 10,
     "text": "Дихає вогнем на всіх у люті, кожні 4 раунди кличе блейзів."
+  },
+  {
+    "id": "goblin",
+    "name": "Гоблін-хакер",
+    "icon": "👺",
+    "hp": 45,
+    "atk": 9,
+    "def": 1,
+    "xp": 28,
+    "gold": 12,
+    "level": 2,
+    "lootChance": 0.3,
+    "dodge": 0.12,
+    "text": "Краде ману."
+  },
+  {
+    "id": "lego_golem",
+    "name": "Лего-голем",
+    "icon": "🧱",
+    "hp": 90,
+    "atk": 11,
+    "def": 4,
+    "xp": 55,
+    "gold": 20,
+    "level": 4,
+    "lootChance": 0.45,
+    "text": "Боляче наступити."
+  },
+  {
+    "id": "boss_server_king",
+    "name": "Король серверів",
+    "icon": "🖥️",
+    "boss": true,
+    "hp": 380,
+    "atk": 20,
+    "def": 6,
+    "xp": 380,
+    "gold": 150,
+    "level": 7,
+    "lootChance": 1,
+    "rageAt": 0.4,
+    "summonEvery": 4,
+    "summons": [
+      "goblin"
+    ],
+    "text": "Кожні 4 раунди кличе гобліна. Нагрівається до 87 °C і лютує."
   }
 ]

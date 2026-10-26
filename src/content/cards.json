@@ -76,9 +76,9 @@
     "cost": 1,
     "rarity": "common",
     "type": "damage",
-    "value": 9,
+    "value": 10,
     "spell": true,
-    "text": "9 шкоди заклинанням."
+    "text": "10 шкоди заклинанням."
   },
   {
     "id": "mana_shield",
@@ -99,9 +99,9 @@
     "cost": 3,
     "rarity": "common",
     "type": "damage",
-    "value": 18,
+    "value": 20,
     "spell": true,
-    "text": "18 шкоди заклинанням."
+    "text": "20 шкоди заклинанням."
   },
   {
     "id": "frost_nova",
@@ -507,5 +507,207 @@
     "type": "weaken",
     "value": 5,
     "text": "Ворог б'є на 5 слабше 2 ходи."
+  },
+  {
+    "id": "holy_shield",
+    "name": "Святий щит",
+    "icon": "✨",
+    "class": "paladin",
+    "cost": 2,
+    "rarity": "common",
+    "type": "shield",
+    "value": 13,
+    "text": "Щит на 13."
+  },
+  {
+    "id": "hammer_of_light",
+    "name": "Молот світла",
+    "icon": "🔨",
+    "class": "paladin",
+    "cost": 3,
+    "rarity": "common",
+    "type": "damage",
+    "value": 16,
+    "text": "16 шкоди."
+  },
+  {
+    "id": "lay_on_hands",
+    "name": "Накладання рук",
+    "icon": "🙌",
+    "class": "paladin",
+    "cost": 3,
+    "rarity": "uncommon",
+    "type": "heal",
+    "value": 24,
+    "text": "+24 здоров'я."
+  },
+  {
+    "id": "consecration",
+    "name": "Освячення",
+    "icon": "🌟",
+    "class": "paladin",
+    "cost": 4,
+    "rarity": "rare",
+    "type": "damage",
+    "value": 14,
+    "aoe": true,
+    "text": "14 шкоди всім ворогам."
+  },
+  {
+    "id": "divine_shield",
+    "name": "Божественний щит",
+    "icon": "🔆",
+    "class": "paladin",
+    "cost": 5,
+    "rarity": "epic",
+    "type": "shield",
+    "value": 22,
+    "aoe": true,
+    "text": "Щит на 22 усій команді."
+  },
+  {
+    "id": "turret",
+    "name": "Турель",
+    "icon": "🗼",
+    "class": "engineer",
+    "cost": 2,
+    "rarity": "common",
+    "type": "summon",
+    "minion": {
+      "name": "Турель",
+      "icon": "🗼",
+      "hp": 8,
+      "atk": 4
+    },
+    "text": "Турель (8 здоров'я, 4 удар) стріляє щоходу."
+  },
+  {
+    "id": "wrench",
+    "name": "Гайковий ключ",
+    "icon": "🔧",
+    "class": "engineer",
+    "cost": 1,
+    "rarity": "common",
+    "type": "damage",
+    "value": 9,
+    "text": "9 шкоди."
+  },
+  {
+    "id": "redstone_bomb",
+    "name": "Редстоун-бомба",
+    "icon": "🧨",
+    "class": "engineer",
+    "cost": 3,
+    "rarity": "uncommon",
+    "type": "damage",
+    "value": 10,
+    "aoe": true,
+    "text": "10 шкоди всім ворогам."
+  },
+  {
+    "id": "repair_bot",
+    "name": "Ремонтний бот",
+    "icon": "🤖",
+    "class": "engineer",
+    "cost": 2,
+    "rarity": "uncommon",
+    "type": "heal",
+    "value": 15,
+    "text": "+15 здоров'я."
+  },
+  {
+    "id": "mech_suit",
+    "name": "Мех-костюм",
+    "icon": "🦾",
+    "class": "engineer",
+    "cost": 5,
+    "rarity": "rare",
+    "type": "summon",
+    "minion": {
+      "name": "Мех",
+      "icon": "🦾",
+      "hp": 26,
+      "atk": 8
+    },
+    "text": "Мех (26 здоров'я, 8 удар)."
+  },
+  {
+    "id": "laser",
+    "name": "Лазер",
+    "icon": "🔴",
+    "class": "engineer",
+    "cost": 6,
+    "rarity": "epic",
+    "type": "damage",
+    "value": 32,
+    "pierce": true,
+    "text": "32 шкоди крізь блок."
+  },
+  {
+    "id": "snowball",
+    "name": "Сніжка",
+    "icon": "⚪",
+    "class": "all",
+    "cost": 1,
+    "rarity": "common",
+    "type": "damage",
+    "value": 7,
+    "text": "7 шкоди. Холодно!"
+  },
+  {
+    "id": "cake",
+    "name": "Тортик",
+    "icon": "🍰",
+    "class": "all",
+    "cost": 2,
+    "rarity": "common",
+    "type": "heal",
+    "value": 12,
+    "text": "+12 здоров'я. Смачно."
+  },
+  {
+    "id": "fishing_rod",
+    "name": "Вудка",
+    "icon": "🎣",
+    "class": "all",
+    "cost": 2,
+    "rarity": "uncommon",
+    "type": "weaken",
+    "value": 5,
+    "text": "Удар ворога −5 на 2 ходи."
+  },
+  {
+    "id": "elytra",
+    "name": "Елітри",
+    "icon": "🪽",
+    "class": "all",
+    "cost": 3,
+    "rarity": "rare",
+    "type": "dodge",
+    "value": 1,
+    "text": "Цього ходу всі удари по тобі повз."
+  },
+  {
+    "id": "beacon",
+    "name": "Маяк",
+    "icon": "💠",
+    "class": "all",
+    "cost": 4,
+    "rarity": "epic",
+    "type": "buff",
+    "value": 10,
+    "text": "+10 до удару на 2 ходи."
+  },
+  {
+    "id": "warden_roar",
+    "name": "Рев Вардена",
+    "icon": "👹",
+    "class": "all",
+    "cost": 7,
+    "rarity": "legendary",
+    "type": "stun",
+    "value": 24,
+    "aoe": true,
+    "text": "24 шкоди всім, усі пропускають удар. Легендарна."
   }
 ]

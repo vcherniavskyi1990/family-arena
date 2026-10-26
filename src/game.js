@@ -7,7 +7,7 @@ import { makeRng } from './engine/rng.js';
 import { createBattle, fighterFromPlayer, fighterFromMob, submitMove, resolveRound, publicFighter, alive } from './engine/combat.js';
 import { newPlayer, addXp, xpForLevel, equipmentBonus, genItem, genCard, equip, unequip, craft, checkAchievements, setDeck, sellPrice } from './engine/progress.js';
 import { makeQuiz, checkQuiz } from './engine/quiz.js';
-import { CLASSES, CARDS, DUNGEONS, QUESTS, ACHIEVEMENTS, ITEMS, ZONES, ZONE_NAMES, classById, dungeonById, mobById, questById, cardById, starterDeck, allowedCards } from './engine/content.js';
+import { CLASSES, CARDS, DUNGEONS, QUESTS, ACHIEVEMENTS, DAILY, FAMILY, ITEMS, ZONES, ZONE_NAMES, classById, dungeonById, mobById, questById, cardById, starterDeck, allowedCards } from './engine/content.js';
 
 export const ROUND_SECONDS = 30;
 const RESULTS_SECONDS = 25;
@@ -46,6 +46,7 @@ export class Game {
     if (!this.history.pastSeasons) this.history.pastSeasons = [];
     if (!this.history.raids) this.history.raids = [];
     if (!this.history.customCards) this.history.customCards = [];
+    if (!this.history.family) this.history.family = { achievements: [] };
     for (const c of this.history.customCards) if (c.approved) this.registerCard(c);
     this.announce = null;
     this.replay = null;
@@ -292,8 +293,10 @@ export class Game {
           if (l.card && !p.collection.includes(l.card)) p.collection.push(l.card);
         }
         for (const a of checkAchievements(p)) ev.push({ t: 'achievement', who: pid, name: a.name, icon: a.icon, title: a.title });
+        for (const d of this.checkDaily(p)) ev.push({ t: 'daily', who: pid, name: d.name, icon: d.icon, gold: d.gold });
         this.addMinutes(p, minutes);
       }
+      for (const a of this.checkFamily()) ev.push({ t: 'family', name: a.name, icon: a.icon, gold: a.gold });
       this.results = { mode: 'dungeon', won, raid: !!d.raid, dungeon: dungeonById[r.dungeon].name, xp: Math.round(r.xp / r.players.length), gold: Math.round(r.gold / r.players.length), kills: r.kills.length,
         loot: r.loot.map(l => ({ ...l, name: this.players[l.pid].name, cardName: l.card ? cardById[l.card].name : undefined })), events: ev.map(e => ({ ...e, whoName: this.players[e.who] && this.players[e.who].name })), players: r.players.map(id => this.publicPlayer(this.players[id])) };
       this.feed(won ? `${d.raid ? '🗿' : '🏆'} ${r.players.map(id => this.players[id].name).join(', ')} пройшли «${dungeonById[r.dungeon].name}»` : `💀 «${dungeonById[r.dungeon].name}» виявилось сильнішим`);
@@ -306,8 +309,10 @@ export class Game {
         p.stats.crits += f.stats.crits; p.stats.blocks += f.stats.blocks; p.stats.heals += f.stats.heals;
         ev.push(...addXp(p, won ? 40 : 15)); p.gold += won ? 12 : 4;
         for (const a of checkAchievements(p)) ev.push({ t: 'achievement', who: pid, name: a.name, icon: a.icon, title: a.title });
+        for (const d of this.checkDaily(p)) ev.push({ t: 'daily', who: pid, name: d.name, icon: d.icon, gold: d.gold });
         this.addMinutes(p, minutes);
       }
+      for (const a of this.checkFamily()) ev.push({ t: 'family', name: a.name, icon: a.icon, gold: a.gold });
       this.results = { mode: 'duel', winners: winners.map(id => this.players[id].name), xp: 40, gold: 12, events: ev.map(e => ({ ...e, whoName: this.players[e.who] && this.players[e.who].name })), players: r.players.map(id => this.publicPlayer(this.players[id])) };
       this.feed(`⚔️ Дуель виграв: ${winners.map(id => this.players[id].name).join(', ')}`);
     }
@@ -350,6 +355,54 @@ export class Game {
     return it;
   }
 
+  // ---------- щоденні ігрові завдання: 3 на день, прогрес зі статистики ----------
+  dailyFor(p) {
+    const day = this.kyiv().day;
+    if (!p.daily || p.daily.day !== day) {
+      const rng = makeRng(parseInt(day.replace(/-/g, ''), 10) + p.id.charCodeAt(1) * 7);
+      const pick = rng.shuffle(DAILY.filter(d => d.stat !== 'quests' || this.settings.questsEnabled)).slice(0, 3);
+      p.daily = { day, tasks: pick.map(d => ({ id: d.id, base: p.stats[d.stat] || 0, done: false })) };
+      this.store.save('players');
+    }
+    return p.daily.tasks.map(t => { const d = DAILY.find(x => x.id === t.id); const progress = Math.min(d.n, (p.stats[d.stat] || 0) - t.base); return { ...d, progress, done: t.done }; });
+  }
+  /** Перевірити щоденні після бою чи справи; повертає виконані зараз. */
+  checkDaily(p) {
+    const out = [];
+    this.dailyFor(p);
+    for (const t of p.daily.tasks) {
+      if (t.done) continue;
+      const d = DAILY.find(x => x.id === t.id);
+      if ((p.stats[d.stat] || 0) - t.base >= d.n) { t.done = true; p.gold += d.gold; addXp(p, d.xp); out.push(d); this.feed(`📅 ${p.name} виконав завдання дня «${d.name}»: +${d.gold} золота`); }
+    }
+    if (out.length) this.store.save('players');
+    return out;
+  }
+
+  // ---------- сімейні досягнення: спільні для всіх ----------
+  familySum(stat) { return this.playerList.reduce((s, p) => s + (p.stats[stat] || 0), 0); }
+  checkFamily() {
+    const got = [];
+    const kids = this.playerList.filter(p => !this.isParent(p));
+    for (const a of FAMILY) {
+      if (this.history.family.achievements.some(x => x.id === a.id)) continue;
+      const c = a.cond; let ok = false;
+      if (c.sum) ok = this.familySum(c.sum) >= c.gte;
+      else if (c.minLevel) ok = this.playerList.length >= 2 && (kids.length ? kids : this.playerList).every(p => p.level >= c.minLevel);
+      else if (c.customCards) ok = this.history.customCards.filter(x => x.approved).length >= c.customCards;
+      if (!ok) continue;
+      this.history.family.achievements.push({ id: a.id, at: this.now() });
+      for (const p of this.playerList) p.gold += a.gold;
+      this.feed(`👨‍👩‍👦 Сімейне досягнення «${a.name}»! Усім +${a.gold} золота`);
+      got.push(a);
+    }
+    if (got.length) { this.store.save('history'); this.store.save('players'); }
+    return got;
+  }
+  familyView() {
+    return { achievements: FAMILY.map(a => ({ ...a, got: this.history.family.achievements.some(x => x.id === a.id) })), sums: { kills: this.familySum('kills'), dungeons: this.familySum('dungeons'), quests: this.familySum('quests'), smart: this.familySum('smart'), raids: this.familySum('raids') } };
+  }
+
   // ---------- квести-справи ----------
   questsFor(p) {
     const day = this.kyiv().day;
@@ -373,7 +426,7 @@ export class Game {
     const it = genItem(this.rng, p.level, null, q.chest); p.inventory.push(it);
     if (it.rarity === 'legendary') { p.stats.legendaries += 1; this.feed(`🟠 ${p.name} отримав легендарку за справу: ${it.name}!`); }
     p.playedToday.minutes = Math.max(0, this.minutesToday(p) - 10); // кожна справа повертає 10 хв гри
-    checkAchievements(p); this.store.save('players');
+    checkAchievements(p); this.checkDaily(p); this.checkFamily(); this.store.save('players');
     this.feed(`✅ ${p.name}: «${q.name}» зараховано, +${q.gold} золота`);
     this.emit();
     return { item: it, gold: q.gold, xp: q.xp, levelups: ev };
@@ -409,7 +462,7 @@ export class Game {
     if (approve) {
       c.approved = true; this.registerCard(c);
       if (owner && !owner.collection.includes(id)) owner.collection.push(id);
-      this.feed(`🖍️ ${c.author} намалював карту «${c.name}», і вона тепер у грі!`);
+      this.feed(`🖍️ ${c.author} намалював карту «${c.name}», і вона тепер у грі!`); this.checkFamily();
     } else {
       this.history.customCards = this.history.customCards.filter(x => x.id !== id);
       if (c.image && this.cardsDir) { const f = join(this.cardsDir, c.image.split('/').pop()); if (existsSync(f)) unlinkSync(f); }
@@ -519,7 +572,8 @@ export class Game {
     const sv = this.seasonView();
     return { phase, season: this.settings.season, seasonN: sv.n, seasonTop: sv.top.slice(0, 5), pastSeasons: sv.past.slice(0, 3), quiet, now: this.now(), announce: this.announce, lobby: this.lobbyView(), battle: this.battle ? this.battleView() : this.replayView(), results: this.results, paused: this.paused, pauseReason: this.pauseReason,
       heroes: this.playerList.map(p => ({ ...this.publicPlayer(p), xp: p.xp, xpNext: xpForLevel(p.level), kills: p.stats.kills, duelWins: p.stats.duelWins, dungeons: p.stats.dungeons, legendaries: p.stats.legendaries, achievements: p.achievements.length })),
-      legendaries: this.history.legendaries.slice(0, 5), feed: this.history.feed.slice(0, 8), pendingQuests: this.pendingQuests().length };
+      legendaries: this.history.legendaries.slice(0, 5), feed: this.history.feed.slice(0, 8), pendingQuests: this.pendingQuests().length,
+      family: this.familyView() };
   }
   playerState(p) {
     const b = this.battle; const f = b && b.fighters.find(x => x.id === p.id);
@@ -534,6 +588,7 @@ export class Game {
       replay: this.replay ? { mode: this.replay.mode, names: this.replay.names } : null, hasReplay: !!(this.history.lastReplay && this.history.lastReplay.frames.length),
       battle: b ? { ...this.battleView(), me: f ? { hand: f.hand.map(id => cardById[id]), mana: f.mana, maxMana: f.maxMana, hp: f.hp, maxHp: f.maxHp, alive: f.alive, move: f.move, shield: f.shield, quiz: f.quiz && !f.move ? { kind: f.quiz.kind, q: f.quiz.q, choices: f.quiz.choices } : null } : null } : null,
       quests: this.settings.questsEnabled ? this.questsFor(p) : [], pendingQuests: this.isParent(p) ? this.pendingQuests() : [],
+      daily: this.dailyFor(p), family: this.familyView(),
       customCards: this.customCardsOf(p), pendingCards: this.isParent(p) ? this.pendingCards() : [], cardTemplates: CARD_TEMPLATES, tvOnline: this.tvOnline(),
     };
   }

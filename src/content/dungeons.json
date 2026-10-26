@@ -23,6 +23,28 @@
   "boss": "boss_ravager"
  },
  {
+  "id": "lego_castle",
+  "name": "Замок Лего в дитячій",
+  "icon": "🧱",
+  "level": 2,
+  "text": "Хтось не прибрав конструктор, і він ожив.",
+  "rooms": [
+   [
+    "slime",
+    "slime"
+   ],
+   [
+    "lego_golem"
+   ],
+   [
+    "skeleton",
+    "spider",
+    "slime"
+   ]
+  ],
+  "boss": "boss_ravager"
+ },
+ {
   "id": "wardrobe_shadows",
   "name": "Гардеробна тіней",
   "icon": "🧥",
@@ -76,6 +98,34 @@
    ]
   ],
   "boss": "boss_ender_dragon"
+ },
+ {
+  "id": "dad_office",
+  "name": "Серверна в кабінеті тата",
+  "icon": "🖥️",
+  "level": 6,
+  "text": "Гобліни зламали домашній сервер. Пульт не відповідає!",
+  "rooms": [
+   [
+    "goblin",
+    "goblin"
+   ],
+   [
+    "hacker",
+    "goblin"
+   ],
+   [
+    "lego_golem",
+    "goblin",
+    "goblin"
+   ],
+   [
+    "hacker",
+    "hacker",
+    "witch"
+   ]
+  ],
+  "boss": "boss_server_king"
  },
  {
   "id": "balcony_citadel",

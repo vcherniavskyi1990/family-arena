@@ -1,0 +1,74 @@
+[
+  {
+    "id": "win_duel",
+    "name": "Виграй дуель",
+    "icon": "🥊",
+    "stat": "duelWins",
+    "n": 1,
+    "gold": 15,
+    "xp": 25
+  },
+  {
+    "id": "kills_5",
+    "name": "Переможи 5 ворогів",
+    "icon": "⚔️",
+    "stat": "kills",
+    "n": 5,
+    "gold": 15,
+    "xp": 25
+  },
+  {
+    "id": "blocks_4",
+    "name": "Заблокуй 4 удари",
+    "icon": "🛡",
+    "stat": "blocks",
+    "n": 4,
+    "gold": 12,
+    "xp": 20
+  },
+  {
+    "id": "crits_2",
+    "name": "Зроби 2 крити",
+    "icon": "💥",
+    "stat": "crits",
+    "n": 2,
+    "gold": 12,
+    "xp": 20
+  },
+  {
+    "id": "smart_3",
+    "name": "Розв'яжи 3 розумні карти",
+    "icon": "🧠",
+    "stat": "smart",
+    "n": 3,
+    "gold": 20,
+    "xp": 30
+  },
+  {
+    "id": "dungeon_1",
+    "name": "Пройди підземелля",
+    "icon": "🏰",
+    "stat": "dungeons",
+    "n": 1,
+    "gold": 25,
+    "xp": 40
+  },
+  {
+    "id": "heals_20",
+    "name": "Вилікуй 20 здоров'я друзям",
+    "icon": "💚",
+    "stat": "heals",
+    "n": 20,
+    "gold": 15,
+    "xp": 25
+  },
+  {
+    "id": "quest_1",
+    "name": "Зроби одну справу по дому",
+    "icon": "✅",
+    "stat": "quests",
+    "n": 1,
+    "gold": 10,
+    "xp": 20
+  }
+]

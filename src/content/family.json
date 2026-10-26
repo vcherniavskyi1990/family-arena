@@ -1,0 +1,89 @@
+[
+  {
+    "id": "fam_kills_100",
+    "name": "Сто ворогів разом",
+    "icon": "⚔️",
+    "cond": {
+      "sum": "kills",
+      "gte": 100
+    },
+    "gold": 30
+  },
+  {
+    "id": "fam_kills_500",
+    "name": "П'ятсот ворогів разом",
+    "icon": "🏆",
+    "cond": {
+      "sum": "kills",
+      "gte": 500
+    },
+    "gold": 80
+  },
+  {
+    "id": "fam_dungeons_10",
+    "name": "Десять підземель",
+    "icon": "🏰",
+    "cond": {
+      "sum": "dungeons",
+      "gte": 10
+    },
+    "gold": 50
+  },
+  {
+    "id": "fam_raid",
+    "name": "Перший сімейний рейд",
+    "icon": "🗿",
+    "cond": {
+      "sum": "raids",
+      "gte": 1
+    },
+    "gold": 50
+  },
+  {
+    "id": "fam_level_5",
+    "name": "Усі п'ятого рівня",
+    "icon": "⭐",
+    "cond": {
+      "minLevel": 5
+    },
+    "gold": 40
+  },
+  {
+    "id": "fam_level_10",
+    "name": "Усі десятого рівня",
+    "icon": "🌟",
+    "cond": {
+      "minLevel": 10
+    },
+    "gold": 100
+  },
+  {
+    "id": "fam_cards_3",
+    "name": "Три намальовані карти",
+    "icon": "🖍️",
+    "cond": {
+      "customCards": 3
+    },
+    "gold": 30
+  },
+  {
+    "id": "fam_quests_50",
+    "name": "П'ятдесят справ по дому",
+    "icon": "🏠",
+    "cond": {
+      "sum": "quests",
+      "gte": 50
+    },
+    "gold": 60
+  },
+  {
+    "id": "fam_smart_100",
+    "name": "Сто розумних відповідей",
+    "icon": "🎓",
+    "cond": {
+      "sum": "smart",
+      "gte": 100
+    },
+    "gold": 60
+  }
+]

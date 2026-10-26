@@ -10,6 +10,8 @@ export const DUNGEONS = load('dungeons');
 export const ITEMS = load('items');
 export const QUESTS = load('quests');
 export const ACHIEVEMENTS = load('achievements');
+export const DAILY = load('daily');
+export const FAMILY = load('family');
 
 export const cardById = Object.fromEntries(CARDS.map(c => [c.id, c]));
 export const classById = Object.fromEntries(CLASSES.map(c => [c.id, c]));
