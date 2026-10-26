@@ -5,9 +5,9 @@ import { mkdirSync, writeFileSync, unlinkSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { makeRng } from './engine/rng.js';
 import { createBattle, fighterFromPlayer, fighterFromMob, submitMove, resolveRound, publicFighter, alive, enemiesOf, MAX_CARDS_PER_TURN } from './engine/combat.js';
-import { newPlayer, addXp, xpForLevel, equipmentBonus, genItem, genCard, equip, unequip, craft, checkAchievements, setDeck, sellPrice } from './engine/progress.js';
+import { newPlayer, addXp, xpForLevel, equipmentBonus, genItem, genCard, equip, unequip, craft, checkAchievements, setDeck, sellPrice, genPet, grantPet, petView, petOf, activePetIcon } from './engine/progress.js';
 import { makeQuiz, checkQuiz } from './engine/quiz.js';
-import { CLASSES, CARDS, DUNGEONS, QUESTS, ACHIEVEMENTS, DAILY, FAMILY, WORLDBOSS, ITEMS, ZONES, ZONE_NAMES, classById, dungeonById, mobById, questById, cardById, starterDeck, allowedCards } from './engine/content.js';
+import { CLASSES, CARDS, DUNGEONS, QUESTS, ACHIEVEMENTS, DAILY, FAMILY, WORLDBOSS, PETS, ITEMS, petById, ZONES, ZONE_NAMES, classById, dungeonById, mobById, questById, cardById, starterDeck, allowedCards } from './engine/content.js';
 
 export const ROUND_SECONDS = 30;
 const RESULTS_SECONDS = 25;
@@ -24,6 +24,7 @@ export const CARD_TEMPLATES = {
 };
 const SEASON_POINTS = { duelWin: 3, duelLoss: 1, dungeonLoss: 1, quest: 1, worldBoss: 5 };
 /** Бос тижня: спільне здоров’я на всю сім’ю; кожен бій відколює шматок. Нагорода, коли впав. */
+const PET_DROP = 0.35;   // шанс вихованця за пройдене підземелля
 const WORLD_BOSS = { duelWin: 30, duelLoss: 10, dungeonBase: 40, dungeonPerLevel: 15, dungeonPerKill: 3, dungeonLoss: 10, smartMult: 2, gold: 40 };
 
 const DEFAULT_SETTINGS = {
@@ -201,7 +202,7 @@ export class Game {
   startBattle() {
     this.stopReplay();
     const ids = Object.keys(this.lobby.players);
-    const fighters = (list) => list.map(id => { const p = this.players[id]; return fighterFromPlayer({ ...p, bonus: equipmentBonus(p), icon: this.publicPlayer(p).icon }, this.rng); });
+    const fighters = (list) => list.map(id => { const p = this.players[id]; return fighterFromPlayer({ ...p, bonus: equipmentBonus(p), icon: this.publicPlayer(p).icon, pet: activePetIcon(p) }, this.rng); });
     this.seed = (this.seed * 7919 + 13) % 2147483647; this.rng = makeRng(this.seed);
     if (this.lobby.mode === 'duel') {
       const t0 = ids.filter(id => this.lobby.players[id].team === 0), t1 = ids.filter(id => this.lobby.players[id].team === 1);
@@ -312,6 +313,7 @@ export class Game {
           this.players[pid].stats.raids = (this.players[pid].stats.raids || 0) + 1; this.addSeasonPoints(pid, 10);
         }
       }
+      if (won) for (const pid of r.players) if (rng.chance(PET_DROP)) r.loot.push({ pid, pet: genPet(rng, d.level), from: d.name });
       for (const pid of r.players) {
         const p = this.players[pid]; const f = r.team.find(x => x.id === pid);
         const share = won ? 1 : 0.4;
@@ -323,6 +325,7 @@ export class Game {
         for (const l of r.loot.filter(x => x.pid === pid)) {
           if (l.item) { p.inventory.push(l.item); if (l.item.rarity === 'legendary') { p.stats.legendaries += 1; this.history.legendaries.unshift({ pid, name: p.name, item: l.item, at: this.now() }); this.feed(`🟠 ${p.name} вибив легендарку: ${l.item.name}!`); } }
           if (l.card && !p.collection.includes(l.card)) p.collection.push(l.card);
+          if (l.pet) { const pe = grantPet(p, l.pet); if (pe) { ev.push(pe); if (pe.isNew) this.feed(`🐾 ${p.name} приручив вихованця: ${pe.icon} ${pe.name}`); } }
         }
         for (const a of checkAchievements(p)) ev.push({ t: 'achievement', who: pid, name: a.name, icon: a.icon, title: a.title });
         for (const d of this.checkDaily(p)) ev.push({ t: 'daily', who: pid, name: d.name, icon: d.icon, gold: d.gold });
@@ -331,7 +334,7 @@ export class Game {
       for (const a of this.checkFamily()) ev.push({ t: 'family', name: a.name, icon: a.icon, gold: a.gold });
       const wb = this.hitWorldBoss(r.players, won ? WORLD_BOSS.dungeonBase + WORLD_BOSS.dungeonPerLevel * d.level + WORLD_BOSS.dungeonPerKill * r.kills.length : WORLD_BOSS.dungeonLoss, ev, null, r.team);
       this.results = { mode: 'dungeon', won, raid: !!d.raid, worldBoss: wb, dungeon: dungeonById[r.dungeon].name, xp: Math.round(r.xp / r.players.length), gold: Math.round(r.gold / r.players.length), kills: r.kills.length,
-        loot: r.loot.map(l => ({ ...l, name: this.players[l.pid].name, cardName: l.card ? cardById[l.card].name : undefined })), events: ev.map(e => ({ ...e, whoName: this.players[e.who] && this.players[e.who].name })), players: r.players.map(id => this.publicPlayer(this.players[id])) };
+        loot: r.loot.map(l => ({ ...l, name: this.players[l.pid].name, cardName: l.card ? cardById[l.card].name : undefined, petName: l.pet ? petById[l.pet].name : undefined, petIcon: l.pet ? petById[l.pet].icon : undefined })), events: ev.map(e => ({ ...e, whoName: this.players[e.who] && this.players[e.who].name })), players: r.players.map(id => this.publicPlayer(this.players[id])) };
       this.feed(won ? `${d.raid ? '🗿' : '🏆'} ${r.players.map(id => this.players[id].name).join(', ')} пройшли «${dungeonById[r.dungeon].name}»` : `💀 «${dungeonById[r.dungeon].name}» виявилось сильнішим`);
     } else {
       const winners = b.fighters.filter(f => f.team === b.winner).map(f => f.id);
@@ -660,6 +663,11 @@ export class Game {
     this.store.save('history'); this.store.save('players');
     return { name: def.name, icon: def.icon, hit: total, killed, hp: w.hp, maxHp: w.maxHp };
   }
+  /** Вибрати активного вихованця (null = без). */
+  setPet(p, id) {
+    if (id !== null && !petOf(p, id)) throw err('немає такого вихованця');
+    p.activePet = id; this.store.save('players'); this.emit(); return petView(p);
+  }
   worldBossView() {
     const w = this.worldBoss(); const def = WORLDBOSS.find(b => b.id === w.id);
     const end = new Date(w.week + 'T12:00:00Z'); end.setUTCDate(end.getUTCDate() + 7);
@@ -683,7 +691,7 @@ export class Game {
     const hm = this.kyiv().hm; const quiet = hm < '07:00' || (hm >= '13:00' && hm < '15:00');
     const sv = this.seasonView();
     return { phase, season: this.settings.season, seasonN: sv.n, seasonTop: sv.top.slice(0, 5), pastSeasons: sv.past.slice(0, 3), quiet, now: this.now(), announce: this.announce, lobby: this.lobbyView(), battle: this.battle ? this.battleView() : this.replayView(), results: this.results, paused: this.paused, pauseReason: this.pauseReason,
-      heroes: this.playerList.map(p => ({ ...this.publicPlayer(p), xp: p.xp, xpNext: xpForLevel(p.level), kills: p.stats.kills, duelWins: p.stats.duelWins, dungeons: p.stats.dungeons, legendaries: p.stats.legendaries, achievements: p.achievements.length })),
+      heroes: this.playerList.map(p => ({ ...this.publicPlayer(p), pet: activePetIcon(p), xp: p.xp, xpNext: xpForLevel(p.level), kills: p.stats.kills, duelWins: p.stats.duelWins, dungeons: p.stats.dungeons, legendaries: p.stats.legendaries, achievements: p.achievements.length })),
       legendaries: this.history.legendaries.slice(0, 5), feed: this.history.feed.slice(0, 8), pendingQuests: this.pendingQuests().length,
       family: this.familyView(), worldBoss: this.worldBossView() };
   }
@@ -692,7 +700,7 @@ export class Game {
     const inLobby = this.lobby.players[p.id];
     const tv = this.tvState(); const sv = { ...this.seasonView(), phase: tv.phase };
     return {
-      me: { ...this.publicPlayer(p), xp: p.xp, xpNext: xpForLevel(p.level), gold: p.gold, deck: p.deck, collection: p.collection, inventory: p.inventory, equipment: p.equipment, bonus: equipmentBonus(p), stats: p.stats, achievements: p.achievements,
+      me: { ...this.publicPlayer(p), xp: p.xp, xpNext: xpForLevel(p.level), gold: p.gold, deck: p.deck, collection: p.collection, inventory: p.inventory, equipment: p.equipment, bonus: equipmentBonus(p), pets: petView(p), stats: p.stats, achievements: p.achievements,
         minutesToday: this.minutesToday(p), limit: this.limitFor(p), blocked: this.blockedReason(p), isParent: this.isParent(p), avatarPending: p.avatarPending || null,
         seasonPoints: this.history.season.points[p.id] || 0, seasonRank: sv.top.findIndex(x => x.id === p.id) + 1 },
       phase: sv.phase, season: { n: sv.n, name: sv.name, top: sv.top.slice(0, 5) }, lobby: this.lobbyView(), inLobby: !!inLobby, results: this.results, paused: this.paused, pauseReason: this.pauseReason,

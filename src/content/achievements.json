@@ -1,4 +1,6 @@
 [
+  { "id": "pets_1", "name": "Перший друг", "icon": "🐾", "title": "Приборкувач", "cond": { "stat": "pets", "gte": 1 } },
+  { "id": "pets_5", "name": "Зоопарк", "icon": "🦁", "title": "Друг звірів", "cond": { "stat": "pets", "gte": 5 } },
   { "id": "worldboss_1", "name": "Бос тижня повалений", "icon": "🐲", "title": "Гроза босів", "cond": { "stat": "worldBoss", "gte": 1 } },
   { "id": "worldboss_5", "name": "П’ять босів тижня", "icon": "🏯", "title": "Легенда тижня", "cond": { "stat": "worldBoss", "gte": 5 } },
   {
