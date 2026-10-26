@@ -1082,3 +1082,28 @@ test('сезон із датою: відлік і автозакриття вв�
   assert.equal(g.autoCloseSeason(), false, 'новий сезон щойно почався');
   g.updateSettings({ seasonDays: 0 }); assert.equal(g.seasonView().daysLeft, null); assert.equal(g.tvState().seasonDaysLeft, null);
 });
+
+test('повернення після паузи: подарунок, збережена серія, заморозка на відпустку', () => {
+  const g = makeGame();
+  const dad = g.createPlayer({ name: 'Тато', classId: 'warrior', age: 40, pin: '1234', role: 'admin' });
+  const a = g.createPlayer({ name: 'Віктор', classId: 'warrior', age: 10, pin: '1111' });
+  g.playerState(a); g.touchStreak(g.players[a.id]); g.advance(86400000); g.playerState(a); g.touchStreak(g.players[a.id]);
+  assert.equal(g.streakView(g.players[a.id]).days, 2);
+  assert.equal(g.playerState(a).welcome, null, 'без паузи нічого');
+  g.advance(2 * 86400000); assert.equal(g.playerState(a).welcome, null, 'пауза 2 дні ще не пауза');
+  assert.equal(g.streakView(g.players[a.id]).days, 0, 'серія згоріла');
+  g.advance(3 * 86400000);
+  const w = g.playerState(a).welcome; assert.ok(w && w.away === 3 && w.gold === 20, JSON.stringify(w));
+  const gold = g.players[a.id].gold; const r = g.claimWelcome(a);
+  assert.equal(r.kept, 2); assert.equal(g.players[a.id].gold, gold + 20);
+  assert.equal(g.streakView(g.players[a.id]).days, 2, 'серію повернули');
+  assert.equal(g.playerState(a).welcome, null); assert.throws(() => g.claimWelcome(a), /немає/);
+  assert.ok(g.announce.text.includes('З поверненням'));
+  g.playerState(dad); g.advance(5 * 86400000); assert.equal(g.playerState(dad).welcome, null, 'батькам не пропонує');
+  // заморозка: серія не згорає без гри і продовжується після
+  g.touchStreak(g.players[a.id]); const d0 = g.streakView(g.players[a.id]).days;
+  g.updateSettings({ freeze: true }); g.advance(6 * 86400000);
+  assert.equal(g.streakView(g.players[a.id]).days, d0); assert.equal(g.streakView(g.players[a.id]).frozen, true);
+  g.updateSettings({ freeze: false }); assert.equal(g.streakView(g.players[a.id]).days, d0, 'після розморозки серія ціла');
+  g.touchStreak(g.players[a.id]); assert.equal(g.streakView(g.players[a.id]).days, d0 + 1);
+});

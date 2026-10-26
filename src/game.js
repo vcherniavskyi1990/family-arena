@@ -54,12 +54,13 @@ const QUIZ_MIN_MS = 15000;   // раніше не закривати, щоб у�
 const CHALLENGE_MS = 120000;   // виклик на дуель живе 2 хв
 const CEREMONY_MS = 40000;   // церемонія закриття сезону на ТБ
 const GIFT = { base: 10, perDay: 5, maxDays: 7, itemEvery: 7 };
+const WELCOME = { afterDays: 3, gold: 20 };   // «з поверненням» після паузи: золото і збережена серія
 const PET_DROP = 0.35;   // шанс вихованця за пройдене підземелля
 const WORLD_BOSS = { duelWin: 30, duelLoss: 10, dungeonBase: 40, dungeonPerLevel: 15, dungeonPerKill: 3, dungeonLoss: 10, smartMult: 2, gold: 40 };
 
 const DEFAULT_SETTINGS = {
   bedtime: '21:30', wakeup: '07:00', limitWeekday: 45, limitWeekend: 90, roundSeconds: ROUND_SECONDS,
-  questsEnabled: true, season: 'Сезон 1: Перші кроки', seasonDays: 14, tz: 'Europe/Kyiv', smartCards: true, raidAnyDay: false,
+  questsEnabled: true, season: 'Сезон 1: Перші кроки', seasonDays: 14, freeze: false, tz: 'Europe/Kyiv', smartCards: true, raidAnyDay: false,
   familyGoal: null,   // ціль сім'ї на тиждень: {kind: quests|smart|wins|battles, n, reward} або null
 };
 const GOAL_KINDS = { quests: ['справ по дому', '🧹'], smart: ['розумних відповідей', '🧠'], wins: ['перемог', '🏆'], battles: ['боїв', '⚔️'] };
@@ -911,13 +912,30 @@ export class Game {
   touchStreak(p, ev = []) {
     const day = this.kyiv().day; const s = p.streak || (p.streak = { days: 0, last: null });
     if (s.last === day) return s.days;
-    s.days = s.last === this.prevDay(day) ? s.days + 1 : 1; s.last = day;
+    s.days = s.last === this.prevDay(day) || (this.settings.freeze && s.last) ? s.days + 1 : 1; s.last = day;
     if (s.days > (p.stats.streakBest || 0)) p.stats.streakBest = s.days;
     for (const a of checkAchievements(p)) ev.push({ t: 'achievement', who: p.id, name: a.name, icon: a.icon, title: a.title });
     if (s.days >= 3 && s.days % 3 === 0) this.feed(`🔥 ${p.name}: ${s.days} днів поспіль!`);
     return s.days;
   }
-  streakView(p) { const day = this.kyiv().day; const s = p.streak || { days: 0, last: null }; const active = s.last === day || s.last === this.prevDay(day); return { days: active ? s.days : 0, today: s.last === day, best: p.stats.streakBest || 0 }; }
+  streakView(p) { const day = this.kyiv().day; const s = p.streak || { days: 0, last: null }; const active = s.last === day || s.last === this.prevDay(day) || (this.settings.freeze && s.last); return { days: active ? s.days : 0, today: s.last === day, best: p.stats.streakBest || 0, frozen: !!this.settings.freeze }; }
+  daysBetween(a, b) { return Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 86400000); }
+  /** Відмітити, що гравець сьогодні заходив; після паузи від 3 днів приготувати «з поверненням». */
+  touchSeen(p) {
+    const day = this.kyiv().day; if (p.lastSeen === day) return;
+    if (p.lastSeen && this.daysBetween(p.lastSeen, day) >= WELCOME.afterDays && !this.isParent(p)) p.welcome = { day, away: this.daysBetween(p.lastSeen, day), claimed: false };
+    p.lastSeen = day; this.store.save('players');
+  }
+  welcomeView(p) { const w = p.welcome; const day = this.kyiv().day; return w && w.day === day && !w.claimed ? { away: w.away, gold: WELCOME.gold } : null; }
+  claimWelcome(p) {
+    const w = this.welcomeView(p); if (!w) throw err('немає що забирати');
+    const day = this.kyiv().day; const s = p.streak || (p.streak = { days: 0, last: null });
+    const kept = s.last && s.last !== day && s.last !== this.prevDay(day) && s.days > 0 ? s.days : 0; if (kept) s.last = this.prevDay(day);
+    p.welcome.claimed = true; p.gold += WELCOME.gold;
+    this.feed(`👋 ${p.name} повернувся після ${w.away} дн.: +${WELCOME.gold} золота${kept ? `, серія ${kept} дн. збережена` : ''}`);
+    this.announce = { text: `👋 З поверненням, ${p.name}! Тебе не було ${w.away} дн.`, by: 'Арена', at: this.now() };
+    this.store.save('players'); this.emit(); return { gold: WELCOME.gold, kept };
+  }
   giftGold(days) { return GIFT.base + GIFT.perDay * Math.min(days, GIFT.maxDays); }
   giftView(p) { const day = this.kyiv().day; const st = this.streakView(p); const d = st.days + (st.today ? 0 : 1); return { claimed: (p.gift && p.gift.day) === day, gold: this.giftGold(d), item: d > 0 && d % GIFT.itemEvery === 0 }; }
   claimGift(p) {
@@ -1362,6 +1380,7 @@ export class Game {
       family: this.familyView(), worldBoss: this.worldBossView(), campaign: this.campaignView(), tournament: this.tournamentView(), today: this.todayView(), familyGoal: this.familyGoalView(), mini: this.miniView(), party: this.partyView(), event: this.eventView(), envelopes: this.envelopesView() };
   }
   playerState(p) {
+    this.touchSeen(p);
     const b = this.battle; const f = b && b.fighters.find(x => x.id === p.id);
     const inLobby = this.lobby.players[p.id];
     const tv = this.tvState(); const sv = { ...this.seasonView(), phase: tv.phase };
@@ -1373,7 +1392,7 @@ export class Game {
       dm: this.isParent(p) && b && b.mode === 'dungeon' && !b.over ? { mobs: this.dmMobs(), players: this.run.players.map(id => this.publicPlayer(this.players[id])) } : null,
       replay: this.replay ? { mode: this.replay.mode, names: this.replay.names } : null, hasReplay: !!(this.history.lastReplay && this.history.lastReplay.frames.length),
       battle: b ? { ...this.battleView(), me: f ? { hand: f.hand.map(id => cardById[id]), mana: f.mana, maxMana: f.maxMana, hp: f.hp, maxHp: f.maxHp, alive: f.alive, move: f.move, shield: f.shield, quiz: f.quiz && !f.move ? { kind: f.quiz.kind, q: f.quiz.q, choices: f.quiz.choices } : null, hint: p.simple && !f.move ? this.hintFor(f) : null } : null } : null,
-      closing: this.closingView(p), done: this.doneView(p), challenges: this.challengesView(p), familyGoal: this.familyGoalView(), mini: this.miniView(p), party: this.partyView(), event: this.eventView(), envelopes: this.envelopesView(), quests: this.settings.questsEnabled ? this.questsFor(p) : [], pendingQuests: this.isParent(p) ? this.pendingQuests() : [], pendingCoupons: this.isParent(p) ? this.pendingCoupons() : [],
+      closing: this.closingView(p), done: this.doneView(p), challenges: this.challengesView(p), familyGoal: this.familyGoalView(), mini: this.miniView(p), party: this.partyView(), event: this.eventView(), envelopes: this.envelopesView(), welcome: this.welcomeView(p), quests: this.settings.questsEnabled ? this.questsFor(p) : [], pendingQuests: this.isParent(p) ? this.pendingQuests() : [], pendingCoupons: this.isParent(p) ? this.pendingCoupons() : [],
       daily: this.dailyFor(p), tournament: this.tournamentView(), worldBoss: { ...this.worldBossView(), mine: (this.worldBoss().dmg[p.id] || 0) }, family: this.familyView(),
       customCards: this.customCardsOf(p), pendingCards: this.isParent(p) ? this.pendingCards() : [], cardTemplates: CARD_TEMPLATES, tvOnline: this.tvOnline(),
     };
@@ -1383,7 +1402,12 @@ export class Game {
   }
   allowedCards(p) { return allowedCards(p.class, p.collection); }
   dungeonList() { return DUNGEONS.map(d => ({ ...d, ...this.raidStatus(d.id) })); }
-  updateSettings(patch) { for (const k of Object.keys(DEFAULT_SETTINGS)) if (patch[k] !== undefined && k !== 'familyGoal') this.settings[k] = patch[k]; this.store.set('settings', this.settings); this.emit(); }
+  updateSettings(patch) {
+    const wasFrozen = !!this.settings.freeze;
+    for (const k of Object.keys(DEFAULT_SETTINGS)) if (patch[k] !== undefined && k !== 'familyGoal') this.settings[k] = patch[k];
+    if (wasFrozen && !this.settings.freeze) { const prev = this.prevDay(this.kyiv().day); for (const p of this.playerList) if (p.streak && p.streak.last && p.streak.last < prev) p.streak.last = prev; this.store.save('players'); }
+    this.store.set('settings', this.settings); this.emit();
+  }
 
   // ---------- таймери й розсилка ----------
   setTimer(name, ms, fn) {
