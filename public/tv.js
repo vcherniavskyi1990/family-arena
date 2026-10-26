@@ -41,13 +41,35 @@
   function renderIdle() {
     var h = '<div class="hdr"><div class="t">⚔️ Родинна арена</div><div class="s">' + esc(state.season) + '</div><div class="r">Скануй QR телефоном,<br>щоб зайти в лобі</div></div>';
     h += '<div class="qr big"><img src="/qr.svg"><div>' + esc(location.host) + '</div></div>';
-    h += '<div class="heroes">' + state.heroes.slice(0, 8).map(function (p) { return '<div class="hero">' + av(p) + '<div class="n">' + esc(p.name) + '</div><div class="c">' + esc(p.title || p.className) + ' · ' + p.level + ' рів.</div><div class="st">⚔️ ' + p.kills + ' · 🏰 ' + p.dungeons + ' · 🥊 ' + p.duelWins + ' · 🟠 ' + p.legendaries + '</div></div>'; }).join('') + '</div>';
+    h += '<div class="heroes">' + state.heroes.slice(0, 8).map(function (p) { return '<div class="hero click" data-hero="' + esc(p.id) + '">' + av(p) + '<div class="n">' + esc(p.name) + '</div><div class="c">' + esc(p.title || p.className) + ' · ' + p.level + ' рів.</div><div class="st">⚔️ ' + p.kills + ' · 🏰 ' + p.dungeons + ' · 🥊 ' + p.duelWins + ' · 🟠 ' + p.legendaries + '</div></div>'; }).join('') + '</div>';
     if (state.family) { var fa = state.family.achievements.filter(function (a) { return a.got; }); h += '<div class="family">' + (fa.length ? fa.map(function (a) { return '<span>' + esc(a.icon) + ' ' + esc(a.name) + '</span>'; }).join('') : '<span style="color:#5c6f85">👨‍👩‍👦 Сімейні досягнення: разом ⚔️ ' + state.family.sums.kills + ' ворогів, 🏰 ' + state.family.sums.dungeons + ' підземель</span>') + '</div>'; }
     h += '<div class="feed"><div class="h">Хроніка</div>' + state.feed.slice(0, 6).map(function (f) { return '<div>' + esc(f.text) + '</div>'; }).join('') + '</div>';
     var top = (state.seasonTop || []).filter(function (p) { return p.points > 0; });
     if (top.length) h += '<div class="season"><div class="h">🏆 ' + esc(state.season) + '</div>' + top.slice(0, 5).map(function (p, i) { return '<div><span class="pl">' + ['🥇', '🥈', '🥉', '4', '5'][i] + '</span> ' + av(p, 'avs') + ' <b>' + esc(p.name) + '</b><span class="pts">' + p.points + '</span></div>'; }).join('') + ((state.pastSeasons || []).length ? '<div class="past">' + state.pastSeasons.map(function (ps) { return '🏅 сезон ' + ps.n + ': ' + esc(ps.winner || '—'); }).join(' · ') + '</div>' : '') + '</div>';
     h += '<div class="legend' + (top.length ? ' short' : '') + '"><div class="h">Зал легендарок</div>' + (state.legendaries.length ? state.legendaries.map(function (l) { return '<div>🟠 <b>' + esc(l.name) + '</b>: <span class="r-legendary">' + esc(l.item.name) + '</span></div>'; }).join('') : '<div style="color:#5c6f85">Ще ніхто не вибив легендарку…</div>') + (state.pendingQuests ? '<div style="margin-top:20px;color:#f1c40f">✅ Справ чекають підтвердження: ' + state.pendingQuests + '</div>' : '') + '</div>';
+    h += '<div class="tvbtns">' + (state.hasReplay !== false ? '<button class="tvbtn" id="tv-replay">📼 Повтор бою</button>' : '') + '<span class="tvhint">Magic Remote: тисни на героя</span></div>';
     stage.innerHTML = h; ticker.innerHTML = '';
+    var cards = stage.querySelectorAll('[data-hero]'); for (var i = 0; i < cards.length; i++) cards[i].onclick = function () { showHero(this.getAttribute('data-hero')); };
+    var rb = document.getElementById('tv-replay'); if (rb) rb.onclick = function () { fetch('/api/tv/replay', { method: 'POST' }).catch(function () { }); };
+  }
+  // ---------- профіль героя на ТБ (клік Magic Remote) ----------
+  var heroTimer = null;
+  function showHero(id) {
+    fetch('/api/tv/hero?id=' + encodeURIComponent(id)).then(function (r) { return r.json(); }).then(function (p) {
+      if (!p || p.error) return;
+      var eq = ['weapon', 'helmet', 'armor', 'amulet'].map(function (sl) { var it = p.equipment[sl]; return it ? '<span class="r-' + it.rarity + '">' + esc(it.name) + '</span>' : null; }).filter(Boolean);
+      var h = '<div class="banner hero-prof"><div class="row">' + av(p, 'avbig') + '<div class="grow"><div class="big">' + esc(p.name) + '</div><div class="sub">' + esc(p.title || p.className) + ' · ' + p.level + ' рів. · ' + p.xp + '/' + p.xpNext + ' досвіду · 🪙 ' + p.gold + '</div>' +
+        '<div class="sub">🏆 Сезон: ' + p.seasonPoints + ' очок, місце ' + (p.seasonRank || '—') + '</div></div></div>' +
+        '<div class="cols"><div class="loot"><div><b>Статистика</b></div><div>⚔️ вбито ' + p.stats.kills + ' · 👑 босів ' + p.stats.bossKills + ' · 🏰 підземель ' + p.stats.dungeons + '</div><div>🥊 дуелей ' + p.stats.duelWins + '/' + p.stats.duels + ' · 💥 критів ' + p.stats.crits + ' · 🛡 блоків ' + p.stats.blocks + '</div><div>🧠 розумних ' + (p.stats.smart || 0) + ' · ✅ справ ' + p.stats.quests + ' · 🟠 легендарок ' + p.stats.legendaries + '</div>' +
+        '<div style="margin-top:10px"><b>Спорядження</b></div><div>' + (eq.length ? eq.join(', ') : 'порожньо') + '</div></div>' +
+        '<div class="loot"><div><b>Досягнення</b></div><div>' + (p.achievements.length ? p.achievements.map(function (a) { return esc(a.icon) + ' ' + esc(a.name); }).join(' · ') : 'ще немає') + '</div>' +
+        '<div style="margin-top:10px"><b>Завдання дня</b></div>' + p.daily.map(function (t) { return '<div>' + (t.done ? '✅' : '○') + ' ' + esc(t.name) + ' (' + t.progress + '/' + t.n + ')</div>'; }).join('') +
+        (p.customCards.length ? '<div style="margin-top:10px"><b>Свої карти</b></div><div>' + p.customCards.map(function (c) { return (c.image ? '<img class="ccimg" src="' + esc(c.image) + '" alt=""> ' : '🖍️ ') + esc(c.name); }).join(' · ') + '</div>' : '') + '</div></div>' +
+        '<div class="cnt">закриється саме</div></div>';
+      overlay.innerHTML = h; overlay.className = 'on';
+      clearTimeout(heroTimer); heroTimer = setTimeout(function () { if (!state.paused && state.phase !== 'results') overlay.className = ''; }, 12000);
+      overlay.onclick = function () { clearTimeout(heroTimer); overlay.className = ''; overlay.onclick = null; };
+    }).catch(function () { });
   }
   // ---------- лобі ----------
   function renderLobby() {

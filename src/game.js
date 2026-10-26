@@ -530,8 +530,8 @@ export class Game {
   }
 
   // ---------- повтор останнього бою на ТБ ----------
-  startReplay(parent) {
-    if (!this.isParent(parent)) throw err('лише батьки', 403);
+  startReplay(parent, { fromTv = false } = {}) {
+    if (!fromTv && !this.isParent(parent)) throw err('лише батьки', 403);
     if (this.battle) throw err('бій уже йде');
     const r = this.history.lastReplay;
     if (!r || !r.frames.length) throw err('ще немає бою для повтору');
@@ -552,6 +552,36 @@ export class Game {
     const rp = this.replay; if (!rp) return null;
     const fr = rp.frames[Math.min(rp.i, rp.frames.length - 1)];
     return { ...fr, replay: true, roundEnds: null, paused: false, pauseReason: null };
+  }
+
+  // ---------- дайджест дня для бота пульта (пульт сам питає GET /api/digest) ----------
+  digest() {
+    const day = this.kyiv().day; const start = new Date(day + 'T00:00:00').getTime();
+    const todayBattles = this.history.battles.filter(b => b.at >= start - 3 * 3600 * 1000);
+    const feed = this.history.feed.filter(f => f.at >= start - 3 * 3600 * 1000);
+    const sv = this.seasonView();
+    const lines = [`⚔️ Родинна арена, ${day}`];
+    if (!todayBattles.length) lines.push('Сьогодні ніхто не бився.');
+    else {
+      const duels = todayBattles.filter(b => b.mode === 'duel'), dungeons = todayBattles.filter(b => b.mode !== 'duel');
+      if (duels.length) { const w = {}; for (const d of duels) for (const n of (d.winners || [])) w[n] = (w[n] || 0) + 1; lines.push(`Дуелей: ${duels.length}. Перемоги: ${Object.entries(w).map(([n, c]) => `${n} ${c}`).join(', ') || '—'}.`); }
+      if (dungeons.length) lines.push(`Підземель: ${dungeons.length}, пройдено ${dungeons.filter(d => d.won).length}.`);
+    }
+    const legend = feed.filter(f => f.text.includes('легендарк')); for (const f of legend.slice(0, 3)) lines.push(f.text);
+    const fam = feed.filter(f => f.text.startsWith('👨‍👩‍👦')); for (const f of fam.slice(0, 2)) lines.push(f.text);
+    const quests = feed.filter(f => f.text.startsWith('✅')).length; if (quests) lines.push(`Справ по дому зараховано: ${quests}.`);
+    const pend = this.pendingQuests().length + this.pendingCards().length; if (pend) lines.push(`⏳ Чекають підтвердження батьків: ${pend}.`);
+    if (sv.top.some(p => p.points > 0)) lines.push(`🏆 ${sv.name}: ${sv.top.slice(0, 3).map((p, i) => `${['🥇', '🥈', '🥉'][i]} ${p.name} ${p.points}`).join(', ')}.`);
+    for (const p of this.playerList) if (!this.isParent(p)) { const m = this.minutesToday(p); if (m) lines.push(`⏱ ${p.name}: ${m} хв з ${this.limitFor(p)}.`); }
+    return { day, text: lines.join('\n'), battles: todayBattles.length, season: { name: sv.name, top: sv.top.slice(0, 3).map(p => ({ name: p.name, points: p.points })) }, pending: pend,
+      players: this.playerList.map(p => ({ name: p.name, level: p.level, minutesToday: this.minutesToday(p) })) };
+  }
+  /** Профіль героя для ТБ (клік Magic Remote по картці). */
+  heroProfile(id) {
+    const p = this.players[id]; if (!p) return null;
+    const sv = this.seasonView();
+    return { ...this.publicPlayer(p), xp: p.xp, xpNext: xpForLevel(p.level), gold: p.gold, stats: p.stats, equipment: p.equipment, achievements: ACHIEVEMENTS.filter(a => p.achievements.includes(a.id)).map(a => ({ name: a.name, icon: a.icon })),
+      seasonPoints: this.history.season.points[p.id] || 0, seasonRank: sv.top.findIndex(x => x.id === p.id) + 1, customCards: this.customCardsOf(p).filter(c => c.approved).map(c => ({ name: c.name, image: c.image, text: c.text })), daily: this.dailyFor(p) };
   }
 
   // ---------- стан для клієнтів ----------
