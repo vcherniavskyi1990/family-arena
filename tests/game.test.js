@@ -342,6 +342,42 @@ test('книга сім\'ї: рекорди побиваються, момент
   assert.ok(g.tvState().book.moments.length <= 6);
 });
 
+test('батьки нарівні: справи батьків підтверджує дитина, свою не можна', () => {
+  const g = makeGame();
+  const dad = g.createPlayer({ name: 'Тато', classId: 'warrior', role: 'parent', pin: '0000' });
+  const a = g.createPlayer({ name: 'Віктор', classId: 'archer', age: 10, pin: '1111' });
+  const dq = g.questsFor(dad); assert.ok(dq.length >= 5 && dq.every(q => q.forParent), 'у батька свої справи');
+  assert.ok(g.questsFor(a).every(q => !q.forParent), 'у дитини дитячі');
+  g.questDone(dad, 'p_sport');
+  assert.equal(g.pendingFor(a).length, 1, 'дитина бачить справу батька');
+  assert.equal(g.pendingFor(dad).length, 0, 'сам себе не бачить');
+  assert.throws(() => g.questApprove(dad, dad.id, 'p_sport'), /свою справу/);
+  const gold = dad.gold; const r = g.questApprove(a, dad.id, 'p_sport');
+  assert.ok(r.item && dad.gold > gold);
+  // дитячу справу дитина не підтверджує
+  g.questDone(a, 'bed'); assert.throws(() => g.questApprove(a, a.id, 'bed'), /лише батьки/);
+  assert.equal(g.pendingFor(dad).length, 1);
+});
+
+test('друзі в гостях: герой на вечір, без очок сезону, завтра йде сам', () => {
+  const g = makeGame();
+  const dad = g.createPlayer({ name: 'Тато', classId: 'warrior', role: 'parent', pin: '0000' });
+  const a = g.createPlayer({ name: 'Віктор', classId: 'archer', age: 10, pin: '1111' }); g.players[a.id].level = 4;
+  const gst = g.createGuest(dad, { name: 'Максим', classId: 'mage' });
+  assert.equal(gst.role, 'guest'); assert.equal(gst.level, 4); assert.match(gst.guest.pin, /^\d{4}$/);
+  assert.ok(g.login(gst.id, gst.guest.pin), 'гість заходить за PIN');
+  assert.equal(g.questsFor(gst).length, 0);
+  g.addSeasonPoints(gst.id, 10); assert.ok(!g.history.season.points[gst.id], 'без очок сезону');
+  assert.ok(g.playerState(dad).guests.some(x => x.name === 'Максим' && x.pin === gst.guest.pin));
+  g.setMode(dad, { mode: 'duel' }); g.join(a); g.join(gst); g.ready(a, true); g.ready(gst, true);
+  let guard = 0; while (g.battle && guard++ < 400) g.fire('round');
+  assert.ok(g.history.battles[0].players.includes(gst.id), 'гість бився');
+  g.expireGuests(); assert.ok(g.players[gst.id], 'того ж дня лишається');
+  g.advance(24 * 3600 * 1000); g.tick();
+  assert.ok(!g.players[gst.id], 'наступного дня пішов');
+  assert.throws(() => { for (let i = 0; i < 4; i++) g.createGuest(dad, { name: 'Гість' + i }); }, /не більше/);
+});
+
 test('тривога з дому: пауза і відбій', () => {
   const g = makeGame();
   const a = g.createPlayer({ name: 'Віктор', classId: 'archer', age: 10, pin: '1111' });

@@ -10,7 +10,7 @@ import { Store } from './store.js';
 import { Game, err } from './game.js';
 import { Avatars } from './avatar.js';
 
-export const VERSION = '0.45.0';
+export const VERSION = '0.46.0';
 const PUBLIC = new URL('../public/', import.meta.url);
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.ico': 'image/x-icon', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' };
 
@@ -213,7 +213,8 @@ export function createApp({ dataDir, avatars: avatarsOpt, baseUrl, alertToken = 
 
     // --- квести ---
     if (path === '/quests/done' && req.method === 'POST') { game.questDone(need(), body.questId, { image: body.image, mime: body.mime }); return ok(); }
-    if (path === '/quests/approve' && req.method === 'POST') { return ok({ reward: game.questApprove(parent(), body.playerId, body.questId, body.approve !== false) }); }
+    if (path === '/quests/approve' && req.method === 'POST') { return ok({ reward: game.questApprove(need(), body.playerId, body.questId, body.approve !== false) }); }
+    if (path === '/admin/guest' && req.method === 'POST') { const g = game.createGuest(parent(), body); return ok({ player: game.publicPlayer(g), pin: g.guest.pin }); }
 
     // --- батьки ---
     if (path === '/admin/campaign/reset' && req.method === 'POST') { return ok({ campaign: game.resetCampaign(need()) }); }
