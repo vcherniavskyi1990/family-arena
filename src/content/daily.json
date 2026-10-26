@@ -70,5 +70,32 @@
     "n": 1,
     "gold": 10,
     "xp": 20
+  },
+  {
+    "id": "gift_1",
+    "name": "Забери щоденний подарунок",
+    "icon": "🎁",
+    "stat": "gifts",
+    "n": 1,
+    "gold": 8,
+    "xp": 15
+  },
+  {
+    "id": "boss_1",
+    "name": "Повали боса",
+    "icon": "👑",
+    "stat": "bossKills",
+    "n": 1,
+    "gold": 20,
+    "xp": 35
+  },
+  {
+    "id": "practice_1",
+    "name": "Потренуйся на манекені",
+    "icon": "🎯",
+    "stat": "practice",
+    "n": 1,
+    "gold": 8,
+    "xp": 15
   }
 ]

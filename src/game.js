@@ -407,8 +407,9 @@ export class Game {
       const won = b.winner === 0;
       const d = dungeonById[r.dungeon];
       if (d.practice) {
-        for (const pid of r.players) this.addMinutes(this.players[pid], minutes);
-        this.results = { mode: 'dungeon', practice: true, won, dungeon: d.name, xp: 0, gold: 0, kills: r.kills.length, loot: [], events: [], rounds: b.round, players: r.players.map(id => this.publicPlayer(this.players[id])) };
+        const pev = [];
+        for (const pid of r.players) { const p = this.players[pid]; this.addMinutes(p, minutes); p.stats.practice = (p.stats.practice || 0) + 1; for (const a of checkAchievements(p)) pev.push({ t: 'achievement', who: pid, name: a.name, icon: a.icon, title: a.title }); for (const d of this.checkDaily(p)) pev.push({ t: 'daily', who: pid, name: d.name, icon: d.icon, gold: d.gold }); }
+        this.results = { mode: 'dungeon', practice: true, won, dungeon: d.name, xp: 0, gold: 0, kills: r.kills.length, loot: [], rounds: b.round, events: pev.map(e => ({ ...e, whoName: this.players[e.who] && this.players[e.who].name })), players: r.players.map(id => this.publicPlayer(this.players[id])) };
         this.feed(`🎯 ${r.players.map(id => this.players[id].name).join(', ')}: тренування, манекен ${won ? 'повалений' : 'встояв'}`);
       } else {
       if (d.raid) {
@@ -569,7 +570,7 @@ export class Game {
     const c = this.settings.coupons.find(x => x.id === couponId); if (!c) throw err('немає такого купона');
     if (this.history.coupons.filter(o => o.pid === p.id && o.status === 'pending').length >= 3) throw err('спочатку хай батьки виконають попередні (до 3 одночасно)');
     if (p.gold < c.price) throw err('не вистачає золота');
-    p.gold -= c.price;
+    p.gold -= c.price; p.stats.coupons = (p.stats.coupons || 0) + 1; checkAchievements(p);
     const o = { id: 'o' + this.now().toString(36) + this.rng.int(0, 999999).toString(36), pid: p.id, couponId: c.id, title: c.name, icon: c.icon, price: c.price, at: this.now(), status: 'pending' };
     this.history.coupons.push(o); this.history.coupons = this.history.coupons.slice(-200);
     this.feed(`🎟 ${p.name} купив бажання: ${c.icon} ${c.name}`); this.announce = { text: `🎟 ${p.name}: ${c.icon} ${c.name}`, by: 'Арена', at: this.now() };
@@ -616,10 +617,10 @@ export class Game {
     const day = this.kyiv().day; if (!p.gift) p.gift = { day: null };
     if (p.gift.day === day) throw err('подарунок на сьогодні вже забрано');
     const days = this.touchStreak(p); const gold = this.giftGold(days);
-    p.gift.day = day; p.gold += gold; p.stats.gifts = (p.stats.gifts || 0) + 1;
+    p.gift.day = day; p.gold += gold; p.stats.gifts = (p.stats.gifts || 0) + 1; const daily = this.checkDaily(p);
     let item = null; if (days % GIFT.itemEvery === 0) { item = genItem(this.rng, p.level, null, 'rare'); p.inventory.push(item); if (item.rarity === 'legendary') p.stats.legendaries += 1; }
-    checkAchievements(p); this.store.save('players'); this.emit();
-    return { gold, item, days };
+    const ach = checkAchievements(p); this.store.save('players'); this.emit();
+    return { gold, item, days, daily: daily.map(d => d.name), achievements: ach.map(a => a.name) };
   }
   buyChest(p, kind) {
     const price = { common: 40, rare: 150 }[kind]; if (!price) throw err('немає такої скрині');

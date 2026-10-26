@@ -298,5 +298,45 @@
       "stat": "raids",
       "gte": 5
     }
+  },
+  {
+    "id": "gift_7",
+    "name": "Щедрий тиждень",
+    "icon": "🎁",
+    "title": "Ощадливий",
+    "cond": {
+      "stat": "gifts",
+      "gte": 7
+    }
+  },
+  {
+    "id": "coupon_1",
+    "name": "Перше бажання",
+    "icon": "🎟",
+    "title": "Мрійник",
+    "cond": {
+      "stat": "coupons",
+      "gte": 1
+    }
+  },
+  {
+    "id": "coupon_10",
+    "name": "Десять бажань",
+    "icon": "🌠",
+    "title": "Володар бажань",
+    "cond": {
+      "stat": "coupons",
+      "gte": 10
+    }
+  },
+  {
+    "id": "practice_5",
+    "name": "П’ять тренувань",
+    "icon": "🎯",
+    "title": "Старанний",
+    "cond": {
+      "stat": "practice",
+      "gte": 5
+    }
   }
 ]
