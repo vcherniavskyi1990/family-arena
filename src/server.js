@@ -10,7 +10,7 @@ import { Store } from './store.js';
 import { Game, err } from './game.js';
 import { Avatars } from './avatar.js';
 
-export const VERSION = '0.33.0';
+export const VERSION = '0.34.0';
 const PUBLIC = new URL('../public/', import.meta.url);
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.ico': 'image/x-icon', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' };
 
@@ -160,6 +160,8 @@ export function createApp({ dataDir, avatars: avatarsOpt, baseUrl, alertToken = 
     if (path === '/admin/coupon/done' && req.method === 'POST') { return ok({ order: game.couponDone(need(), body.orderId, !!body.refund) }); }
     if (path === '/admin/coupons' && req.method === 'POST') { return ok({ coupons: game.setCoupons(need(), body.coupons) }); }
     if (path === '/me/gift' && req.method === 'POST') { return ok(game.claimGift(need())); }
+    if (path === '/me/mini/start' && req.method === 'POST') { return ok(game.startMini(need())); }
+    if (path === '/me/mini/tap' && req.method === 'POST') { return ok(game.tapMini(need())); }
     if (path === '/me/challenge' && req.method === 'POST') { return ok(game.challenge(need(), String(body.to || ''))); }
     if (path === '/me/challenge/answer' && req.method === 'POST') { return ok(game.challengeAnswer(need(), String(body.id || ''), !!body.accept)); }
     if (path === '/me/pet' && req.method === 'POST') { return ok({ pets: game.setPet(need(), body.petId || null) }); }

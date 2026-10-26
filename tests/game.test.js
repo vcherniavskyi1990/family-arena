@@ -884,3 +884,26 @@ test('ціль сім’ї на тиждень: прогрес, досягнен
   g.updateSettings({ familyGoal: { kind: 'wins', n: 1, reward: 'x' } }); assert.notEqual((g.settings.familyGoal || {}).kind, 'wins', 'лише через setFamilyGoal');
   g.setFamilyGoal(dad, null); assert.equal(g.familyGoalView(), null);
 });
+
+test('міні-гра «Реакція»: чекай, тисни, фальстарт, найшвидший +5 золота', () => {
+  const g = makeGame();
+  const dad = g.createPlayer({ name: 'Тато', classId: 'warrior', age: 40, pin: '1234', role: 'admin' });
+  const a = g.createPlayer({ name: 'A', classId: 'rogue', age: 10, pin: '1111' }); const b = g.createPlayer({ name: 'B', classId: 'mage', age: 7, pin: '2222' });
+  assert.equal(g.miniView(), null); assert.throws(() => g.tapMini(a), /не йде/);
+  const v = g.startMini(a); assert.equal(v.phase, 'wait'); assert.equal(v.by, 'A');
+  assert.throws(() => g.startMini(b), /вже йде/);
+  g.tapMini(b); assert.equal(g.miniView(b).me.fault, true, 'натиснув зарано = фальстарт');
+  g.fire('mini-go'); assert.equal(g.miniView().phase, 'go'); assert.equal(g.tvState().mini.phase, 'go');
+  g.advance(230); g.tapMini(a); g.advance(100); g.tapMini(dad); g.tapMini(a);
+  assert.equal(g.miniView(a).me.tapped, 230); assert.equal(g.miniView(b).me.tapped, null, 'фальстарт не рахується');
+  const gold = g.players[a.id].gold;
+  g.fire('mini-end'); const d = g.miniView(a);
+  assert.equal(d.phase, 'done'); assert.deepEqual(d.ranking.map(r => r.name), ['A', 'Тато']); assert.equal(d.ranking[0].ms, 230); assert.deepEqual(d.faults, ['B']);
+  assert.equal(g.players[a.id].gold, gold + 5); assert.equal(g.players[a.id].stats.reaction, 1);
+  assert.throws(() => g.tapMini(a), /не йде/);
+  g.fire('mini-clear'); assert.equal(g.miniView(), null);
+  // нова гра можлива одразу після підсумків; без натискань нікому золота
+  g.startMini(b); g.fire('mini-go'); g.fire('mini-end'); assert.equal(g.miniView().ranking.length, 0);
+  g.fire('mini-clear'); g.join(a); g.join(b); g.setMode(a, { mode: 'duel' }); g.ready(a, true); g.ready(b, true);
+  if (g.battle) assert.throws(() => g.startMini(a), /бій/);
+});
