@@ -747,3 +747,13 @@ test('профіль героя на ТБ: вихованці, серія, бо�
   const h = g.heroProfile(a.id);
   assert.equal(h.coupons.length, 1); assert.equal(h.streak.days, 4); assert.equal(h.streak.best, 6); assert.equal(h.worldBossDmg, 77); assert.deepEqual(h.pets, []);
 });
+
+test('відновлення зі старої копії без купонів не ламає купони', () => {
+  const g = makeGame();
+  const dad = g.createPlayer({ name: 'Тато', classId: 'warrior', age: 40, pin: '1234', role: 'admin' });
+  const data = g.backup(); delete data.history.coupons; delete data.settings.coupons;
+  g.restore(g.players[dad.id], data);
+  assert.ok(Array.isArray(g.settings.coupons) && g.settings.coupons.length >= 5);
+  assert.deepEqual(g.history.coupons, []);
+  assert.ok(g.couponsView(g.players[dad.id]).list.length >= 5);
+});

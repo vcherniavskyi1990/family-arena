@@ -537,7 +537,7 @@ export class Game {
     if (this.history.coupons.filter(o => o.pid === p.id && o.status === 'pending').length >= 3) throw err('спочатку хай батьки виконають попередні (до 3 одночасно)');
     if (p.gold < c.price) throw err('не вистачає золота');
     p.gold -= c.price;
-    const o = { id: 'o' + this.now().toString(36) + Math.floor(this.rng.next() * 1e6).toString(36), pid: p.id, couponId: c.id, title: c.name, icon: c.icon, price: c.price, at: this.now(), status: 'pending' };
+    const o = { id: 'o' + this.now().toString(36) + this.rng.int(0, 999999).toString(36), pid: p.id, couponId: c.id, title: c.name, icon: c.icon, price: c.price, at: this.now(), status: 'pending' };
     this.history.coupons.push(o); this.history.coupons = this.history.coupons.slice(-200);
     this.feed(`🎟 ${p.name} купив бажання: ${c.icon} ${c.name}`); this.announce = { text: `🎟 ${p.name}: ${c.icon} ${c.name}`, by: 'Арена', at: this.now() };
     this.store.save('players'); this.store.save('history'); this.emit();
@@ -922,8 +922,11 @@ export class Game {
     this.history = data.history; this.store.set('history', this.history);
     for (const k of ['season', 'pastSeasons', 'raids', 'customCards', 'family', 'days', 'campaign']) if (this.history[k] === undefined) this.history[k] = k === 'season' ? { n: 1, startedAt: this.now(), points: {} } : k === 'family' ? { achievements: [] } : k === 'days' ? {} : k === 'campaign' ? { chapter: 0, runs: 0, done: [] } : [];
     if (this.history.worldBoss === undefined) this.history.worldBoss = null;
+    if (!Array.isArray(this.history.coupons)) this.history.coupons = [];
     for (const c of this.history.customCards) if (c.approved) this.registerCard(c);
-    if (data.settings) { this.settings = { ...DEFAULT_SETTINGS, ...data.settings }; this.store.set('settings', this.settings); }
+    if (data.settings) { this.settings = { ...DEFAULT_SETTINGS, ...data.settings }; }
+    if (!Array.isArray(this.settings.coupons)) this.settings.coupons = DEFAULT_COUPONS.map(c => ({ ...c }));
+    this.store.set('settings', this.settings);
     this.tokens = {}; this.store.set('tokens', this.tokens);   // усі входять заново
     this.lobby.players = {}; this.results = null; this.tournament = null;
     this.feed('💾 Дані гри відновлено з резервної копії'); this.emit();
