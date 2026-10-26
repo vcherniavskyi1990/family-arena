@@ -17,6 +17,7 @@ const RESULTS_SECONDS = 25;
 const ROOM_HEAL = 0.3;
 const REPLAY_FRAMES = 80;
 const CUSTOM_CARD_MAX = 3;
+const GUEST_MAX = 3;      // друзів у гостях одночасно
 const CUSTOM_MOB_MAX = 2; // своїх монстрів на дитину
 const MOB_POINTS = 10;    // очок на сила/здоров'я/хитрість
 /** Шаблони «своїх карт»: дитина малює картинку й дає назву, сила з шаблону, щоб баланс не ламався. */
@@ -174,13 +175,16 @@ export class Game {
   auth(token) { const t = token && this.tokens[token]; return t ? this.players[t.playerId] : null; }
   logout(token) { delete this.tokens[token]; this.store.save('tokens'); }
   isParent(p) { return p && (p.role === 'parent' || p.role === 'admin'); }
+  isGuest(p) { return !!(p && p.role === 'guest'); }
+  /** Сім'я без гостей: для сум, цілей і конвертів. */
+  get familyList() { return this.playerList.filter(p => !this.isGuest(p)); }
   checkPin(p, pin) { return p.pinHash === hashPin(String(pin), p.id); }
   parentPin(pin) { return this.playerList.some(p => this.isParent(p) && this.checkPin(p, pin)); }
   updatePlayer(id, patch) {
     const p = this.players[id]; if (!p) throw err('немає гравця');
     if (patch.name) p.name = String(patch.name).trim().slice(0, 20);
     if (patch.age !== undefined) p.age = patch.age ? Number(patch.age) : null;
-    if (patch.role && ['kid', 'parent', 'admin'].includes(patch.role)) p.role = patch.role;
+    if (patch.role && ['kid', 'parent', 'admin', 'guest'].includes(patch.role)) p.role = patch.role;
     if (patch.pin) { if (!/^\d{4}$/.test(String(patch.pin))) throw err('PIN: 4 цифри'); p.pinHash = hashPin(patch.pin, p.id); for (const [t, v] of Object.entries(this.tokens)) if (v.playerId === id) delete this.tokens[t]; this.store.save('tokens'); }
     if (patch.class && classById[patch.class] && p.level <= 3) { p.class = patch.class; p.deck = starterDeck(patch.class); }
     if (patch.simple !== undefined) p.simple = !!patch.simple;
@@ -188,6 +192,23 @@ export class Game {
     return p;
   }
   deletePlayer(id) { delete this.players[id]; delete this.lobby.players[id]; this.store.save('players'); this.emit(); }
+  // ---------- друзі в гостях: герой на один вечір, без прогресу в сезоні ----------
+  createGuest(parent, { name, classId, age }) {
+    if (!this.isParent(parent)) throw err('лише батьки', 403);
+    if (this.playerList.filter(p => this.isGuest(p)).length >= GUEST_MAX) throw err(`не більше ${GUEST_MAX} гостей`);
+    const pin = String(1000 + Math.floor(Math.random() * 9000));
+    const p = this.createPlayer({ name, classId: classId || 'warrior', age, pin, role: 'guest' });
+    const fam = this.familyList.filter(x => !this.isParent(x)); const lv = fam.length ? Math.round(fam.reduce((s, x) => s + x.level, 0) / fam.length) : 1;
+    p.level = Math.max(1, lv); p.xp = 0; p.title = 'Гість'; p.guest = { day: this.kyiv().day, pin };
+    this.store.save('players'); this.feed(`👋 Гість ${p.name} у гостях на вечір (${p.level} рів.)`); this.emit();
+    return p;
+  }
+  guestsView() { return this.playerList.filter(p => this.isGuest(p)).map(p => ({ id: p.id, name: p.name, level: p.level, pin: p.guest ? p.guest.pin : null, className: classById[p.class].name })); }
+  /** Гості йдуть додому наступного дня: видаляємо, коли не в бою. */
+  expireGuests() {
+    const day = this.kyiv().day; const inBattle = new Set(this.run ? this.run.players : []);
+    for (const p of this.playerList) if (this.isGuest(p) && p.guest && p.guest.day !== day && !inBattle.has(p.id)) { this.feed(`👋 Гість ${p.name} пішов додому`); this.deletePlayer(p.id); }
+  }
 
   // ---------- час, ліміти, тиша ----------
   kyiv(ts = this.now()) {
@@ -881,7 +902,7 @@ export class Game {
   }
   /** Раз на 30 с: оголошення на ТБ за 10 хв до сну (раз на день). */
   tick() {
-    this.expireChallenges(); this.autoCloseSeason();
+    this.expireChallenges(); this.autoCloseSeason(); this.expireGuests();
     const bed = this.minutesToBedtime(); const day = this.kyiv().day;
     if (bed > 0 && bed <= CLOSING_WARN_MIN && this.closingWarnedDay !== day && this.playerList.some(x => !this.isParent(x))) {
       this.closingWarnedDay = day;
@@ -945,7 +966,7 @@ export class Game {
   /** Відмітити, що гравець сьогодні заходив; після паузи від 3 днів приготувати «з поверненням». */
   touchSeen(p) {
     const day = this.kyiv().day; if (p.lastSeen === day) return;
-    if (p.lastSeen && this.daysBetween(p.lastSeen, day) >= WELCOME.afterDays && !this.isParent(p)) p.welcome = { day, away: this.daysBetween(p.lastSeen, day), claimed: false };
+    if (p.lastSeen && this.daysBetween(p.lastSeen, day) >= WELCOME.afterDays && !this.isParent(p) && !this.isGuest(p)) p.welcome = { day, away: this.daysBetween(p.lastSeen, day), claimed: false };
     p.lastSeen = day; this.store.save('players');
   }
   welcomeView(p) { const w = p.welcome; const day = this.kyiv().day; return w && w.day === day && !w.claimed ? { away: w.away, gold: WELCOME.gold } : null; }
@@ -1034,7 +1055,7 @@ export class Game {
     if (got.length) { this.store.save('history'); this.store.save('players'); }
     return got;
   }
-  familySum(stat) { return this.playerList.reduce((s, p) => s + (p.stats[stat] || 0), 0); }
+  familySum(stat) { return this.familyList.reduce((s, p) => s + (p.stats[stat] || 0), 0); }
   checkFamily() {
     const got = [];
     const kids = this.playerList.filter(p => !this.isParent(p));
@@ -1061,7 +1082,8 @@ export class Game {
   questsFor(p) {
     const day = this.kyiv().day;
     if (!p.quests || p.quests.day !== day) { if (p.quests && p.quests.photos) for (const q of Object.keys(p.quests.photos)) this.questPhotoDrop(p, q); p.quests = { day, state: {} }; }
-    return QUESTS.map(q => ({ ...q, state: p.quests.state[q.id] || 'open' }));
+    if (this.isGuest(p)) return [];
+    return QUESTS.filter(q => !!q.forParent === this.isParent(p)).map(q => ({ ...q, state: p.quests.state[q.id] || 'open' }));
   }
   /** «Зробив»: з фото-доказом (jpg/png base64, до 2 МБ, лежить у cardsDir як /cards/q_…) або без. */
   questDone(p, qid, { image, mime } = {}) {
@@ -1080,9 +1102,11 @@ export class Game {
     const url = p.quests && p.quests.photos && p.quests.photos[qid]; if (!url) return;
     delete p.quests.photos[qid]; if (this.cardsDir) { try { unlinkSync(join(this.cardsDir, url.replace('/cards/', ''))); } catch (e) { /* нема файлу */ } }
   }
+  /** Справи дітей підтверджують батьки; справи батьків підтверджує будь-хто інший із сім'ї (діти нарівні). */
   questApprove(parent, pid, qid, approve = true) {
-    if (!this.isParent(parent)) throw err('лише батьки', 403);
     const p = this.players[pid]; if (!p) throw err('немає гравця');
+    if (this.isParent(p)) { if (parent.id === pid || this.isGuest(parent)) throw err('свою справу не підтвердиш: хай підтвердить дитина', 403); }
+    else if (!this.isParent(parent)) throw err('лише батьки', 403);
     const q = questById[qid]; if (!q) throw err('немає квесту');
     this.questsFor(p);
     if (!approve) { p.quests.state[qid] = 'open'; this.questPhotoDrop(p, qid); this.store.save('players'); this.emit(); return null; }
@@ -1099,9 +1123,11 @@ export class Game {
   }
   pendingQuests() {
     const out = [];
-    for (const p of this.playerList) { this.questsFor(p); for (const [qid, st] of Object.entries(p.quests.state)) if (st === 'pending') out.push({ pid: p.id, name: p.name, quest: questById[qid], photo: p.quests.photos && p.quests.photos[qid] || null }); }
+    for (const p of this.playerList) { this.questsFor(p); for (const [qid, st] of Object.entries(p.quests.state)) if (st === 'pending') out.push({ pid: p.id, name: p.name, parent: this.isParent(p), quest: questById[qid], photo: p.quests.photos && p.quests.photos[qid] || null }); }
     return out;
   }
+  /** Що може підтвердити саме цей гравець: батько — справи дітей і інших батьків, дитина — справи батьків. */
+  pendingFor(p) { if (this.isGuest(p)) return []; return this.pendingQuests().filter(q => q.pid !== p.id && (q.parent || this.isParent(p))); }
 
   // ---------- свої карти: дитина малює, батьки підтверджують ----------
   registerCard(c) { if (!cardById[c.id]) { cardById[c.id] = c; CARDS.push(c); } else Object.assign(cardById[c.id], c); }
@@ -1239,7 +1265,7 @@ export class Game {
   dmMobs() { return Object.values(mobById).filter(m => !m.boss).map(m => ({ id: m.id, name: m.name, icon: m.icon, level: m.level })); }
 
   // ---------- сезони ----------
-  addSeasonPoints(pid, n) { const s = this.history.season; s.points[pid] = (s.points[pid] || 0) + n; }
+  addSeasonPoints(pid, n) { if (this.isGuest(this.players[pid])) return; const s = this.history.season; s.points[pid] = (s.points[pid] || 0) + n; }
   seasonView() {
     const s = this.history.season;
     const top = this.playerList.map(p => ({ ...this.publicPlayer(p), points: s.points[p.id] || 0 })).sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
@@ -1484,7 +1510,7 @@ export class Game {
       dm: this.isParent(p) && b && b.mode === 'dungeon' && !b.over ? { mobs: this.dmMobs(), players: this.run.players.map(id => this.publicPlayer(this.players[id])) } : null,
       replay: this.replay ? { mode: this.replay.mode, names: this.replay.names } : null, hasReplay: !!(this.history.lastReplay && this.history.lastReplay.frames.length),
       battle: b ? { ...this.battleView(), me: f ? { hand: f.hand.map(id => cardById[id]), mana: f.mana, maxMana: f.maxMana, hp: f.hp, maxHp: f.maxHp, alive: f.alive, move: f.move, shield: f.shield, quiz: f.quiz && !f.move ? { kind: f.quiz.kind, q: f.quiz.q, choices: f.quiz.choices } : null, hint: p.simple && !f.move ? this.hintFor(f) : null } : null } : null,
-      closing: this.closingView(p), done: this.doneView(p), challenges: this.challengesView(p), familyGoal: this.familyGoalView(), mini: this.miniView(p), party: this.partyView(), event: this.eventView(), envelopes: this.envelopesView(), welcome: this.welcomeView(p), quests: this.settings.questsEnabled ? this.questsFor(p) : [], pendingQuests: this.isParent(p) ? this.pendingQuests() : [], pendingCoupons: this.isParent(p) ? this.pendingCoupons() : [],
+      closing: this.closingView(p), done: this.doneView(p), challenges: this.challengesView(p), familyGoal: this.familyGoalView(), mini: this.miniView(p), party: this.partyView(), event: this.eventView(), envelopes: this.envelopesView(), welcome: this.welcomeView(p), quests: this.settings.questsEnabled ? this.questsFor(p) : [], pendingQuests: this.pendingFor(p), guests: this.isParent(p) ? this.guestsView() : [], pendingCoupons: this.isParent(p) ? this.pendingCoupons() : [],
       daily: this.dailyFor(p), tournament: this.tournamentView(), worldBoss: { ...this.worldBossView(), mine: (this.worldBoss().dmg[p.id] || 0) }, family: this.familyView(),
       customCards: this.customCardsOf(p), pendingCards: this.isParent(p) ? this.pendingCards() : [], cardTemplates: CARD_TEMPLATES, tvOnline: this.tvOnline(),
       customMobs: this.customMobsOf(p), pendingMobs: this.isParent(p) ? this.pendingMobs() : [], mobs: this.mobsView(), mobPoints: MOB_POINTS, book: this.bookView(),
