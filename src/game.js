@@ -22,7 +22,8 @@ export const CARD_TEMPLATES = {
   heal: { name: 'Зцілення', cost: 3, type: 'heal', value: 18, text: '+18 здоров’я.' },
   poison: { name: 'Отрута', cost: 2, type: 'poison', value: 5, turns: 3, text: '5 отрути на 3 ходи.' },
 };
-const SEASON_POINTS = { duelWin: 3, duelLoss: 1, dungeonLoss: 1, quest: 1, worldBoss: 5, chapter: 3 };
+const SEASON_POINTS = { duelWin: 3, duelLoss: 1, dungeonLoss: 1, quest: 1, worldBoss: 5, chapter: 3, champion: 8 };
+const TOURNAMENT_MIN = 3, TOURNAMENT_MAX = 4;
 /** Бос тижня: спільне здоров’я на всю сім’ю; кожен бій відколює шматок. Нагорода, коли впав. */
 const PET_DROP = 0.35;   // шанс вихованця за пройдене підземелля
 const WORLD_BOSS = { duelWin: 30, duelLoss: 10, dungeonBase: 40, dungeonPerLevel: 15, dungeonPerKill: 3, dungeonLoss: 10, smartMult: 2, gold: 40 };
@@ -58,6 +59,7 @@ export class Game {
     this.announce = null;
     this.replay = null;
     this.lobby = { players: {}, mode: 'dungeon', dungeonId: DUNGEONS[0].id };
+    this.tournament = null;   // турнір: {players, matches: [{a, b, winner}], current, champion}
     this.battle = null; this.run = null; this.results = null;
     this.paused = false; this.pauseReason = null;
     this.listeners = new Set();
@@ -204,7 +206,7 @@ export class Game {
   ready(p, on) { const l = this.lobby.players[p.id]; if (!l) throw err('ти не в лобі'); l.ready = !!on; this.emit(); this.maybeStart(); }
   setMode(p, { mode, dungeonId }) {
     if (this.battle) throw err('бій уже йде');
-    if (mode && !['dungeon', 'duel', 'campaign'].includes(mode)) throw err('режим');
+    if (mode && !['dungeon', 'duel', 'campaign', 'tournament'].includes(mode)) throw err('режим');
     if (mode) this.lobby.mode = mode;
     if (dungeonId) { if (!dungeonById[dungeonId]) throw err('підземелля'); const rs = this.raidStatus(dungeonId); if (!rs.available) throw err(rs.reason); this.lobby.dungeonId = dungeonId; }
     for (const l of Object.values(this.lobby.players)) l.ready = false;
@@ -214,7 +216,9 @@ export class Game {
   maybeStart() {
     const ids = Object.keys(this.lobby.players);
     if (!ids.length || !ids.every(id => this.lobby.players[id].ready)) return;
-    if (this.lobby.mode === 'duel') {
+    if (this.lobby.mode === 'tournament') {
+      if (ids.length < TOURNAMENT_MIN || ids.length > TOURNAMENT_MAX) return;
+    } else if (this.lobby.mode === 'duel') {
       const t0 = ids.filter(id => this.lobby.players[id].team === 0), t1 = ids.filter(id => this.lobby.players[id].team === 1);
       if (!t0.length || !t1.length) return;
     } else if (this.lobby.mode !== 'campaign') {
@@ -223,9 +227,56 @@ export class Game {
     }
     this.startBattle();
   }
+  /** Турнір на 3–4 гравці: 3 — кожен з кожним, 4 — два півфінали і фінал. Дуелі йдуть одна за одною самі. */
+  startTournament(ids) {
+    const order = this.rng.shuffle(ids.slice());
+    const matches = order.length === 3 ? [[order[0], order[1]], [order[0], order[2]], [order[1], order[2]]] : [[order[0], order[1]], [order[2], order[3]], [null, null]];
+    this.tournament = { players: order, kind: order.length === 3 ? 'robin' : 'bracket', matches: matches.map(([a, b]) => ({ a, b, winner: null })), current: 0, champion: null, startedAt: this.now() };
+    this.feed(`🏆 Турнір: ${order.map(id => this.players[id].name).join(', ')}`);
+    this.announce = { text: '🏆 Турнір починається! ' + (order.length === 3 ? 'Кожен з кожним' : 'Два півфінали й фінал'), by: 'Арена', at: this.now() };
+    this.startMatch();
+  }
+  startMatch() {
+    const t = this.tournament; const m = t.matches[t.current];
+    const fighters = (list) => list.map(id => { const p = this.players[id]; return fighterFromPlayer({ ...p, bonus: equipmentBonus(p), icon: this.publicPlayer(p).icon, pet: activePetIcon(p) }, this.rng); });
+    this.seed = (this.seed * 7919 + 13) % 2147483647; this.rng = makeRng(this.seed);
+    this.run = { mode: 'duel', players: [m.a, m.b], tournament: t.current, startedAt: this.now(), frames: [] };
+    this.battle = createBattle({ teams: [fighters([m.a]), fighters([m.b])], seed: this.seed, mode: 'duel' });
+    this.roundEvents = []; this.recordFrame();
+    this.lobby.players = {};
+    this.startRound();
+  }
+  /** Після дуелі турніру: записати переможця, підготувати наступну пару або назвати чемпіона. */
+  tournamentAfterDuel(winners) {
+    const t = this.tournament; if (!t) return null;
+    const m = t.matches[t.current]; m.winner = winners.includes(m.a) ? m.a : m.b;
+    if (t.kind === 'bracket' && t.current === 1) { t.matches[2].a = t.matches[0].winner; t.matches[2].b = t.matches[1].winner; }
+    t.current += 1;
+    if (t.current >= t.matches.length) {
+      const st = this.tournamentStandings(); t.champion = st[0].id; t.current = t.matches.length;
+      const c = this.players[t.champion]; c.stats.tournaments = (c.stats.tournaments || 0) + 1; this.addSeasonPoints(t.champion, SEASON_POINTS.champion);
+      this.feed(`🏆 Чемпіон турніру: ${c.name}!`); this.announce = { text: `🏆 Чемпіон турніру: ${c.name}! +${SEASON_POINTS.champion} очок сезону`, by: 'Арена', at: this.now() };
+      return { done: true, champion: c.name, achievements: checkAchievements(c).map(a => ({ t: 'achievement', who: c.id, name: a.name, icon: a.icon, title: a.title })) };
+    }
+    return { done: false };
+  }
+  tournamentStandings() {
+    const t = this.tournament; const w = {}; for (const id of t.players) w[id] = 0;
+    for (const m of t.matches) if (m.winner) w[m.winner] += 1;
+    if (t.kind === 'bracket' && t.matches[2].winner) w[t.matches[2].winner] += 10;
+    return t.players.map(id => ({ id, name: this.players[id].name, wins: w[id] })).sort((x, y) => y.wins - x.wins || t.players.indexOf(x.id) - t.players.indexOf(y.id));
+  }
+  tournamentView() {
+    const t = this.tournament; if (!t) return null;
+    const nm = id => id ? this.publicPlayer(this.players[id]) : null;
+    return { kind: t.kind, current: t.current, of: t.matches.length, champion: t.champion ? this.players[t.champion].name : null,
+      matches: t.matches.map((m, i) => ({ a: nm(m.a), b: nm(m.b), winner: m.winner ? this.players[m.winner].name : null, live: i === t.current && !t.champion, final: t.kind === 'bracket' && i === 2 })),
+      standings: this.tournamentStandings(), players: t.players.map(nm) };
+  }
   startBattle() {
     this.stopReplay();
     const ids = Object.keys(this.lobby.players);
+    if (this.lobby.mode === 'tournament') { this.tournament = null; return this.startTournament(ids); }
     const fighters = (list) => list.map(id => { const p = this.players[id]; return fighterFromPlayer({ ...p, bonus: equipmentBonus(p), icon: this.publicPlayer(p).icon, pet: activePetIcon(p) }, this.rng); });
     this.seed = (this.seed * 7919 + 13) % 2147483647; this.rng = makeRng(this.seed);
     if (this.lobby.mode === 'duel') {
@@ -386,7 +437,8 @@ export class Game {
       }
       for (const a of this.checkFamily()) ev.push({ t: 'family', name: a.name, icon: a.icon, gold: a.gold });
       const wb = this.hitWorldBoss(r.players, 0, ev, (pid) => winners.includes(pid) ? WORLD_BOSS.duelWin : WORLD_BOSS.duelLoss, b.fighters);
-      this.results = { mode: 'duel', worldBoss: wb, winners: winners.map(id => this.players[id].name), xp: 40, gold: 12, events: ev.map(e => ({ ...e, whoName: this.players[e.who] && this.players[e.who].name })), players: r.players.map(id => this.publicPlayer(this.players[id])) };
+      let tr = null; if (r.tournament !== undefined && this.tournament) { tr = this.tournamentAfterDuel(winners); if (tr.achievements) ev.push(...tr.achievements); }
+      this.results = { mode: 'duel', worldBoss: wb, tournament: tr ? { ...this.tournamentView(), done: tr.done } : null, winners: winners.map(id => this.players[id].name), xp: 40, gold: 12, events: ev.map(e => ({ ...e, whoName: this.players[e.who] && this.players[e.who].name })), players: r.players.map(id => this.publicPlayer(this.players[id])) };
       this.feed(`⚔️ Дуель виграв: ${winners.map(id => this.players[id].name).join(', ')}`);
     }
     this.history.battles.unshift({ mode: r.mode, players: r.players, at: this.now(), won: this.results.won, winners: this.results.winners });
@@ -396,7 +448,12 @@ export class Game {
     this.store.save('players'); this.store.save('history');
     this.battle = null; this.run = null; this.roundEvents = [];
     this.emit();
-    this.setTimer('results', RESULTS_SECONDS * 1000, () => { this.results = null; this.emit(); });
+    this.setTimer('results', RESULTS_SECONDS * 1000, () => {
+      this.results = null;
+      if (this.tournament && !this.tournament.champion && this.tournament.current < this.tournament.matches.length) { this.startMatch(); return; }
+      if (this.tournament && this.tournament.champion) this.tournament = null;
+      this.emit();
+    });
   }
   /** Тривога з дому (пульт шле POST /api/alert): пауза з причиною alert, оголошення на ТБ. */
   setAlert(on) {
@@ -740,7 +797,7 @@ export class Game {
     return { phase, season: this.settings.season, seasonN: sv.n, seasonTop: sv.top.slice(0, 5), pastSeasons: sv.past.slice(0, 3), quiet, now: this.now(), announce: this.announce, lobby: this.lobbyView(), battle: this.battle ? this.battleView() : this.replayView(), results: this.results, paused: this.paused, pauseReason: this.pauseReason,
       heroes: this.playerList.map(p => ({ ...this.publicPlayer(p), pet: activePetIcon(p), xp: p.xp, xpNext: xpForLevel(p.level), kills: p.stats.kills, duelWins: p.stats.duelWins, dungeons: p.stats.dungeons, legendaries: p.stats.legendaries, achievements: p.achievements.length })),
       legendaries: this.history.legendaries.slice(0, 5), feed: this.history.feed.slice(0, 8), pendingQuests: this.pendingQuests().length,
-      family: this.familyView(), worldBoss: this.worldBossView(), campaign: this.campaignView() };
+      family: this.familyView(), worldBoss: this.worldBossView(), campaign: this.campaignView(), tournament: this.tournamentView() };
   }
   playerState(p) {
     const b = this.battle; const f = b && b.fighters.find(x => x.id === p.id);
@@ -755,7 +812,7 @@ export class Game {
       replay: this.replay ? { mode: this.replay.mode, names: this.replay.names } : null, hasReplay: !!(this.history.lastReplay && this.history.lastReplay.frames.length),
       battle: b ? { ...this.battleView(), me: f ? { hand: f.hand.map(id => cardById[id]), mana: f.mana, maxMana: f.maxMana, hp: f.hp, maxHp: f.maxHp, alive: f.alive, move: f.move, shield: f.shield, quiz: f.quiz && !f.move ? { kind: f.quiz.kind, q: f.quiz.q, choices: f.quiz.choices } : null, hint: p.simple && !f.move ? this.hintFor(f) : null } : null } : null,
       quests: this.settings.questsEnabled ? this.questsFor(p) : [], pendingQuests: this.isParent(p) ? this.pendingQuests() : [],
-      daily: this.dailyFor(p), worldBoss: { ...this.worldBossView(), mine: (this.worldBoss().dmg[p.id] || 0) }, family: this.familyView(),
+      daily: this.dailyFor(p), tournament: this.tournamentView(), worldBoss: { ...this.worldBossView(), mine: (this.worldBoss().dmg[p.id] || 0) }, family: this.familyView(),
       customCards: this.customCardsOf(p), pendingCards: this.isParent(p) ? this.pendingCards() : [], cardTemplates: CARD_TEMPLATES, tvOnline: this.tvOnline(),
     };
   }
