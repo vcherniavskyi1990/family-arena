@@ -57,10 +57,11 @@
     var top = (state.seasonTop || []).filter(function (p) { return p.points > 0; });
     if (top.length) h += '<div class="season"><div class="h">🏆 ' + esc(state.season) + (state.seasonDaysLeft !== null && state.seasonDaysLeft !== undefined ? ' <span class="left">· ' + (state.seasonDaysLeft > 0 ? 'ще ' + state.seasonDaysLeft + ' дн.' : 'фінал сьогодні!') + '</span>' : '') + '</div>' + top.slice(0, 5).map(function (p, i) { return '<div><span class="pl">' + ['🥇', '🥈', '🥉', '4', '5'][i] + '</span> ' + av(p, 'avs') + ' <b>' + esc(p.name) + '</b><span class="pts">' + p.points + '</span></div>'; }).join('') + ((state.pastSeasons || []).length ? '<div class="past">' + state.pastSeasons.map(function (ps) { return '🏅 сезон ' + ps.n + ': ' + esc(ps.winner || '—'); }).join(' · ') + '</div>' : '') + '</div>';
     h += '<div class="legend' + (top.length ? ' short' : '') + '"><div class="h">Зал легендарок</div>' + (state.legendaries.length ? state.legendaries.map(function (l) { return '<div>🟠 <b>' + esc(l.name) + '</b>: <span class="r-legendary">' + esc(l.item.name) + '</span></div>'; }).join('') : '<div style="color:#5c6f85">Ще ніхто не вибив легендарку…</div>') + (state.pendingQuests ? '<div style="margin-top:20px;color:#f1c40f">✅ Справ чекають підтвердження: ' + state.pendingQuests + '</div>' : '') + '</div>';
-    h += '<div class="tvbtns">' + (state.hasReplay !== false ? '<button class="tvbtn" id="tv-replay">📼 Повтор бою</button>' : '') + '<span class="tvhint">Magic Remote: тисни на героя</span></div>';
+    h += '<div class="tvbtns">' + (state.hasReplay !== false ? '<button class="tvbtn" id="tv-replay">📼 Повтор бою</button>' : '') + '<button class="tvbtn" id="tv-book">📖 Книга сім’ї</button>' + '<span class="tvhint">Magic Remote: тисни на героя</span></div>';
     stage.innerHTML = h; ticker.innerHTML = '';
     var cards = stage.querySelectorAll('[data-hero]'); for (var i = 0; i < cards.length; i++) cards[i].onclick = function () { showHero(this.getAttribute('data-hero')); };
     var rb = document.getElementById('tv-replay'); if (rb) rb.onclick = function () { fetch('/api/tv/replay', { method: 'POST' }).catch(function () { }); };
+    var bb = document.getElementById('tv-book'); if (bb) bb.onclick = showBook;
   }
   // ---------- церемонія закриття сезону ----------
   var ceremonyTimer = null;
@@ -130,6 +131,17 @@
         '<div class="cnt">закриється саме</div></div>';
       overlay.innerHTML = h; overlay.className = 'on';
       clearTimeout(heroTimer); heroTimer = setTimeout(function () { if (!state.paused && state.phase !== 'results') overlay.className = ''; }, 12000);
+      overlay.onclick = function () { clearTimeout(heroTimer); overlay.className = ''; overlay.onclick = null; };
+    }).catch(function () { });
+  }
+  function showBook() {
+    fetch('/api/tv/book').then(function (r) { return r.json(); }).then(function (b) {
+      var h = '<div class="banner hero-prof"><div class="big">📖 Книга сім’ї</div><div class="sub">' + b.total + ' моментів від ' + esc(b.since) + ' · босів повалено ' + b.bosses + '</div>' +
+        '<div class="cols"><div class="loot"><div><b>Рекорди</b></div>' + b.records.map(function (r) { return '<div>' + esc(r.icon) + ' ' + esc(r.name) + (r.value ? ': <b>' + esc(r.text) + '</b> <span style="color:#9fb0c3">' + esc(r.day) + '</span>' : ' <span style="color:#5c6f85">ще не було</span>') + '</div>'; }).join('') +
+        (b.seasons.length ? '<div style="margin-top:10px"><b>Сезони</b></div>' + b.seasons.map(function (s) { return '<div>🏅 Сезон ' + s.n + ' «' + esc(s.name) + '»: ' + esc(s.winner || 'без чемпіона') + '</div>'; }).join('') : '') + '</div>' +
+        '<div class="loot"><div><b>Пам’ятні моменти</b></div>' + (b.moments.length ? b.moments.slice(0, 8).map(function (m) { return '<div><span style="color:#9fb0c3">' + esc(m.day) + '</span> ' + esc(m.icon) + ' ' + esc(m.text) + '</div>'; }).join('') : '<div style="color:#5c6f85">Ще порожньо</div>') + '</div></div><div class="cnt">закриється саме</div></div>';
+      overlay.innerHTML = h; overlay.className = 'on';
+      clearTimeout(heroTimer); heroTimer = setTimeout(function () { if (!state.paused && state.phase !== 'results') overlay.className = ''; }, 20000);
       overlay.onclick = function () { clearTimeout(heroTimer); overlay.className = ''; overlay.onclick = null; };
     }).catch(function () { });
   }
