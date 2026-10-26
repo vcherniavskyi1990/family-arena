@@ -260,5 +260,15 @@
       "minRarity": "epic",
       "legendaryChance": 0.4
     }
+  },
+  {
+    "id": "practice",
+    "name": "Тренування",
+    "icon": "🎯",
+    "level": 1,
+    "practice": true,
+    "text": "Манекен у дворі. Без нагород і без очок: просто спробувати удари, блоки й карти. Можна одному.",
+    "rooms": [],
+    "boss": "dummy"
   }
 ]
