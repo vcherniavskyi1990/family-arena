@@ -562,3 +562,26 @@ test('турнір на 4: півфінали й фінал', () => {
   playDuel();
   assert.equal(g.results.tournament.done, true); assert.equal(g.tournamentStandings()[0].id, t.matches[2].winner);
 });
+
+test('косметика: купити за золото, надіти, видно на ТБ і в бійця', () => {
+  const g = makeGame();
+  const a = g.createPlayer({ name: 'Віктор', classId: 'warrior', age: 10, pin: '1111' });
+  const b = g.createPlayer({ name: 'Саша', classId: 'mage', age: 7, pin: '2222' });
+  const p = g.players[a.id];
+  assert.equal(p.gold, 50);
+  assert.throws(() => g.buyCosmetic(p, 'frame:gold'), /золота/);
+  assert.throws(() => g.buyCosmetic(p, 'frame:nope'), /немає/);
+  assert.throws(() => g.setCosmetic(p, { frame: 'wood' }), /не куплено/);
+  const v = g.buyCosmetic(p, 'frame:wood');
+  assert.equal(p.gold, 20); assert.equal(v.frame, 'wood'); assert.ok(v.frames.find(f => f.id === 'wood').owned);
+  assert.throws(() => g.buyCosmetic(p, 'frame:wood'), /уже є/);
+  g.buyCosmetic(p, 'cry:boom');
+  assert.equal(p.gold, 0); assert.equal(g.publicPlayer(p).cry, 'Бумм!'); assert.equal(g.publicPlayer(p).frame, 'wood');
+  g.setCosmetic(p, { frame: null }); assert.equal(g.publicPlayer(p).frame, null);
+  g.setCosmetic(p, { frame: 'wood' });
+  assert.equal(g.playerState(p).me.cosmetics.cries.find(c => c.id === 'boom').active, true);
+  g.setMode(a, { mode: 'duel' }); g.join(a); g.join(b); g.ready(a, true); g.ready(b, true);
+  const f = g.battleView().fighters.find(x => x.id === a.id);
+  assert.equal(f.frame, 'wood'); assert.equal(f.cry, 'Бумм!');
+  assert.equal(g.tvState().heroes.find(h => h.id === a.id).frame, 'wood');
+});

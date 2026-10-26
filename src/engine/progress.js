@@ -9,7 +9,7 @@ export function newPlayer({ id, name, classId, age, role = 'kid', pinHash }) {
     id, name, class: classId, age: age || null, role, pinHash, icon: null, avatar: null, title: null, simple: !!(age && age <= 8),
     level: 1, xp: 0, gold: 50, deck: [], collection: [], inventory: [], equipment: {}, achievements: [],
     stats: { kills: 0, bossKills: 0, dragonKills: 0, duelWins: 0, duels: 0, dungeons: 0, legendaries: 0, blocks: 0, crits: 0, heals: 0, quests: 0, crafts: 0, alertPauses: 0, smart: 0, seasonWins: 0, raids: 0, worldBoss: 0, pets: 0, chapters: 0, tournaments: 0, level: 1 },
-    quests: {}, playedToday: { day: null, minutes: 0 }, createdAt: Date.now(), pets: [], activePet: null,
+    quests: {}, playedToday: { day: null, minutes: 0 }, createdAt: Date.now(), pets: [], activePet: null, cosmetics: { owned: [], frame: null, cry: null },
   };
 }
 

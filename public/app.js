@@ -256,6 +256,11 @@
       h += '<div class="card"><b>📦 Проста скриня</b> · 40 🪙<div class="small muted">Незвичайний предмет або краще</div><button class="btn-sm btn-primary" data-chest="common" ' + (me.gold < 40 ? 'disabled' : '') + '>Купити</button></div>' +
         '<div class="card"><b>💎 Рідкісна скриня</b> · 150 🪙<div class="small muted">Рідкісний предмет або краще, шанс на легендарку</div><button class="btn-sm btn-primary" data-chest="rare" ' + (me.gold < 150 ? 'disabled' : '') + '>Купити</button></div>';
       if (ui.lastChest) h += '<div class="card ok"><div>Відкрито:</div>' + itemHtml(ui.lastChest) + '</div>';
+      var cs = me.cosmetics;
+      if (cs) {
+        h += '<div class="card"><h3>🖼 Рамки аватара</h3><div class="small muted">Видно на ТБ: у лобі, в бою й на екрані очікування.</div>' + cs.frames.map(function (f) { return '<div class="row small" style="padding:4px 0"><span class="frbox fr-' + f.id + '">' + esc(f.icon) + '</span><div class="grow"><b>' + esc(f.name) + '</b>' + (f.owned ? '' : ' · ' + f.price + ' 🪙') + '</div>' + (f.active ? '<button class="btn-sm btn-blue" data-frame="">На мені</button>' : f.owned ? '<button class="btn-sm" data-frame="' + f.id + '">Надіти</button>' : '<button class="btn-sm btn-primary" data-buy="frame:' + f.id + '" ' + (me.gold < f.price ? 'disabled' : '') + '>Купити</button>') + '</div>'; }).join('') + '</div>';
+        h += '<div class="card"><h3>📣 Бойовий клич</h3><div class="small muted">Спливає на ТБ, коли ти робиш крит.</div>' + cs.cries.map(function (c) { return '<div class="row small" style="padding:4px 0"><div class="grow"><b>«' + esc(c.text) + '»</b>' + (c.owned ? '' : ' · ' + c.price + ' 🪙') + '</div>' + (c.active ? '<button class="btn-sm btn-blue" data-cry="">Мій</button>' : c.owned ? '<button class="btn-sm" data-cry="' + c.id + '">Обрати</button>' : '<button class="btn-sm btn-primary" data-buy="cry:' + c.id + '" ' + (me.gold < c.price ? 'disabled' : '') + '>Купити</button>') + '</div>'; }).join('') + '</div>';
+      }
     } else if (ui.heroView === 'pets') {
       var pets = me.pets || [];
       if (!pets.length) h += '<div class="card"><div class="muted">Вихованців ще немає. Вони випадають із пройдених підземель (шанс ~35 %). Повторний той самий — досвід і рівень вихованця.</div></div>';
@@ -371,6 +376,9 @@
     on('#go', function () { var m = ui.move; ui.sent = true; render(); act('/battle/move', { target: m.target, attack: m.attack, blocks: m.blocks, cards: m.cards.map(function (k) { return k.split('#')[0]; }), quiz: m.quiz }).catch(function () { ui.sent = false; render(); }); });
     on('[data-report]', function (el) { api('/admin/report?back=' + el.dataset.report).then(function (r) { ui.report = r; render(); }).catch(function (e) { toast(e.message, 3000); }); });
     on('[data-hv]', function (el) { ui.heroView = el.dataset.hv; ui.lastChest = null; render(); });
+    on('[data-buy]', function (el) { act('/me/cosmetic/buy', { key: el.dataset.buy }, '🛍 Куплено!'); });
+    on('[data-frame]', function (el) { act('/me/cosmetic', { frame: el.dataset.frame || null }); });
+    on('[data-cry]', function (el) { act('/me/cosmetic', { cry: el.dataset.cry || null }); });
     on('[data-pet]', function (el) { act('/me/pet', { petId: el.dataset.pet || null }).then(function () { toast(el.dataset.pet ? '🐾 Вихованець із тобою' : '🐾 Відпочиває'); }); });
     on('[data-unequip]', function (el) { act('/me/unequip', { slot: el.dataset.unequip }); });
     on('[data-equip]', function (el) { act('/me/equip', { itemId: el.dataset.equip }, 'Вдягнуто'); });
