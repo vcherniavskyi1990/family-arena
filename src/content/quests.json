@@ -1,11 +1,90 @@
 [
-  { "id": "bed", "name": "Застелити ліжко", "icon": "🛏️", "gold": 10, "xp": 15, "chest": "common" },
-  { "id": "homework", "name": "Зробити уроки", "icon": "📚", "gold": 25, "xp": 40, "chest": "uncommon" },
-  { "id": "dishes", "name": "Прибрати посуд зі столу", "icon": "🍽️", "gold": 10, "xp": 15, "chest": "common" },
-  { "id": "toys", "name": "Прибрати іграшки", "icon": "🧸", "gold": 12, "xp": 20, "chest": "common" },
-  { "id": "teeth", "name": "Почистити зуби без нагадувань", "icon": "🪥", "gold": 8, "xp": 10, "chest": "common" },
-  { "id": "read", "name": "Почитати 20 хвилин", "icon": "📖", "gold": 20, "xp": 35, "chest": "uncommon" },
-  { "id": "walk", "name": "Погуляти на вулиці", "icon": "🌳", "gold": 15, "xp": 25, "chest": "common" },
-  { "id": "help_mom", "name": "Допомогти мамі", "icon": "💐", "gold": 30, "xp": 50, "chest": "rare" },
-  { "id": "brother", "name": "Погратися з братом без сварки", "icon": "🤝", "gold": 25, "xp": 40, "chest": "uncommon" }
+  {
+    "id": "bed",
+    "name": "Застелити ліжко",
+    "icon": "🛏️",
+    "gold": 10,
+    "xp": 15,
+    "chest": "common"
+  },
+  {
+    "id": "homework",
+    "name": "Зробити уроки",
+    "icon": "📚",
+    "gold": 25,
+    "xp": 40,
+    "chest": "uncommon"
+  },
+  {
+    "id": "dishes",
+    "name": "Прибрати посуд зі столу",
+    "icon": "🍽️",
+    "gold": 10,
+    "xp": 15,
+    "chest": "common"
+  },
+  {
+    "id": "toys",
+    "name": "Прибрати іграшки",
+    "icon": "🧸",
+    "gold": 12,
+    "xp": 20,
+    "chest": "common"
+  },
+  {
+    "id": "teeth",
+    "name": "Почистити зуби без нагадувань",
+    "icon": "🪥",
+    "gold": 8,
+    "xp": 10,
+    "chest": "common"
+  },
+  {
+    "id": "read",
+    "name": "Почитати 20 хвилин",
+    "icon": "📖",
+    "gold": 20,
+    "xp": 35,
+    "chest": "uncommon"
+  },
+  {
+    "id": "walk",
+    "name": "Погуляти на вулиці",
+    "icon": "🌳",
+    "gold": 15,
+    "xp": 25,
+    "chest": "common"
+  },
+  {
+    "id": "help_mom",
+    "name": "Допомогти мамі",
+    "icon": "💐",
+    "gold": 30,
+    "xp": 50,
+    "chest": "rare"
+  },
+  {
+    "id": "brother",
+    "name": "Погратися з братом без сварки",
+    "icon": "🤝",
+    "gold": 25,
+    "xp": 40,
+    "chest": "uncommon"
+  },
+  {
+    "id": "plants",
+    "name": "Полити квіти",
+    "icon": "🪴",
+    "gold": 12,
+    "xp": 18,
+    "chest": "common"
+  },
+  {
+    "id": "shoes",
+    "name": "Поставити взуття на місце",
+    "icon": "👟",
+    "gold": 8,
+    "xp": 12,
+    "chest": "common"
+  }
 ]

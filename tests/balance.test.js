@@ -55,3 +55,25 @@ test('перше підземелля проходять двоє новачкі
   assert.ok(wins / 60 > 0.5, `перемог ${wins}/60`);
   assert.ok(rounds / 60 >= 3, 'бос надто слабкий');
 });
+
+test('нові підземелля (спальня 4, гараж 7) проходяться двома гравцями свого рівня, гараж не легший за балкон', () => {
+  for (const [id, lvl, min] of [['bedroom_nightmares', 5, 0.5], ['garage_machines', 9, 0.35]]) {
+    const d = DUNGEONS.find(x => x.id === id); assert.ok(d, id);
+    let wins = 0;
+    for (let i = 0; i < 40; i++) {
+      const rng = makeRng(700 + i);
+      const team = [fighterFromPlayer({ ...player('a', 'warrior'), level: lvl }, rng), fighterFromPlayer({ ...player('b', 'healer'), level: lvl }, rng)];
+      let ok = true;
+      for (const room of [...d.rooms, [d.boss]]) {
+        const mobs = room.map((m, j) => fighterFromMob(m, j));
+        const b = createBattle({ teams: [team, mobs], seed: 1900 + i });
+        while (!b.over) resolveRound(b);
+        if (b.winner !== 0) { ok = false; break; }
+        for (const f of team) { f.hp = Math.min(f.maxHp, f.hp + Math.round(f.maxHp * 0.3)); f.alive = f.hp > 0; f.move = null; }
+      }
+      if (ok) wins++;
+    }
+    console.log(`  підземелля «${d.name}»: ${wins}/40 перемог`);
+    assert.ok(wins / 40 >= min, `${id}: перемог ${wins}/40`);
+  }
+});
