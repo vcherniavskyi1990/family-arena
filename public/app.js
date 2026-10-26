@@ -128,6 +128,7 @@
     if (state.results) return h + renderResults();
     if (state.battle && !state.battle.replay) return h + '<div class="card">Бій уже йде без тебе. Зачекай, поки закінчиться.</div>' + battleSpectator();
     if (state.replay) h += '<div class="card">📼 На ТБ іде повтор: ' + esc(state.replay.names.join(', ')) + (me.isParent ? ' <button class="btn-sm" id="replay-stop">Зупинити</button>' : '') + '</div>';
+    h += worldBossHtml();
     var lob = state.lobby;
     var raidOf = {}; (lob.raids || []).forEach(function (r) { raidOf[r.id] = r; });
     var dungeons = content.dungeons.map(function (d) { var r = raidOf[d.id]; return '<option value="' + d.id + '"' + (lob.dungeonId === d.id ? ' selected' : '') + (r && !r.available ? ' disabled' : '') + '>' + d.icon + ' ' + esc(d.name) + ' (рівень ' + d.level + ')' + (r && !r.available ? ' 🔒' : '') + '</option>'; }).join('');
@@ -153,14 +154,22 @@
     var b = state.battle;
     return '<div class="card">' + b.fighters.map(function (f) { return '<div class="row small"><span>' + esc(f.icon) + ' ' + esc(f.name) + '</span><div class="bar grow ' + (f.team ? 'red' : '') + '"><i style="width:' + (100 * f.hp / f.maxHp) + '%"></i></div><span>' + f.hp + '</span></div>'; }).join('') + '</div>';
   }
+  function worldBossHtml() {
+    var w = state.worldBoss; if (!w) return '';
+    var top = w.top.map(function (t) { return esc(t.name) + ' ' + t.dmg; }).join(', ');
+    return '<div class="card wboss"><h3>' + esc(w.icon) + ' Бос тижня: ' + esc(w.name) + '</h3>' + (w.killed ? '<div class="ok-text">Повалений! Новий у понеділок.</div>' :
+      '<div class="bar red"><i style="width:' + w.pct + '%"></i></div><div class="small">' + w.hp + ' / ' + w.maxHp + ' · ще ' + w.daysLeft + ' дн.</div>') +
+      '<div class="small muted">' + esc(w.text) + '</div>' + (w.mine ? '<div class="small">Твій внесок: ' + w.mine + '</div>' : '') + (top ? '<div class="small muted">Б’ють: ' + top + '</div>' : '') + '</div>';
+  }
   function renderResults() {
     var r = state.results;
     var h = '<div class="card ' + (r.mode === 'duel' || r.won ? 'ok' : 'warn') + '"><div class="big">' + (r.mode === 'duel' ? '⚔️ Дуель виграв: ' + esc(r.winners.join(', ')) : (r.won ? (r.raid ? '🗿 Рейд пройдено! ' : '🏆 ') + '«' + esc(r.dungeon) + '»' + (r.raid ? '' : ' пройдено!') : '💀 «' + esc(r.dungeon) + '» виявилось сильнішим')) + '</div>' +
       (r.mode === 'dungeon' ? '<div class="muted">Вбито ' + r.kills + ' · кожному +' + r.xp + ' досвіду, +' + r.gold + ' золота</div>' : '') + '</div>';
     var myLoot = (r.loot || []).filter(function (l) { return state.tvOnline ? l.name === state.me.name : true; });
     if (myLoot.length) h += '<div class="card"><h3>' + (state.tvOnline ? 'Твій лут' : 'Лут усім') + '</h3>' + myLoot.map(function (l) { return (state.tvOnline ? '' : '<div class="small muted">' + esc(l.name) + ':</div>') + (l.item ? itemHtml(l.item) : '<div class="item b-rare"><b class="r-rare">🃏 Нова карта: ' + esc(l.cardName) + '</b></div>'); }).join('') + '</div>';
-    var ev = (r.events || []).filter(function (e) { return e.who === state.me.id || e.t === 'family'; });
-    if (ev.length) h += '<div class="card ok">' + ev.map(function (e) { return e.t === 'levelup' ? '<div>⬆️ Новий рівень: ' + e.level + '!</div>' : e.t === 'daily' ? '<div>📅 Завдання дня «' + esc(e.name) + '»: +' + e.gold + ' 🪙</div>' : e.t === 'family' ? '<div>👨‍👩‍👦 Сімейне досягнення «' + esc(e.name) + '»: усім +' + e.gold + ' 🪙</div>' : '<div>' + esc(e.icon) + ' Досягнення: ' + esc(e.name) + ' (титул «' + esc(e.title) + '»)</div>'; }).join('') + '</div>';
+    if (r.worldBoss && r.worldBoss.hit) h += '<div class="card">' + esc(r.worldBoss.icon) + ' Босу тижня «' + esc(r.worldBoss.name) + '» −' + r.worldBoss.hit + (r.worldBoss.killed ? ' · <b>повалений!</b>' : ' (лишилось ' + r.worldBoss.hp + ')') + '</div>';
+    var ev = (r.events || []).filter(function (e) { return e.who === state.me.id || e.t === 'family' || e.t === 'worldboss'; });
+    if (ev.length) h += '<div class="card ok">' + ev.map(function (e) { return e.t === 'worldboss' ? '<div>' + esc(e.icon) + ' Бос тижня «' + esc(e.name) + '» повалений: +' + e.gold + ' золота всім!</div>' : e.t === 'levelup' ? '<div>⬆️ Новий рівень: ' + e.level + '!</div>' : e.t === 'daily' ? '<div>📅 Завдання дня «' + esc(e.name) + '»: +' + e.gold + ' 🪙</div>' : e.t === 'family' ? '<div>👨‍👩‍👦 Сімейне досягнення «' + esc(e.name) + '»: усім +' + e.gold + ' 🪙</div>' : '<div>' + esc(e.icon) + ' Досягнення: ' + esc(e.name) + ' (титул «' + esc(e.title) + '»)</div>'; }).join('') + '</div>';
     return h + '<button class="btn-primary btn-block" id="join">Ще раз у лобі</button>';
   }
 

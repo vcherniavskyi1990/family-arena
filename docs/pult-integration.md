@@ -11,6 +11,7 @@
 | `GET /api/digest` або `/api/digest.txt` + `X-Arena-Token` (або `?token=`) | бот пульта (команда «арена», вечірній дайджест) | підсумок дня: бої, переможці, легендарки, сімейні досягнення, справи, таблиця сезону, хвилини дітей |
 | `GET /health` | моніторинг | `{"ok","version","players","phase","paused","tv"}` |
 
-Що лишилось зробити в `mimismart-pult` (підпродукт `notify`, окремий PR): при зміні тривоги слати `POST /api/alert`;
-команда бота «арена» → `GET /api/digest.txt`; о 20:30 дайджест у сімейний чат, якщо сьогодні були бої.
-Адреса арени й шлях до токена мають бути в реєстрі налаштувань пульта (`contract/settings.json`).
+Сторона пульта зроблена (`mimismart-pult` PR #271, підпродукт `notify`, `domains/notify/lib/Arena.php`): `pult@announce` шле
+`POST /api/alert` на початок і відбій тривоги; бот розуміє «арена» (`GET /api/digest`); о `arena.digestAt` (20:30) дайджест
+в усі чати, якщо були бої. Реєстр: store `arena` (`/home/pult/arena.json`: `enabled` типово вимкнено, `alert`, `digestAt`, `host`),
+секрет `/home/pult/arena-token.txt`. Увімкнення наживо: токен у файл, `arena.enabled` на сторінці налаштувань пульта.

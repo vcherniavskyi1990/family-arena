@@ -1,4 +1,6 @@
 [
+  { "id": "worldboss_1", "name": "Бос тижня повалений", "icon": "🐲", "title": "Гроза босів", "cond": { "stat": "worldBoss", "gte": 1 } },
+  { "id": "worldboss_5", "name": "П’ять босів тижня", "icon": "🏯", "title": "Легенда тижня", "cond": { "stat": "worldBoss", "gte": 5 } },
   {
     "id": "first_blood",
     "name": "Перша кров",
