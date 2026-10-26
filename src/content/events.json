@@ -1,0 +1,6 @@
+[
+  { "id": "smart_wed", "weekday": "Wed", "name": "Розумна середа", "icon": "🧠", "text": "Бліц, Реакція й Пам’ять: золото переможцю ×2 весь день.", "miniGoldMult": 2 },
+  { "id": "gold_fri", "weekday": "Fri", "name": "П’ятниця щедрості", "icon": "🪙", "text": "Золото за дуелі й підземелля ×2 весь день.", "goldMult": 2 },
+  { "id": "boss_sat", "weekday": "Sat", "name": "Субота боса", "icon": "🐲", "text": "Кожен удар по босу тижня рахується подвійно: валимо його разом!", "worldBossMult": 2 },
+  { "id": "family_sun", "weekday": "Sun", "name": "Сімейна неділя", "icon": "👨‍👩‍👦", "text": "Підземелля вдвох і більше: досвід ×2 і +2 очки сезону кожному. Тато в бою: +1 очко всім.", "familyXpMult": 2, "familyPoints": 2, "parentBonus": 1 }
+]
