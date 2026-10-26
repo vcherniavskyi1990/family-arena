@@ -48,7 +48,7 @@
     if (!b) ui.sent = false;
     if (b && !b.replay && b.lastRound && (!prev || !prev.battle || !prev.battle.lastRound || prev.battle.lastRound.n !== b.lastRound.n)) { if (navigator.vibrate) navigator.vibrate(60); beep(440, 120, 'triangle'); }
     if (state.results && (!prev || !prev.results)) { tab = 'arena'; }
-    if (state.mini && state.mini.phase === 'go' && (!prev || !prev.mini || prev.mini.phase !== 'go')) { if (navigator.vibrate) navigator.vibrate(80); beep(880, 120, 'square'); }
+    if (state.mini && state.mini.kind !== 'quiz' && state.mini.phase === 'go' && (!prev || !prev.mini || prev.mini.phase !== 'go')) { if (navigator.vibrate) navigator.vibrate(80); beep(880, 120, 'square'); }
     if (state.mini && (!prev || !prev.mini)) tab = 'arena';
     var inc = state.challenges ? state.challenges.incoming.length : 0, pinc = prev && prev.challenges ? prev.challenges.incoming.length : 0;
     if (inc > pinc) { if (navigator.vibrate) navigator.vibrate([120, 60, 120]); beep(660, 150, 'square'); beep(880, 200, 'square'); tab = 'arena'; toast('⚔️ Тебе кличуть на дуель!', 3000); }
@@ -136,7 +136,7 @@
     if (state.tournament && !state.battle) h += tournamentHtml(state.tournament);
     if (state.battle && !state.battle.replay) return h + '<div class="card">Бій уже йде без тебе. Зачекай, поки закінчиться.</div>' + battleSpectator();
     if (state.replay) h += '<div class="card">📼 На ТБ іде повтор: ' + esc(state.replay.names.join(', ')) + (me.isParent ? ' <button class="btn-sm" id="replay-stop">Зупинити</button>' : '') + '</div>';
-    if (!me.blocked && !state.battle) h += '<div class="card mini"><div class="row"><div class="grow"><b>⚡ Реакція</b><div class="small muted">ТБ скаже «ТИСНИ!», хто швидший — +5 🪙. Для всіх, хто з телефоном.</div></div><button class="btn-sm btn-primary" id="mini-start">Хто швидший?</button></div></div>';
+    if (!me.blocked && !state.battle) h += '<div class="card mini"><h3>Міні-ігри для всіх, хто з телефоном</h3><div class="row"><div class="grow"><b>⚡ Реакція</b><div class="small muted">ТБ скаже «ТИСНИ!», хто швидший — +5 🪙</div></div><button class="btn-sm btn-primary" id="mini-start">Грати</button></div><div class="row" style="margin-top:8px"><div class="grow"><b>🧠 Бліц</b><div class="small muted">5 прикладів чи слів за віком, хто більше й швидше — +5 🪙, усе йде в розумні відповіді</div></div><button class="btn-sm btn-primary" id="quiz-start">Грати</button></div></div>';
     h += worldBossHtml(); h += goalHtml(); h += giftHtml();
     var lob = state.lobby;
     var raidOf = {}; (lob.raids || []).forEach(function (r) { raidOf[r.id] = r; });
@@ -188,6 +188,12 @@
   }
   function miniHtml(m) {
     var me = m.me || {};
+    if (m.kind === 'quiz') {
+      if (m.phase === 'done') return '<div class="card mini"><h3>🧠 Бліц: підсумки</h3>' + (m.ranking.length ? m.ranking.map(function (r, i) { return '<div class="q"><span class="ic">' + (['🥇', '🥈', '🥉'][i] || (i + 1)) + '</span><div class="grow"><b>' + esc(r.name) + '</b></div><b>✅ ' + r.correct + ' з ' + m.n + (r.ms !== null ? ' · ' + Math.round(r.ms / 1000) + ' с' : '') + '</b></div>'; }).join('') : '<div class="muted">Ніхто не відповів 😅</div>') + (state.me.blocked ? '' : '<button class="btn-block btn-primary" id="quiz-start" style="margin-top:8px">🧠 Ще раз</button>') + '</div>';
+      var hdr = '<div class="card mini"><h3>🧠 Бліц · запустив ' + esc(m.by) + ' · ще ' + m.left + ' с</h3>';
+      if (!me || !me.q) return hdr + (me && me.done ? '<div class="mbtn ok">Готово!<br><span class="small">✅ ' + me.correct + ' з ' + m.n + ' · чекаємо інших</span></div>' : '<div class="small muted">Твої питання за віком з\'являться тут</div><button class="btn-block btn-primary" id="quiz-answer" data-a="">Почати</button>') + '</div>';
+      return hdr + '<div class="small muted">' + (me.i + 1) + ' з ' + m.n + ' · ✅ ' + me.correct + ' · ' + (me.q.kind === 'english' ? 'англійська' : 'математика') + '</div><div class="big" style="margin:8px 0">' + esc(me.q.q) + '</div><div class="row">' + me.q.choices.map(function (c) { return '<button class="btn-sm grow btn-blue" data-a="' + esc(c) + '">' + esc(c) + '</button>'; }).join('') + '</div></div>';
+    }
     if (m.phase === 'done') return '<div class="card mini"><h3>⚡ Реакція: підсумки</h3>' + (m.ranking.length ? m.ranking.map(function (r, i) { return '<div class="q"><span class="ic">' + ['🥇', '🥈', '🥉'][i] + '</span><div class="grow"><b>' + esc(r.name) + '</b></div><b>' + r.ms + ' мс</b></div>'; }).join('') : '<div class="muted">Ніхто не встиг за 3 с 😅</div>') + (m.faults.length ? '<div class="small muted">Фальстарт: ' + esc(m.faults.join(', ')) + '</div>' : '') + (state.me.blocked ? '' : '<button class="btn-block btn-primary" id="mini-start" style="margin-top:8px">⚡ Ще раз</button>') + '</div>';
     if (me.fault) return '<div class="card mini"><div class="mbtn fault">😅 Фальстарт<br><span class="small">Треба було чекати</span></div></div>';
     if (me.tapped !== null && me.tapped !== undefined) return '<div class="card mini"><div class="mbtn ok">⚡ ' + me.tapped + ' мс<br><span class="small">Чекаємо інших…</span></div></div>';
@@ -457,7 +463,9 @@
     on('#go', function () { var m = ui.move; ui.sent = true; render(); act('/battle/move', { target: m.target, attack: m.attack, blocks: m.blocks, cards: m.cards.map(function (k) { return k.split('#')[0]; }), quiz: m.quiz }).catch(function () { ui.sent = false; render(); }); });
     on('#backup', function () { api('/admin/backup').then(function (d) { var blob = new Blob([JSON.stringify(d)], { type: 'application/json' }); var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'arena-' + new Date().toISOString().slice(0, 10) + '.json'; document.body.appendChild(a); a.click(); a.remove(); toast('💾 Копію завантажено'); }).catch(function (e) { toast(e.message, 3000); }); });
     var rs = $('#restore'); if (rs) rs.onchange = function (ev) { var f = ev.target.files[0]; if (!f) return; var pin = prompt('PIN батьків, щоб відновити дані з «' + f.name + '». Поточні дані буде замінено.'); if (!pin) return; var rd = new FileReader(); rd.onload = function () { var data; try { data = JSON.parse(rd.result); } catch (e) { toast('Це не JSON-файл', 3000); return; } act('/admin/restore', { pin: pin, data: data }, '💾 Відновлено, увійди знову'); }; rd.readAsText(f); };
-    on('#mini-start', function () { act('/me/mini/start'); });
+    on('#mini-start', function () { act('/me/mini/start', { kind: 'reaction' }); });
+    on('#quiz-start', function () { act('/me/mini/start', { kind: 'quiz' }); });
+    on('[data-a]', function (el) { act('/me/mini/answer', { answer: el.dataset.a }); });
     on('#mini-tap', function () { api('/me/mini/tap', {}).catch(function () {}); });
     on('[data-to]', function (el) { act('/me/challenge', { to: el.dataset.to }, '⚔️ Виклик надіслано!'); });
     on('[data-chal]', function (el) { act('/me/challenge/answer', { id: el.dataset.chal, accept: !!el.dataset.ok }).then(function (r) { if (r.accepted) { toast('🔥 Дуель! Тисни «Готовий»'); tab = 'arena'; } }); });

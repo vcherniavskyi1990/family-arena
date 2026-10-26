@@ -39,6 +39,9 @@ const CLOSING_WARN_MIN = 10;
 const MINI_GOLD = 5;   // золото найшвидшому в «Реакції»
 const MINI_TAP_MS = 3000;   // скільки чекаємо натискань після «ТИСНИ!»
 const MINI_SHOW_MS = 8000;   // скільки висять підсумки
+const QUIZ_N = 5;   // питань у «Бліці»
+const QUIZ_MS = 60000;   // ліміт «Бліцу»
+const QUIZ_MIN_MS = 15000;   // раніше не закривати, щоб усі встигли зайти
 const CHALLENGE_MS = 120000;   // виклик на дуель живе 2 хв
 const CEREMONY_MS = 40000;   // церемонія закриття сезону на ТБ
 const GIFT = { base: 10, perDay: 5, maxDays: 7, itemEvery: 7 };
@@ -300,12 +303,20 @@ export class Game {
     this.emit();
   }
   // ---------- міні-гра «Реакція»: ТБ каже «ТИСНИ!», хто швидше натисне на телефоні ----------
-  startMini(p) {
+  startMini(p, kind = 'reaction') {
     if (this.battle) throw err('бій уже йде, зачекай');
-    if (this.mini && this.mini.phase !== 'done') throw err('«Реакція» вже йде');
+    if (this.mini && this.mini.phase !== 'done') throw err('міні-гра вже йде');
     const why = this.blockedReason(p); if (why) throw err(why);
+    if (!['reaction', 'quiz'].includes(kind)) throw err('яка гра?');
     this.clearTimer('mini-clear');
-    this.mini = { phase: 'wait', by: p.id, at: this.now(), goAt: null, taps: {}, faults: {}, ranking: [] };
+    if (kind === 'quiz') {
+      this.mini = { kind, phase: 'go', by: p.id, at: this.now(), goAt: this.now(), qs: {}, prog: {}, ranking: [], taps: {}, faults: {} };
+      this.setTimer('mini-end', QUIZ_MS, () => this.endMini());
+      const tickQ = () => { if (this.mini && this.mini.kind === 'quiz' && this.mini.phase === 'go') { this.emit(); this.setTimer('mini-tick', 10000, tickQ); } };   // лічильник секунд на ТБ
+      this.setTimer('mini-tick', 10000, tickQ);
+      this.emit(); return this.miniView(p);
+    }
+    this.mini = { kind, phase: 'wait', by: p.id, at: this.now(), goAt: null, taps: {}, faults: {}, ranking: [] };
     this.setTimer('mini-go', 2000 + this.rng.int(0, 3500), () => {
       const m = this.mini; if (!m || m.phase !== 'wait') return;
       m.phase = 'go'; m.goAt = this.now(); this.emit();
@@ -314,16 +325,46 @@ export class Game {
     this.emit();
     return this.miniView(p);
   }
+  /** «Бліц»: у кожного свої питання за віком; відповідь рухає далі, після QUIZ_N — готово. */
+  quizFor(p) {
+    const m = this.mini; if (!m.qs[p.id]) { m.qs[p.id] = Array.from({ length: QUIZ_N }, () => makeQuiz(this.rng, p.age)); m.prog[p.id] = { i: 0, correct: 0, doneAt: null }; }
+    return { qs: m.qs[p.id], pr: m.prog[p.id] };
+  }
+  answerMini(p, answer) {
+    const m = this.mini; if (!m || m.kind !== 'quiz' || m.phase !== 'go') throw err('«Бліц» не йде');
+    const { qs, pr } = this.quizFor(p);
+    if (!pr.doneAt) {
+      if (checkQuiz(qs[pr.i], answer)) pr.correct += 1;
+      pr.i += 1; if (pr.i >= QUIZ_N) { pr.doneAt = this.now(); const wait = QUIZ_MIN_MS - (this.now() - m.at); if (wait > 0) this.setTimer('mini-min', wait, () => this.maybeEndQuiz()); }
+    }
+    if (!this.maybeEndQuiz()) this.emit();
+    return this.miniView(p);
+  }
+  /** Закрити «Бліц», коли минуло QUIZ_MIN_MS і всі, хто почав, готові. */
+  maybeEndQuiz() {
+    const m = this.mini; if (!m || m.kind !== 'quiz' || m.phase !== 'go') return false;
+    const active = Object.values(m.prog).filter(x => x.i > 0);
+    if (this.now() - m.at < QUIZ_MIN_MS || !active.length || !active.every(x => x.doneAt)) return false;
+    this.endMini(); return true;
+  }
   tapMini(p) {
-    const m = this.mini; if (!m || m.phase === 'done') throw err('«Реакція» не йде');
+    const m = this.mini; if (!m || m.kind === 'quiz' || m.phase === 'done') throw err('«Реакція» не йде');
     if (m.faults[p.id] || m.taps[p.id] !== undefined) return this.miniView(p);
     if (m.phase === 'wait') m.faults[p.id] = true; else m.taps[p.id] = this.now() - m.goAt;
     this.emit(); return this.miniView(p);
   }
   endMini() {
     const m = this.mini; if (!m || m.phase === 'done') return;
-    this.clearTimer('mini-go'); this.clearTimer('mini-end');
+    this.clearTimer('mini-go'); this.clearTimer('mini-end'); this.clearTimer('mini-min'); this.clearTimer('mini-tick');
     m.phase = 'done'; m.endAt = this.now();
+    if (m.kind === 'quiz') {
+      m.ranking = Object.entries(m.prog).filter(([pid, x]) => this.players[pid] && x.i > 0).sort((a, b) => b[1].correct - a[1].correct || (a[1].doneAt || Infinity) - (b[1].doneAt || Infinity)).map(([pid, x]) => ({ id: pid, name: this.players[pid].name, correct: x.correct, ms: x.doneAt ? x.doneAt - m.at : null }));
+      for (const r of m.ranking) if (r.correct) { const p = this.players[r.id]; p.stats.smart = (p.stats.smart || 0) + r.correct; this.logDay(r.id, { smart: r.correct }); }
+      if (m.ranking.length && m.ranking[0].correct) { const w = this.players[m.ranking[0].id]; w.gold += MINI_GOLD; w.stats.quiz = (w.stats.quiz || 0) + 1; this.feed(`🧠 Бліц: ${w.name} найрозумніший (${m.ranking[0].correct} з ${QUIZ_N}), +${MINI_GOLD} золота`); }
+      this.store.save('players'); this.emit();
+      this.setTimer('mini-clear', MINI_SHOW_MS, () => { this.mini = null; this.emit(); });
+      return;
+    }
     m.ranking = Object.entries(m.taps).filter(([pid]) => this.players[pid]).sort((a, b) => a[1] - b[1]).map(([pid, ms]) => ({ id: pid, name: this.players[pid].name, ms }));
     if (m.ranking.length) { const w = this.players[m.ranking[0].id]; w.gold += MINI_GOLD; w.stats.reaction = (w.stats.reaction || 0) + 1; this.store.save('players'); this.feed(`⚡ Реакція: ${w.name} найшвидший (${m.ranking[0].ms} мс), +${MINI_GOLD} золота`); }
     this.emit();
@@ -332,7 +373,14 @@ export class Game {
   miniView(p = null) {
     const m = this.mini; if (!m) return null;
     const name = id => this.players[id] ? this.players[id].name : '?';
-    const v = { phase: m.phase, by: name(m.by), at: m.at, goAt: m.goAt, ranking: m.ranking, faults: Object.keys(m.faults).map(name), tapped: Object.keys(m.taps).length };
+    const v = { kind: m.kind || 'reaction', phase: m.phase, by: name(m.by), at: m.at, goAt: m.goAt, ranking: m.ranking, faults: Object.keys(m.faults).map(name), tapped: Object.keys(m.taps).length };
+    if (m.kind === 'quiz') {
+      v.n = QUIZ_N; v.left = Math.max(0, Math.ceil((QUIZ_MS - (this.now() - m.at)) / 1000));
+      v.players = Object.entries(m.prog).filter(([pid]) => this.players[pid]).map(([pid, x]) => ({ name: name(pid), i: x.i, correct: x.correct, done: !!x.doneAt }));
+      if (p && m.phase === 'go') { const { qs, pr } = this.quizFor(p); const q = qs[pr.i]; v.me = { i: pr.i, correct: pr.correct, done: !!pr.doneAt, q: q && !pr.doneAt ? { kind: q.kind, q: q.q, choices: q.choices } : null }; }
+      else if (p) { const pr = m.prog[p.id]; v.me = pr ? { i: pr.i, correct: pr.correct, done: !!pr.doneAt, q: null } : null; }
+      return v;
+    }
     if (p) v.me = { tapped: m.taps[p.id] !== undefined ? m.taps[p.id] : null, fault: !!m.faults[p.id] };
     return v;
   }
