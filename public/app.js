@@ -314,6 +314,17 @@
   }
 
   // ---------- квести ----------
+  function doneHtml(d, parent) {
+    if (!d) return '';
+    var h = '<details class="card done-week"><summary><b>📜 Зроблено за тиждень</b> <span class="small muted">' + (d.total ? d.total + ' ' + plural(d.total, 'справа', 'справи', 'справ') : 'ще нічого') + '</span></summary>';
+    if (!d.days.length) h += '<div class="small muted">Цього тижня ще нічого не зроблено. Перша справа потрапить сюди.</div>';
+    d.days.forEach(function (x) {
+      h += '<div class="dd"><div class="dh"><b>' + (x.today ? 'Сьогодні' : esc(x.name) + ' ' + x.day.slice(8, 10) + '.' + x.day.slice(5, 7)) + '</b><span class="small muted">' + (x.battles ? '⚔️ ' + x.battles + (x.wins ? ' (🏆 ' + x.wins + ')' : '') + ' · ' : '') + x.minutes + ' хв</span></div>' +
+        (x.items.length ? x.items.map(function (i) { return '<span class="chip">' + esc(i.icon) + ' ' + (parent ? esc(i.who) + ': ' : '') + esc(i.name) + '</span>'; }).join('') : '<span class="small muted">без справ</span>') + '</div>';
+    });
+    return h + '</details>';
+  }
+  function plural(n, a, b, c) { var m = n % 10, h = n % 100; return (m === 1 && h !== 11) ? a : (m >= 2 && m <= 4 && (h < 12 || h > 14)) ? b : c; }
   function renderQuests() {
     var me = state.me, h = head();
     if (me.isParent && state.pendingQuests.length) h += '<div class="card warn"><h3>Чекають підтвердження</h3>' + state.pendingQuests.map(function (q) { return '<div class="q"><span class="ic">' + esc(q.quest.icon) + '</span><div class="grow"><b>' + esc(q.name) + '</b>: ' + esc(q.quest.name) + (q.photo ? '<div><a href="' + esc(q.photo) + '" target="_blank"><img class="qimg" src="' + esc(q.photo) + '" alt="фото"></a></div>' : '<div class="small muted">без фото</div>') + '</div><button class="btn-sm btn-green" data-approve="' + q.pid + '|' + q.quest.id + '">✅</button><button class="btn-sm" data-reject="' + q.pid + '|' + q.quest.id + '">✕</button></div>'; }).join('') + '</div>';
@@ -321,6 +332,7 @@
     if (me.isParent && state.pendingCards && state.pendingCards.length) h += '<div class="card warn"><h3>🖍️ Нові карти дітей</h3>' + state.pendingCards.map(function (c) { return '<div class="q">' + (c.image ? '<img class="cimg" src="' + esc(c.image) + '" alt="">' : '<span class="ic">🖍️</span>') + '<div class="grow"><b>' + esc(c.author) + '</b>: «' + esc(c.name) + '» <span class="small muted">' + esc(c.text) + '</span></div><button class="btn-sm btn-green" data-cardok="' + c.id + '">✅</button><button class="btn-sm" data-cardno="' + c.id + '">✕</button></div>'; }).join('') + '</div>';
     if (state.daily && state.daily.length) h += '<div class="card"><h3>📅 Завдання дня</h3>' + state.daily.map(function (t) { return '<div class="q ' + (t.done ? 'done' : '') + '"><span class="ic">' + esc(t.icon) + '</span><div class="grow"><b>' + esc(t.name) + '</b><div class="small muted">' + (t.done ? 'виконано' : t.progress + ' з ' + t.n) + ' · +' + t.gold + ' 🪙, +' + t.xp + ' досвіду</div><div class="bar xp"><i style="width:' + Math.round(100 * Math.min(1, t.progress / t.n)) + '%"></i></div></div><span>' + (t.done ? '✅' : '') + '</span></div>'; }).join('') + '</div>';
     h += '<h3>Справи на сьогодні</h3><div class="small muted">Зробив — сфотографуй результат («📷 Зробив») або натисни ✓ без фото. Батьки підтвердять, і впаде скриня + 10 хвилин гри.</div>';
+    h += doneHtml(state.done, me.isParent);
     h += state.quests.map(function (q) { return '<div class="q ' + (q.state === 'approved' ? 'done' : '') + '"><span class="ic">' + esc(q.icon) + '</span><div class="grow"><b>' + esc(q.name) + '</b><div class="small muted">+' + q.gold + ' 🪙, +' + q.xp + ' досвіду, скриня: ' + esc(RAR[q.chest]) + '</div></div>' + (q.state === 'open' ? '<label class="btn-sm btn-primary qph">📷 Зробив<input type="file" accept="image/*" capture="environment" data-qphoto="' + q.id + '"></label><button class="btn-sm" data-done="' + q.id + '" title="без фото">✓</button>' : q.state === 'pending' ? '<span class="small">⏳ чекає</span>' : '<span>✅</span>') + '</div>'; }).join('');
     return h;
   }

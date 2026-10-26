@@ -809,3 +809,26 @@ test('завдання дня й досягнення для подарунка,
   assert.equal(p.stats.practice, 1); assert.ok(g.results.events.some(e => e.t === 'daily' && e.name === 'Потренуйся на манекені'));
   assert.ok(p.daily.tasks.find(t => t.id === 'practice_1').done);
 });
+
+test('сьогодні зроблено (ТБ) і тиждень справ (телефон)', () => {
+  const g = makeGame();
+  const dad = g.createPlayer({ name: 'Тато', classId: 'warrior', age: 40, pin: '1234', role: 'admin' });
+  assert.equal(g.todayView(), null, 'порожній день = null');
+  const kid = g.createPlayer({ name: 'Малий', classId: 'mage', age: 7, pin: '2222' });
+  assert.equal(g.todayView(), null);
+  assert.equal(g.doneView(kid).total, 0); assert.equal(g.doneView(kid).days.length, 0);
+  g.questDone(kid, 'bed'); g.questApprove(dad, kid.id, 'bed');
+  g.addMinutes(kid, 7);
+  const t = g.todayView();
+  assert.ok(t && t.kids.length === 1 && t.kids[0].name === 'Малий');
+  assert.equal(t.kids[0].quests.length, 1); assert.equal(t.kids[0].minutes, 7);
+  const d = g.doneView(kid);
+  assert.equal(d.total, 1); assert.equal(d.days[0].today, true); assert.equal(d.days[0].items[0].who, 'Малий');
+  assert.equal(g.doneView(dad).days[0].items.length, 1, 'батько бачить справи дітей');
+  // учора: запис у журналі видно на телефоні, але не на ТБ
+  g.history.questLog.push({ day: g.kyiv(g.now() - 86400000).day, pid: kid.id, qid: 'bed', at: g.now() - 86400000 });
+  assert.equal(g.doneView(kid).days.length, 2); assert.equal(g.todayView().kids[0].quests.length, 1);
+  assert.ok(g.tvState().today && g.playerState(kid).done.total === 2);
+  // відновлення старого бекапу без questLog не падає
+  const b = g.backup(); delete b.history.questLog; g.restore(dad, b); assert.ok(Array.isArray(g.history.questLog));
+});
