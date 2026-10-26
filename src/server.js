@@ -10,7 +10,7 @@ import { Store } from './store.js';
 import { Game, err } from './game.js';
 import { Avatars } from './avatar.js';
 
-export const VERSION = '0.3.0';
+export const VERSION = '0.4.0';
 const PUBLIC = new URL('../public/', import.meta.url);
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.ico': 'image/x-icon' };
 
@@ -160,6 +160,7 @@ export function createApp({ dataDir, avatars: avatarsOpt, baseUrl } = {}) {
     if (path === '/lobby/team' && req.method === 'POST') { game.setTeam(need(), body.team); return ok(); }
     if (path === '/battle/move' && req.method === 'POST') { game.move(need(), body); return ok(); }
     if (path === '/season') { need(); return send(200, game.seasonView()); }
+    if (path === '/dm' && req.method === 'POST') { return ok(game.dmAction(parent(), body)); }
 
     // --- квести ---
     if (path === '/quests/done' && req.method === 'POST') { game.questDone(need(), body.questId); return ok(); }

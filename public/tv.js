@@ -27,10 +27,16 @@
     var phase = state.phase;
     if (!prev || prev.phase !== phase) { shownRound = 0; queue = []; roomShown = null; playing = false; stage.removeAttribute('data-next'); }
     if (phase === 'battle' || phase === 'replay') renderBattle(); else if (phase === 'lobby') renderLobby(); else if (phase === 'results') renderResults(); else renderIdle();
+    if (state.announce && (!prev || !prev.announce || prev.announce.at !== state.announce.at)) showAnnounce(state.announce);
     if (state.paused) { overlay.className = 'on'; overlay.innerHTML = '<div class="banner pause"><div class="big">⏸ ПАУЗА</div><div class="sub">' + (state.pauseReason === 'alert' ? 'Тривога. Усі в укриття, бій зачекає.' : 'Батьки поставили гру на паузу') + '</div></div>'; }
     else if (phase !== 'results' && Date.now() > introUntil) overlay.className = '';
   }
   var introUntil = 0;
+  function showAnnounce(a) {
+    var old = document.querySelector('.announce'); if (old) old.remove();
+    var d = document.createElement('div'); d.className = 'announce'; d.innerHTML = '<div class="who">🎩 ' + esc(a.by) + '</div><div class="tx">' + esc(a.text) + '</div>';
+    document.body.appendChild(d); beep(440, 200, 'triangle', 0.07); setTimeout(function () { d.remove(); }, 5000);
+  }
   // ---------- екран спокою: зал трофеїв + QR ----------
   function renderIdle() {
     var h = '<div class="hdr"><div class="t">⚔️ Родинна арена</div><div class="s">' + esc(state.season) + '</div><div class="r">Скануй QR телефоном,<br>щоб зайти в лобі</div></div>';
@@ -46,7 +52,7 @@
   function renderLobby() {
     var l = state.lobby;
     var h = '<div class="hdr"><div class="t">Лобі</div><div class="s">' + esc(state.season) + '</div><div class="r">Скануй QR, щоб приєднатись</div></div>';
-    h += '<div class="lobby"><div class="mode">' + (l.mode === 'duel' ? '⚔️ Дуель <span>· дві команди</span>' : l.dungeon.icon + ' ' + esc(l.dungeon.name) + ' <span>· рівень ' + l.dungeon.level + ' · ' + l.dungeon.rooms.length + ' кімнати + бос</span><div class="s" style="font-size:24px;color:#9fb0c3">' + esc(l.dungeon.text) + '</div>') + '</div>';
+    h += '<div class="lobby"><div class="mode">' + (l.mode === 'duel' ? '⚔️ Дуель <span>· дві команди</span>' : l.dungeon.icon + ' ' + esc(l.dungeon.name) + ' <span>· рівень ' + l.dungeon.level + ' · ' + (l.dungeon.raid ? 'РЕЙД: бос сильнішає з кожним гравцем' : l.dungeon.rooms.length + ' кімнати + бос') + '</span><div class="s" style="font-size:24px;color:#9fb0c3">' + esc(l.dungeon.text) + '</div>') + '</div>';
     h += l.players.map(function (p) { return '<div class="lp ' + (p.ready ? 'ready' : '') + '">' + (l.mode === 'duel' ? '<div class="team">' + (p.team ? '🔴' : '🔵') + '</div>' : '') + '<div class="rd">' + (p.ready ? '✅' : '⏳') + '</div>' + av(p) + '<div class="n">' + esc(p.name) + '</div><div class="c">' + esc(p.className) + ' · ' + p.level + ' рів.</div></div>'; }).join('');
     for (var i = l.players.length; i < 4; i++) h += '<div class="lp empty">вільне місце</div>';
     h += '</div><div class="hint">' + (l.players.every(function (p) { return p.ready; }) ? 'Починаємо!' : 'Натисніть «Готовий» на телефонах') + '</div><div class="qr small"><img src="/qr.svg"></div>';
@@ -65,7 +71,7 @@
   function renderBattle() {
     var b = state.battle;
     var t0 = b.fighters.filter(function (f) { return f.team === 0; }), t1 = b.fighters.filter(function (f) { return f.team === 1; });
-    var title = b.mode === 'duel' ? '⚔️ Дуель' : (b.meta.boss ? '👑 БОС' : '🏰 Кімната ' + b.meta.room + ' з ' + b.meta.rooms);
+    var title = b.mode === 'duel' ? '⚔️ Дуель' : (b.meta.boss ? (b.meta.raid ? '🗿 РЕЙД-БОС' : '👑 БОС') : '🏰 Кімната ' + b.meta.room + ' з ' + b.meta.rooms);
     var h = '<div class="hdr"><div class="t">' + (b.replay ? '📼 ПОВТОР · ' : '') + title + '</div><div class="s">' + esc(state.season) + '</div>' + (b.replay ? '<div class="r">Повтор останнього бою</div>' : '') + '</div>';
     h += '<div class="arena"><div class="team l">' + t0.map(function (f) { return fighterHtml(f, false); }).join('') + '</div>';
     h += '<div class="mid"><div class="round">раунд ' + (b.round + 1) + '</div><div class="timer" id="timer">' + (b.roundEnds ? Math.max(0, Math.round((b.roundEnds - Date.now()) / 1000)) : '…') + '</div><div class="vs">VS</div></div>';
@@ -100,6 +106,7 @@
     var wait = 450, who = esc(e.whoName), by = esc(e.byName);
     switch (e.t) {
       case 'round': say('<b>Раунд ' + e.n + '</b>: усі розкривають ходи!'); wait = 700; break;
+      case 'reinforce': say('🧟 ' + (e.dm ? '<b>Ведучий</b> кличе' : '<b>' + who + '</b> кличе підмогу') + ': ' + esc((e.names || []).join(', ')) + ' ' + esc((e.icons || []).join(''))); beep(200, 300, 'sawtooth', 0.07); wait = 1200; break;
       case 'smart': floatText(e.who, '🧠 ×1.5', 'heal'); say('🧠 <b>' + who + '</b> розв’язав розумну карту: удар у півтора раза сильніший!'); beep(900, 150, 'sine', 0.06); wait = 900; break;
       case 'card': showCard(e); say('🃏 ' + who + ' грає <b>' + esc(e.name) + '</b>'); beep(520, 120, 'triangle'); wait = 1100; break;
       case 'block': flash(e.who, 'blocked'); floatText(e.who, '🛡 БЛОК', 'block'); say('🛡 ' + who + ' заблокував удар ' + by + ' (' + ZONE[e.zone] + ')'); beep(300, 80); break;
@@ -132,7 +139,7 @@
   function renderResults() {
     var r = state.results;
     var win = r.mode === 'duel' || r.won;
-    var h = '<div class="banner ' + (win ? '' : 'lose') + '"><div class="big">' + (r.mode === 'duel' ? '⚔️ Переміг: ' + esc(r.winners.join(', ')) : (r.won ? '🏆 «' + esc(r.dungeon) + '» пройдено!' : '💀 «' + esc(r.dungeon) + '» виявилось сильнішим')) + '</div>';
+    var h = '<div class="banner ' + (win ? '' : 'lose') + '"><div class="big">' + (r.mode === 'duel' ? '⚔️ Переміг: ' + esc(r.winners.join(', ')) : (r.won ? (r.raid ? '🗿 РЕЙД ПРОЙДЕНО! «' + esc(r.dungeon) + '»' : '🏆 «' + esc(r.dungeon) + '» пройдено!') : '💀 «' + esc(r.dungeon) + '» виявилось сильнішим')) + '</div>';
     if (r.mode === 'dungeon') h += '<div class="sub">Вбито ' + r.kills + ' · кожному +' + r.xp + ' досвіду, +' + r.gold + ' золота</div>';
     var loot = (r.loot || []).slice(0, 10);
     h += '<div class="cols">';

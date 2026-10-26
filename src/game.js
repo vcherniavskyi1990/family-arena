@@ -15,7 +15,7 @@ const SEASON_POINTS = { duelWin: 3, duelLoss: 1, dungeonLoss: 1, quest: 1 };
 
 const DEFAULT_SETTINGS = {
   bedtime: '21:30', wakeup: '07:00', limitWeekday: 45, limitWeekend: 90, roundSeconds: ROUND_SECONDS,
-  questsEnabled: true, season: 'Сезон 1: Перші кроки', tz: 'Europe/Kyiv', smartCards: true,
+  questsEnabled: true, season: 'Сезон 1: Перші кроки', tz: 'Europe/Kyiv', smartCards: true, raidAnyDay: false,
 };
 
 export const hashPin = (pin, salt) => createHash('sha256').update(`${salt}:${pin}`).digest('hex');
@@ -31,6 +31,8 @@ export class Game {
     this.history = store.get('history', () => ({ battles: [], legendaries: [], feed: [] }));
     if (!this.history.season) this.history.season = { n: 1, startedAt: this.now(), points: {} };
     if (!this.history.pastSeasons) this.history.pastSeasons = [];
+    if (!this.history.raids) this.history.raids = [];
+    this.announce = null;
     this.replay = null;
     this.lobby = { players: {}, mode: 'dungeon', dungeonId: DUNGEONS[0].id };
     this.battle = null; this.run = null; this.results = null;
@@ -90,6 +92,19 @@ export class Game {
     const o = Object.fromEntries(f.formatToParts(ts).map(x => [x.type, x.value]));
     return { day: `${o.year}-${o.month}-${o.day}`, hm: `${o.hour === '24' ? '00' : o.hour}:${o.minute}`, weekend: o.weekday === 'Sat' || o.weekday === 'Sun' };
   }
+  /** Ключ тижня (понеділок) за Києвом для щотижневих рейдів. */
+  weekKey(ts = this.now()) {
+    const k = this.kyiv(ts); const d = new Date(k.day + 'T12:00:00Z'); const wd = (d.getUTCDay() + 6) % 7; d.setUTCDate(d.getUTCDate() - wd);
+    return d.toISOString().slice(0, 10);
+  }
+  /** Чи можна зараз іти в рейд: вихідні (або дозвіл батьків на будь-який день) і ще не пройдено цього тижня. */
+  raidStatus(dungeonId) {
+    const d = dungeonById[dungeonId]; if (!d || !d.raid) return { raid: false, available: true };
+    const done = this.history.raids.some(r => r.raid === d.id && r.week === this.weekKey() && r.won);
+    if (done) return { raid: true, available: false, reason: 'Цей рейд уже пройдено цього тижня. Новий у понеділок!' };
+    if (!this.kyiv().weekend && !this.settings.raidAnyDay) return { raid: true, available: false, reason: 'Рейд лише у вихідні (батьки можуть дозволити в будь-який день)' };
+    return { raid: true, available: true, minPlayers: d.minPlayers || 2 };
+  }
   limitFor(p) { return this.kyiv().weekend ? this.settings.limitWeekend : this.settings.limitWeekday; }
   minutesToday(p) { const k = this.kyiv(); if (p.playedToday.day !== k.day) { p.playedToday = { day: k.day, minutes: 0 }; } return p.playedToday.minutes; }
   /** Чому гравець не може почати бій зараз (null = може). */
@@ -118,7 +133,7 @@ export class Game {
     if (this.battle) throw err('бій уже йде');
     if (mode && !['dungeon', 'duel'].includes(mode)) throw err('режим');
     if (mode) this.lobby.mode = mode;
-    if (dungeonId) { if (!dungeonById[dungeonId]) throw err('підземелля'); this.lobby.dungeonId = dungeonId; }
+    if (dungeonId) { if (!dungeonById[dungeonId]) throw err('підземелля'); const rs = this.raidStatus(dungeonId); if (!rs.available) throw err(rs.reason); this.lobby.dungeonId = dungeonId; }
     for (const l of Object.values(this.lobby.players)) l.ready = false;
     this.emit();
   }
@@ -129,6 +144,9 @@ export class Game {
     if (this.lobby.mode === 'duel') {
       const t0 = ids.filter(id => this.lobby.players[id].team === 0), t1 = ids.filter(id => this.lobby.players[id].team === 1);
       if (!t0.length || !t1.length) return;
+    } else {
+      const rs = this.raidStatus(this.lobby.dungeonId);
+      if (rs.raid && (!rs.available || ids.length < rs.minPlayers)) return;
     }
     this.startBattle();
   }
@@ -154,10 +172,11 @@ export class Game {
   }
   nextRoom() {
     const r = this.run;
-    const scale = 1 + Math.max(0, r.players.length - 2) * 0.35;
+    const d = dungeonById[r.dungeon];
+    const scale = d.raid ? 1 + Math.max(0, r.players.length - 1) * (d.scalePerPlayer || 0.5) : 1 + Math.max(0, r.players.length - 2) * 0.35;
     const mobs = r.rooms[r.room].map((m, i) => fighterFromMob(m, i, mobById[m].boss ? scale * 1.1 : scale));
     for (const f of r.team) { f.move = null; f.shield = 0; f.buffs = []; f.effects = {}; f.minions = []; if (r.room > 0 && f.alive) f.hp = Math.min(f.maxHp, f.hp + Math.round(f.maxHp * ROOM_HEAL)); if (!f.alive) { f.alive = true; f.hp = Math.round(f.maxHp * 0.5); } }
-    this.battle = createBattle({ teams: [r.team, mobs], seed: this.seed + r.room, mode: 'dungeon', meta: { room: r.room + 1, rooms: r.rooms.length, boss: r.room === r.rooms.length - 1, dungeon: r.dungeon } });
+    this.battle = createBattle({ teams: [r.team, mobs], seed: this.seed + r.room, mode: 'dungeon', meta: { room: r.room + 1, rooms: r.rooms.length, boss: r.room === r.rooms.length - 1, dungeon: r.dungeon, raid: !!d.raid, scale } });
     this.roundEvents = [{ t: 'room', n: r.room + 1, of: r.rooms.length, boss: r.room === r.rooms.length - 1, names: mobs.map(m => m.name) }];
     this.recordFrame();
   }
@@ -237,6 +256,14 @@ export class Game {
         r.room += 1; this.nextRoom(); this.startRound(); return;
       }
       const won = b.winner === 0;
+      const d = dungeonById[r.dungeon];
+      if (d.raid) {
+        this.history.raids.push({ raid: d.id, week: this.weekKey(), won, at: this.now(), players: r.players.map(id => this.players[id].name) });
+        if (won) for (const pid of r.players) {
+          const it = genItem(rng, d.level, rng.chance(d.rewards.legendaryChance) ? 'legendary' : null, d.rewards.minRarity); r.loot.push({ pid, item: it, from: d.name, guaranteed: true });
+          this.players[pid].stats.raids = (this.players[pid].stats.raids || 0) + 1; this.addSeasonPoints(pid, 10);
+        }
+      }
       for (const pid of r.players) {
         const p = this.players[pid]; const f = r.team.find(x => x.id === pid);
         const share = won ? 1 : 0.4;
@@ -252,9 +279,9 @@ export class Game {
         for (const a of checkAchievements(p)) ev.push({ t: 'achievement', who: pid, name: a.name, icon: a.icon, title: a.title });
         this.addMinutes(p, minutes);
       }
-      this.results = { mode: 'dungeon', won, dungeon: dungeonById[r.dungeon].name, xp: Math.round(r.xp / r.players.length), gold: Math.round(r.gold / r.players.length), kills: r.kills.length,
+      this.results = { mode: 'dungeon', won, raid: !!d.raid, dungeon: dungeonById[r.dungeon].name, xp: Math.round(r.xp / r.players.length), gold: Math.round(r.gold / r.players.length), kills: r.kills.length,
         loot: r.loot.map(l => ({ ...l, name: this.players[l.pid].name, cardName: l.card ? cardById[l.card].name : undefined })), events: ev.map(e => ({ ...e, whoName: this.players[e.who] && this.players[e.who].name })), players: r.players.map(id => this.publicPlayer(this.players[id])) };
-      this.feed(won ? `🏆 ${r.players.map(id => this.players[id].name).join(', ')} пройшли «${dungeonById[r.dungeon].name}»` : `💀 «${dungeonById[r.dungeon].name}» виявилось сильнішим`);
+      this.feed(won ? `${d.raid ? '🗿' : '🏆'} ${r.players.map(id => this.players[id].name).join(', ')} пройшли «${dungeonById[r.dungeon].name}»` : `💀 «${dungeonById[r.dungeon].name}» виявилось сильнішим`);
     } else {
       const winners = b.fighters.filter(f => f.team === b.winner).map(f => f.id);
       for (const pid of r.players) {
@@ -336,6 +363,39 @@ export class Game {
     return out;
   }
 
+  // ---------- тато-ведучий: втручання в бій з телефона ----------
+  dmAction(parent, { kind, mobId, playerId, text }) {
+    if (!this.isParent(parent)) throw err('лише батьки', 403);
+    const b = this.battle;
+    if (kind === 'say') {
+      const t = String(text || '').trim().slice(0, 120); if (!t) throw err('порожнє повідомлення');
+      this.announce = { text: t, by: parent.name, at: this.now() }; this.emit(); return { ok: true };
+    }
+    if (!b || b.over) throw err('бій не йде');
+    if (b.mode !== 'dungeon') throw err('ведучий лише в підземеллі');
+    const r = this.run;
+    if (kind === 'spawn') {
+      const m = mobById[mobId]; if (!m || m.boss) throw err('немає такого моба');
+      const scale = b.meta.scale || 1; const f = fighterFromMob(m.id, 200 + b.fighters.length, scale); f.team = 1; b.fighters.push(f);
+      this.roundEvents = (this.roundEvents || []).concat([this.describe({ t: 'reinforce', who: parent.id, names: [f.name], icons: [f.icon], dm: true })]);
+      this.announce = { text: `🎩 Ведучий кличе ${f.name}!`, by: parent.name, at: this.now() };
+    } else if (kind === 'heal') {
+      for (const f of b.fighters) if (f.kind === 'player' && f.alive) f.hp = Math.min(f.maxHp, f.hp + 25);
+      this.announce = { text: '🎩 Ведучий зцілює команду: +25 усім', by: parent.name, at: this.now() };
+    } else if (kind === 'rage') {
+      const boss = b.fighters.find(f => f.kind === 'boss' && f.alive); if (!boss) throw err('боса немає');
+      boss.raged = true; this.announce = { text: `🎩 Ведучий розлютив ${boss.name}!`, by: parent.name, at: this.now() };
+    } else if (kind === 'treasure') {
+      const pid = playerId && r.players.includes(playerId) ? playerId : this.rng.pick(r.players);
+      const it = genItem(this.rng, dungeonById[r.dungeon].level, null, 'rare'); r.loot.push({ pid, item: it, from: 'Ведучий', guaranteed: true });
+      this.announce = { text: `🎩 Скарб від ведучого для ${this.players[pid].name}: ${it.name}`, by: parent.name, at: this.now() };
+    } else throw err('невідома дія ведучого');
+    this.recordFrame();
+    this.emit();
+    return { ok: true };
+  }
+  dmMobs() { return Object.values(mobById).filter(m => !m.boss).map(m => ({ id: m.id, name: m.name, icon: m.icon, level: m.level })); }
+
   // ---------- сезони ----------
   addSeasonPoints(pid, n) { const s = this.history.season; s.points[pid] = (s.points[pid] || 0) + n; }
   seasonView() {
@@ -393,14 +453,15 @@ export class Game {
       fighters: b.fighters.map(publicFighter), lastRound: this.lastRound && this.lastRound.n === b.round ? this.lastRound : null, roomIntro: this.roundEvents && this.roundEvents[0] && this.roundEvents[0].t === 'room' ? this.roundEvents[0] : null };
   }
   lobbyView() {
-    return { mode: this.lobby.mode, dungeonId: this.lobby.dungeonId, dungeon: dungeonById[this.lobby.dungeonId],
+    return { mode: this.lobby.mode, dungeonId: this.lobby.dungeonId, dungeon: dungeonById[this.lobby.dungeonId], raid: this.raidStatus(this.lobby.dungeonId),
+      raids: DUNGEONS.filter(d => d.raid).map(d => ({ id: d.id, name: d.name, icon: d.icon, level: d.level, ...this.raidStatus(d.id) })),
       players: Object.entries(this.lobby.players).map(([id, l]) => ({ ...this.publicPlayer(this.players[id]), ready: l.ready, team: l.team })) };
   }
   tvState() {
     const phase = this.battle ? 'battle' : this.replay ? 'replay' : this.results ? 'results' : Object.keys(this.lobby.players).length ? 'lobby' : 'idle';
     const hm = this.kyiv().hm; const quiet = hm < '07:00' || (hm >= '13:00' && hm < '15:00');
     const sv = this.seasonView();
-    return { phase, season: this.settings.season, seasonN: sv.n, seasonTop: sv.top.slice(0, 5), pastSeasons: sv.past.slice(0, 3), quiet, now: this.now(), lobby: this.lobbyView(), battle: this.battle ? this.battleView() : this.replayView(), results: this.results, paused: this.paused, pauseReason: this.pauseReason,
+    return { phase, season: this.settings.season, seasonN: sv.n, seasonTop: sv.top.slice(0, 5), pastSeasons: sv.past.slice(0, 3), quiet, now: this.now(), announce: this.announce, lobby: this.lobbyView(), battle: this.battle ? this.battleView() : this.replayView(), results: this.results, paused: this.paused, pauseReason: this.pauseReason,
       heroes: this.playerList.map(p => ({ ...this.publicPlayer(p), xp: p.xp, xpNext: xpForLevel(p.level), kills: p.stats.kills, duelWins: p.stats.duelWins, dungeons: p.stats.dungeons, legendaries: p.stats.legendaries, achievements: p.achievements.length })),
       legendaries: this.history.legendaries.slice(0, 5), feed: this.history.feed.slice(0, 8), pendingQuests: this.pendingQuests().length };
   }
@@ -413,6 +474,7 @@ export class Game {
         minutesToday: this.minutesToday(p), limit: this.limitFor(p), blocked: this.blockedReason(p), isParent: this.isParent(p), avatarPending: p.avatarPending || null,
         seasonPoints: this.history.season.points[p.id] || 0, seasonRank: sv.top.findIndex(x => x.id === p.id) + 1 },
       phase: sv.phase, season: { n: sv.n, name: sv.name, top: sv.top.slice(0, 5) }, lobby: this.lobbyView(), inLobby: !!inLobby, results: this.results, paused: this.paused, pauseReason: this.pauseReason,
+      dm: this.isParent(p) && b && b.mode === 'dungeon' && !b.over ? { mobs: this.dmMobs(), players: this.run.players.map(id => this.publicPlayer(this.players[id])) } : null,
       replay: this.replay ? { mode: this.replay.mode, names: this.replay.names } : null, hasReplay: !!(this.history.lastReplay && this.history.lastReplay.frames.length),
       battle: b ? { ...this.battleView(), me: f ? { hand: f.hand.map(id => cardById[id]), mana: f.mana, maxMana: f.maxMana, hp: f.hp, maxHp: f.maxHp, alive: f.alive, move: f.move, shield: f.shield, quiz: f.quiz && !f.move ? { kind: f.quiz.kind, q: f.quiz.q, choices: f.quiz.choices } : null } : null } : null,
       quests: this.settings.questsEnabled ? this.questsFor(p) : [], pendingQuests: this.isParent(p) ? this.pendingQuests() : [],
@@ -422,6 +484,7 @@ export class Game {
     return { classes: CLASSES, cards: CARDS, dungeons: DUNGEONS, quests: QUESTS, achievements: ACHIEVEMENTS, rarities: ITEMS.rarities, slots: ITEMS.slots, zones: ZONES, zoneNames: ZONE_NAMES, roundSeconds: this.settings.roundSeconds };
   }
   allowedCards(p) { return allowedCards(p.class, p.collection); }
+  dungeonList() { return DUNGEONS.map(d => ({ ...d, ...this.raidStatus(d.id) })); }
   updateSettings(patch) { for (const k of Object.keys(DEFAULT_SETTINGS)) if (patch[k] !== undefined) this.settings[k] = patch[k]; this.store.set('settings', this.settings); this.emit(); }
 
   // ---------- таймери й розсилка ----------

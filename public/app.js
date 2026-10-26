@@ -96,7 +96,7 @@
     var pendingN = state.pendingQuests ? state.pendingQuests.length : 0;
     var tabs = [['arena', '⚔️', 'Арена'], ['hero', '🧙', 'Герой'], ['deck', '🃏', 'Колода'], ['quests', '✅', 'Квести'], me.isParent ? ['admin', '👨‍👩‍👦', 'Батьки'] : ['more', '⚙️', 'Ще']];
     var body;
-    if (state.battle && state.battle.me) body = renderBattle();
+    if (state.battle && state.battle.me && !(tab === 'admin' && state.dm)) body = renderBattle();
     else if (tab === 'arena') body = renderArena();
     else if (tab === 'hero') body = renderHero();
     else if (tab === 'deck') body = renderDeck();
@@ -120,10 +120,11 @@
     if (state.battle && !state.battle.replay) return h + '<div class="card">Бій уже йде без тебе. Зачекай, поки закінчиться.</div>' + battleSpectator();
     if (state.replay) h += '<div class="card">📼 На ТБ іде повтор: ' + esc(state.replay.names.join(', ')) + (me.isParent ? ' <button class="btn-sm" id="replay-stop">Зупинити</button>' : '') + '</div>';
     var lob = state.lobby;
-    var dungeons = content.dungeons.map(function (d) { return '<option value="' + d.id + '"' + (lob.dungeonId === d.id ? ' selected' : '') + '>' + d.icon + ' ' + esc(d.name) + ' (рівень ' + d.level + ')</option>'; }).join('');
+    var raidOf = {}; (lob.raids || []).forEach(function (r) { raidOf[r.id] = r; });
+    var dungeons = content.dungeons.map(function (d) { var r = raidOf[d.id]; return '<option value="' + d.id + '"' + (lob.dungeonId === d.id ? ' selected' : '') + (r && !r.available ? ' disabled' : '') + '>' + d.icon + ' ' + esc(d.name) + ' (рівень ' + d.level + ')' + (r && !r.available ? ' 🔒' : '') + '</option>'; }).join('');
     var mine = lob.players.filter(function (p) { return p.id === me.id; })[0];
     h += '<div class="card"><h3>Режим</h3><div class="row"><button class="btn-sm ' + (lob.mode === 'dungeon' ? 'btn-blue' : '') + '" data-mode="dungeon">🏰 Підземелля</button><button class="btn-sm ' + (lob.mode === 'duel' ? 'btn-blue' : '') + '" data-mode="duel">⚔️ Дуель</button></div>' +
-      (lob.mode === 'dungeon' ? '<select id="dungeon">' + dungeons + '</select><div class="small muted">' + esc(lob.dungeon.text) + ' · кімнат: ' + lob.dungeon.rooms.length + ' + бос</div>' : '<div class="small muted">Дві команди. Перемикай команду кнопкою нижче.</div>') + '</div>';
+      (lob.mode === 'dungeon' ? '<select id="dungeon">' + dungeons + '</select><div class="small muted">' + esc(lob.dungeon.text) + ' · кімнат: ' + lob.dungeon.rooms.length + ' + бос</div>' + (lob.raid && lob.raid.raid ? '<div class="card warn" style="margin:8px 0 0">🗿 Рейд: мінімум ' + (lob.raid.minPlayers || 2) + ' гравці, бос сильнішає з кожним. Раз на тиждень.' + (lob.raid.available ? '' : ' ' + esc(lob.raid.reason)) + '</div>' : '') : '<div class="small muted">Дві команди. Перемикай команду кнопкою нижче.</div>') + '</div>';
     h += '<div class="card"><h3>Лобі (' + lob.players.length + ')</h3>' + (lob.players.length ? lob.players.map(function (p) { return '<div class="row" style="padding:4px 0">' + avatarHtml(p) + '<div class="grow"><b>' + esc(p.name) + '</b> <span class="small muted">' + p.level + ' рів.' + (lob.mode === 'duel' ? ' · команда ' + (p.team ? '🔴' : '🔵') : '') + '</span></div><div>' + (p.ready ? '✅' : '⏳') + '</div></div>'; }).join('') : '<div class="muted">Ще нікого. Подивись на ТБ!</div>') + '</div>';
     if (me.blocked) h += '<div class="card warn">🔒 ' + esc(me.blocked) + '</div>';
     else if (!mine) h += '<button class="btn-primary btn-block" id="join">Зайти в лобі</button>';
@@ -145,7 +146,7 @@
   }
   function renderResults() {
     var r = state.results;
-    var h = '<div class="card ' + (r.mode === 'duel' || r.won ? 'ok' : 'warn') + '"><div class="big">' + (r.mode === 'duel' ? '⚔️ Дуель виграв: ' + esc(r.winners.join(', ')) : (r.won ? '🏆 «' + esc(r.dungeon) + '» пройдено!' : '💀 «' + esc(r.dungeon) + '» виявилось сильнішим')) + '</div>' +
+    var h = '<div class="card ' + (r.mode === 'duel' || r.won ? 'ok' : 'warn') + '"><div class="big">' + (r.mode === 'duel' ? '⚔️ Дуель виграв: ' + esc(r.winners.join(', ')) : (r.won ? (r.raid ? '🗿 Рейд пройдено! ' : '🏆 ') + '«' + esc(r.dungeon) + '»' + (r.raid ? '' : ' пройдено!') : '💀 «' + esc(r.dungeon) + '» виявилось сильнішим')) + '</div>' +
       (r.mode === 'dungeon' ? '<div class="muted">Вбито ' + r.kills + ' · кожному +' + r.xp + ' досвіду, +' + r.gold + ' золота</div>' : '') + '</div>';
     var myLoot = (r.loot || []).filter(function (l) { return l.name === state.me.name; });
     if (myLoot.length) h += '<div class="card"><h3>Твій лут</h3>' + myLoot.map(function (l) { return l.item ? itemHtml(l.item) : '<div class="item b-rare"><b class="r-rare">🃏 Нова карта: ' + esc(l.cardName) + '</b></div>'; }).join('') + '</div>';
@@ -196,6 +197,7 @@
       case 'stun': return '💫 ' + who + ' оглушений';
       case 'skip': return '💫 ' + who + ' пропускає удар';
       case 'shield': return '🛡 ' + who + ' щит +' + e.v;
+      case 'reinforce': return '🧟 ' + (e.dm ? 'Ведучий кличе' : who + ' кличе підмогу') + ': ' + esc((e.names || []).join(', '));
       case 'smart': return '🧠 ' + who + ' розв’язав розумну карту: удар ×1.5';
       case 'end': return e.winner === myTeam() ? '🏆 ПЕРЕМОГА!' : '💀 Поразка…';
       default: return null;
@@ -252,14 +254,22 @@
   }
 
   // ---------- батьки ----------
+  function renderDm() {
+    var dm = state.dm;
+    return '<div class="card" style="border-color:#f1c40f"><h3>🎩 Ведучий</h3><div class="small muted">Втручайся в бій, поки діти не бачать. Усе показується на ТБ.</div>' +
+      '<div class="row"><select id="dm-mob" class="grow">' + dm.mobs.map(function (m) { return '<option value="' + m.id + '">' + esc(m.icon) + ' ' + esc(m.name) + ' (' + m.level + ')</option>'; }).join('') + '</select><button class="btn-sm btn-red" data-dm="spawn">🧟 Підмога</button></div>' +
+      '<div class="row"><button class="btn-sm btn-green grow" data-dm="heal">💚 Зцілити +25</button><button class="btn-sm btn-red grow" data-dm="rage">😡 Лють боса</button></div>' +
+      '<div class="row"><select id="dm-player" class="grow">' + dm.players.map(function (p) { return '<option value="' + p.id + '">' + esc(p.name) + '</option>'; }).join('') + '</select><button class="btn-sm btn-primary" data-dm="treasure">🎁 Скарб</button></div>' +
+      '<div class="row"><input id="dm-text" class="grow" placeholder="Слово ведучого на ТБ…" maxlength="120"><button class="btn-sm" data-dm="say">📣</button></div></div>';
+  }
   function renderAdmin() {
-    var h = head() + '<div class="card"><h3>Пауза гри</h3><button class="btn-block ' + (state.paused ? 'btn-green' : 'btn-red') + '" id="pause">' + (state.paused ? '▶️ Зняти паузу' : '⏸ Поставити на паузу (тривога)') + '</button></div>';
+    var h = head() + (state.dm ? renderDm() : (state.me.isParent ? '<div class="card"><div class="row"><input id="dm-text" class="grow" placeholder="Оголошення на ТБ…" maxlength="120"><button class="btn-sm" data-dm="say">📣</button></div></div>' : '')) + '<div class="card"><h3>Пауза гри</h3><button class="btn-block ' + (state.paused ? 'btn-green' : 'btn-red') + '" id="pause">' + (state.paused ? '▶️ Зняти паузу' : '⏸ Поставити на паузу (тривога)') + '</button></div>';
     h += '<div class="card"><h3>На ТБ</h3><button class="btn-block" id="replay" ' + (state.hasReplay && !state.battle ? '' : 'disabled') + '>📼 Повтор останнього бою на ТБ</button></div>';
     h += '<div class="card"><h3>Сезон</h3><div class="small muted">Зараз: ' + esc(state.season.name) + '. Закриття: лідер стає чемпіоном сезону (титул, +100 🪙), очки обнуляються.</div><input id="season-name" placeholder="Назва нового сезону (необов’язково)"><button class="btn-block btn-red" id="season-end">🏁 Закрити сезон</button></div>';
     h += '<div class="card"><h3>Новий гравець</h3>' + playerForm('Додати', true) + '</div>';
     h += '<div class="card"><h3>Гравці</h3>' + (ui.players || []).map(function (p) { return '<div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)">' + avatarHtml(p) + '<div class="grow"><b>' + esc(p.name) + '</b><div class="small muted">' + esc(p.className) + ' · ' + p.level + ' рів. · ' + (p.role === 'kid' ? 'дитина' : 'батьки') + (p.age ? ' · ' + p.age + ' р.' : '') + '</div></div><button class="btn-sm" data-edit="' + p.id + '">✏️</button></div>'; }).join('') + '</div>';
     if (ui.editP) { var p = ui.editP; h += '<div class="card warn"><h3>' + esc(p.name) + '</h3><input id="e-name" value="' + esc(p.name) + '"><input id="e-age" type="number" value="' + (p.age || '') + '" placeholder="Вік"><select id="e-role"><option value="kid" ' + (p.role === 'kid' ? 'selected' : '') + '>Дитина</option><option value="parent" ' + (p.role !== 'kid' ? 'selected' : '') + '>Батьки</option></select><input id="e-pin" type="tel" maxlength="4" placeholder="Новий PIN (порожнє = без змін)"><div class="row"><button class="btn-sm btn-primary" id="e-save">Зберегти</button><button class="btn-sm" id="e-avreset">Скинути аватар</button><button class="btn-sm btn-red" id="e-del">Видалити</button><button class="btn-sm right" id="e-close">✕</button></div></div>'; }
-    if (ui.settings) { var s = ui.settings; h += '<div class="card"><h3>Правила</h3><label class="small muted">Діти грають до</label><input id="s-bed" value="' + esc(s.bedtime) + '"><label class="small muted">і з</label><input id="s-wake" value="' + esc(s.wakeup) + '"><label class="small muted">Хвилин на день, будні</label><input id="s-wd" type="number" value="' + s.limitWeekday + '"><label class="small muted">Хвилин на день, вихідні</label><input id="s-we" type="number" value="' + s.limitWeekend + '"><label class="small muted">Секунд на хід</label><input id="s-round" type="number" value="' + s.roundSeconds + '"><label class="small muted">Назва сезону</label><input id="s-season" value="' + esc(s.season) + '"><label class="row small"><input type="checkbox" id="s-smart" ' + (s.smartCards ? 'checked' : '') + '> 🧠 Розумні карти в бою (математика, англійська)</label><button class="btn-primary btn-block" id="s-save">Зберегти правила</button></div>'; }
+    if (ui.settings) { var s = ui.settings; h += '<div class="card"><h3>Правила</h3><label class="small muted">Діти грають до</label><input id="s-bed" value="' + esc(s.bedtime) + '"><label class="small muted">і з</label><input id="s-wake" value="' + esc(s.wakeup) + '"><label class="small muted">Хвилин на день, будні</label><input id="s-wd" type="number" value="' + s.limitWeekday + '"><label class="small muted">Хвилин на день, вихідні</label><input id="s-we" type="number" value="' + s.limitWeekend + '"><label class="small muted">Секунд на хід</label><input id="s-round" type="number" value="' + s.roundSeconds + '"><label class="small muted">Назва сезону</label><input id="s-season" value="' + esc(s.season) + '"><label class="row small"><input type="checkbox" id="s-smart" ' + (s.smartCards ? 'checked' : '') + '> 🧠 Розумні карти в бою (математика, англійська)</label><label class="row small"><input type="checkbox" id="s-raid" ' + (s.raidAnyDay ? 'checked' : '') + '> 🗿 Рейд дозволено в будь-який день (не лише вихідні)</label><button class="btn-primary btn-block" id="s-save">Зберегти правила</button></div>'; }
     else api('/admin/settings').then(function (s) { ui.settings = s; render(); });
     if (!ui.players) api('/players').then(function (r) { ui.players = r.players; render(); });
     return h + '<button class="btn-block" id="logout">Вийти з акаунта</button>';
@@ -281,6 +291,7 @@
     on('[data-target]', function (el) { ui.move.target = el.dataset.target; render(); });
     on('[data-att]', function (el) { ui.move.attack = el.dataset.att; render(); });
     on('[data-quiz]', function (el) { ui.move.quiz = el.dataset.quiz; render(); });
+    on('[data-dm]', function (el) { var k = el.dataset.dm; var body = { kind: k }; if (k === 'spawn') body.mobId = $('#dm-mob').value; if (k === 'treasure') body.playerId = $('#dm-player').value; if (k === 'say') { body.text = $('#dm-text').value; } act('/dm', body, k === 'say' ? 'На ТБ' : 'Зроблено').then(function () { if (k === 'say') $('#dm-text').value = ''; }); });
     on('#replay-stop', function () { act('/admin/replay', { on: false }); });
     on('#replay', function () { act('/admin/replay', { on: true }, 'Повтор пішов на ТБ'); });
     on('#season-end', function () { if (confirm('Закрити сезон? Лідер стане чемпіоном, очки обнуляться.')) act('/admin/season/end', { name: $('#season-name').value }).then(function (r) { toast(r.season.winner ? '🥇 Чемпіон: ' + r.season.winner : 'Сезон закрито'); ui.settings = null; render(); }); });
@@ -316,7 +327,7 @@
     on('#e-save', function () { var p = ui.editP; act('/admin/players/update', { id: p.id, name: $('#e-name').value, age: $('#e-age').value, role: $('#e-role').value, pin: $('#e-pin').value || undefined }, 'Збережено').then(function () { ui.editP = null; ui.players = null; render(); }); });
     on('#e-avreset', function () { act('/admin/avatar/reset', { playerId: ui.editP.id }, 'Аватар скинуто'); });
     on('#e-del', function () { var pin = prompt('Видалити ' + ui.editP.name + ' назавжди? Введи свій PIN'); if (pin) act('/admin/players/delete', { id: ui.editP.id, pin: pin }, 'Видалено').then(function () { ui.editP = null; ui.players = null; render(); }); });
-    on('#s-save', function () { act('/admin/settings', { bedtime: $('#s-bed').value, wakeup: $('#s-wake').value, limitWeekday: +$('#s-wd').value, limitWeekend: +$('#s-we').value, roundSeconds: +$('#s-round').value, season: $('#s-season').value, smartCards: $('#s-smart').checked }, 'Правила збережено').then(function () { ui.settings = null; }); });
+    on('#s-save', function () { act('/admin/settings', { bedtime: $('#s-bed').value, wakeup: $('#s-wake').value, limitWeekday: +$('#s-wd').value, limitWeekend: +$('#s-we').value, roundSeconds: +$('#s-round').value, season: $('#s-season').value, smartCards: $('#s-smart').checked, raidAnyDay: $('#s-raid').checked }, 'Правила збережено').then(function () { ui.settings = null; }); });
     on('#p-save', function () { act('/me/pin', { oldPin: $('#p-old').value, pin: $('#p-new').value }, 'PIN змінено, увійди знову').then(function () { setTimeout(logout, 800); }); });
     on('#logout', function () { api('/logout', {}).catch(function () { }); logout(); });
     clearInterval(ui.timerId);
