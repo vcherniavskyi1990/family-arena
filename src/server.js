@@ -10,7 +10,7 @@ import { Store } from './store.js';
 import { Game, err } from './game.js';
 import { Avatars } from './avatar.js';
 
-export const VERSION = '0.32.0';
+export const VERSION = '0.33.0';
 const PUBLIC = new URL('../public/', import.meta.url);
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.ico': 'image/x-icon', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' };
 
@@ -217,6 +217,7 @@ export function createApp({ dataDir, avatars: avatarsOpt, baseUrl, alertToken = 
     if (path === '/admin/players/delete' && req.method === 'POST') { const a = parent(); if (!game.checkPin(a, body.pin)) throw err('PIN'); game.deletePlayer(body.id); return ok(); }
     if (path === '/admin/settings' && req.method === 'GET') { parent(); return send(200, game.settings); }
     if (path === '/admin/settings' && req.method === 'POST') { parent(); game.updateSettings(body); return ok(); }
+    if (path === '/admin/goal' && req.method === 'POST') { return ok({ goal: game.setFamilyGoal(parent(), body.goal || null) }); }
     if (path === '/admin/pause' && req.method === 'POST') { parent(); game.setPaused(!!body.on, body.reason || 'manual'); return ok(); }
     if (path === '/admin/season/end' && req.method === 'POST') { return ok({ season: game.endSeason(parent(), body.name) }); }
     if (path === '/admin/replay' && req.method === 'POST') { const p = parent(); if (body.on === false) game.stopReplay(); else game.startReplay(p); return ok(); }
