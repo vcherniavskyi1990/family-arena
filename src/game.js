@@ -39,6 +39,10 @@ const CLOSING_WARN_MIN = 10;
 const MINI_GOLD = 5;   // золото найшвидшому в «Реакції»
 const MINI_TAP_MS = 3000;   // скільки чекаємо натискань після «ТИСНИ!»
 const MINI_SHOW_MS = 8000;   // скільки висять підсумки
+const MEMORY_LEN = 4;   // довжина послідовності в «Пам'яті»
+const MEMORY_STEP_MS = 800;   // показ одного кольору на ТБ
+const MEMORY_INPUT_MS = 20000;   // час на повтор
+const MEMORY_MIN_MS = 5000;   // раніше не закривати
 const QUIZ_N = 5;   // питань у «Бліці»
 const QUIZ_MS = 60000;   // ліміт «Бліцу»
 const QUIZ_MIN_MS = 15000;   // раніше не закривати, щоб усі встигли зайти
@@ -307,13 +311,22 @@ export class Game {
     if (this.battle) throw err('бій уже йде, зачекай');
     if (this.mini && this.mini.phase !== 'done') throw err('міні-гра вже йде');
     const why = this.blockedReason(p); if (why) throw err(why);
-    if (!['reaction', 'quiz'].includes(kind)) throw err('яка гра?');
+    if (!['reaction', 'quiz', 'memory'].includes(kind)) throw err('яка гра?');
     this.clearTimer('mini-clear');
     if (kind === 'quiz') {
       this.mini = { kind, phase: 'go', by: p.id, at: this.now(), goAt: this.now(), qs: {}, prog: {}, ranking: [], taps: {}, faults: {} };
       this.setTimer('mini-end', QUIZ_MS, () => this.endMini());
       const tickQ = () => { if (this.mini && this.mini.kind === 'quiz' && this.mini.phase === 'go') { this.emit(); this.setTimer('mini-tick', 10000, tickQ); } };   // лічильник секунд на ТБ
       this.setTimer('mini-tick', 10000, tickQ);
+      this.emit(); return this.miniView(p);
+    }
+    if (kind === 'memory') {
+      this.mini = { kind, phase: 'wait', by: p.id, at: this.now(), goAt: null, seq: this.memorySeq(), inputs: {}, taps: {}, faults: {}, ranking: [] };
+      this.setTimer('mini-go', MEMORY_LEN * MEMORY_STEP_MS + 1200, () => {
+        const m = this.mini; if (!m || m.phase !== 'wait') return;
+        m.phase = 'go'; m.goAt = this.now(); this.emit();
+        this.setTimer('mini-end', MEMORY_INPUT_MS, () => this.endMini());
+      });
       this.emit(); return this.miniView(p);
     }
     this.mini = { kind, phase: 'wait', by: p.id, at: this.now(), goAt: null, taps: {}, faults: {}, ranking: [] };
@@ -347,8 +360,31 @@ export class Game {
     if (this.now() - m.at < QUIZ_MIN_MS || !active.length || !active.every(x => x.doneAt)) return false;
     this.endMini(); return true;
   }
+  /** Послідовність для «Пам'яті»: без двох однакових кольорів поспіль. */
+  memorySeq() {
+    const seq = [];
+    while (seq.length < MEMORY_LEN) { const c = this.rng.int(0, 3); if (c !== seq[seq.length - 1]) seq.push(c); }
+    return seq;
+  }
+  /** «Пам'ять»: повторити послідовність кольорів з ТБ; не той колір = помилка, повна = час. */
+  pressMini(p, color) {
+    const m = this.mini; if (!m || m.kind !== 'memory' || m.phase !== 'go') throw err('«Пам\'ять» не йде');
+    if (m.faults[p.id] || m.taps[p.id] !== undefined) return this.miniView(p);
+    const c = Number(color); if (!(c >= 0 && c <= 3)) throw err('колір');
+    const inp = m.inputs[p.id] || (m.inputs[p.id] = []); inp.push(c);
+    if (m.seq[inp.length - 1] !== c) m.faults[p.id] = true;
+    else if (inp.length === m.seq.length) { m.taps[p.id] = this.now() - m.goAt; const wait = MEMORY_MIN_MS - (this.now() - m.goAt); if (wait > 0) this.setTimer('mini-min', wait, () => this.maybeEndMemory()); }
+    if (!this.maybeEndMemory()) this.emit();
+    return this.miniView(p);
+  }
+  maybeEndMemory() {
+    const m = this.mini; if (!m || m.kind !== 'memory' || m.phase !== 'go') return false;
+    const active = Object.keys(m.inputs);
+    if (this.now() - m.goAt < MEMORY_MIN_MS || !active.length || !active.every(pid => m.faults[pid] || m.taps[pid] !== undefined)) return false;
+    this.endMini(); return true;
+  }
   tapMini(p) {
-    const m = this.mini; if (!m || m.kind === 'quiz' || m.phase === 'done') throw err('«Реакція» не йде');
+    const m = this.mini; if (!m || m.kind !== 'reaction' || m.phase === 'done') throw err('«Реакція» не йде');
     if (m.faults[p.id] || m.taps[p.id] !== undefined) return this.miniView(p);
     if (m.phase === 'wait') m.faults[p.id] = true; else m.taps[p.id] = this.now() - m.goAt;
     this.emit(); return this.miniView(p);
@@ -367,7 +403,7 @@ export class Game {
     }
     m.ranking = Object.entries(m.taps).filter(([pid]) => this.players[pid]).sort((a, b) => a[1] - b[1]).map(([pid, ms]) => ({ id: pid, name: this.players[pid].name, ms }));
     for (const r of m.ranking) this.players[r.id].stats.minis = (this.players[r.id].stats.minis || 0) + 1;
-    if (m.ranking.length) { const w = this.players[m.ranking[0].id]; w.gold += MINI_GOLD; w.stats.reaction = (w.stats.reaction || 0) + 1; this.feed(`⚡ Реакція: ${w.name} найшвидший (${m.ranking[0].ms} мс), +${MINI_GOLD} золота`); }
+    if (m.ranking.length) { const w = this.players[m.ranking[0].id]; w.gold += MINI_GOLD; if (m.kind === 'memory') { w.stats.memory = (w.stats.memory || 0) + 1; this.feed(`🧩 Пам'ять: ${w.name} найуважніший (${(m.ranking[0].ms / 1000).toFixed(1)} с), +${MINI_GOLD} золота`); } else { w.stats.reaction = (w.stats.reaction || 0) + 1; this.feed(`⚡ Реакція: ${w.name} найшвидший (${m.ranking[0].ms} мс), +${MINI_GOLD} золота`); } }
     this.afterMini(m.ranking.map(r => r.id)); this.store.save('players'); this.emit();
     this.setTimer('mini-clear', MINI_SHOW_MS, () => { this.mini = null; this.emit(); });
   }
@@ -387,7 +423,11 @@ export class Game {
       else if (p) { const pr = m.prog[p.id]; v.me = pr ? { i: pr.i, correct: pr.correct, done: !!pr.doneAt, q: null } : null; }
       return v;
     }
-    if (p) v.me = { tapped: m.taps[p.id] !== undefined ? m.taps[p.id] : null, fault: !!m.faults[p.id] };
+    if (m.kind === 'memory') {
+      v.len = MEMORY_LEN; v.step = MEMORY_STEP_MS; if (!p || m.phase === 'done') v.seq = m.seq;   // телефон послідовності не бачить, поки гра йде
+      v.players = Object.keys(m.inputs).filter(pid => this.players[pid]).map(pid => ({ name: name(pid), pressed: m.inputs[pid].length, done: m.taps[pid] !== undefined, fault: !!m.faults[pid] }));
+    }
+    if (p) v.me = { tapped: m.taps[p.id] !== undefined ? m.taps[p.id] : null, fault: !!m.faults[p.id], pressed: m.kind === 'memory' && m.inputs[p.id] ? m.inputs[p.id].length : 0 };
     return v;
   }
   // ---------- виклик на дуель: з телефона братові, той приймає на своєму ----------

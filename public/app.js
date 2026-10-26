@@ -136,7 +136,7 @@
     if (state.tournament && !state.battle) h += tournamentHtml(state.tournament);
     if (state.battle && !state.battle.replay) return h + '<div class="card">Бій уже йде без тебе. Зачекай, поки закінчиться.</div>' + battleSpectator();
     if (state.replay) h += '<div class="card">📼 На ТБ іде повтор: ' + esc(state.replay.names.join(', ')) + (me.isParent ? ' <button class="btn-sm" id="replay-stop">Зупинити</button>' : '') + '</div>';
-    if (!me.blocked && !state.battle) h += '<div class="card mini"><h3>Міні-ігри для всіх, хто з телефоном</h3><div class="row"><div class="grow"><b>⚡ Реакція</b><div class="small muted">ТБ скаже «ТИСНИ!», хто швидший — +5 🪙</div></div><button class="btn-sm btn-primary" id="mini-start">Грати</button></div><div class="row" style="margin-top:8px"><div class="grow"><b>🧠 Бліц</b><div class="small muted">5 прикладів чи слів за віком, хто більше й швидше — +5 🪙, усе йде в розумні відповіді</div></div><button class="btn-sm btn-primary" id="quiz-start">Грати</button></div></div>';
+    if (!me.blocked && !state.battle) h += '<div class="card mini"><h3>Міні-ігри для всіх, хто з телефоном</h3><div class="row"><div class="grow"><b>⚡ Реакція</b><div class="small muted">ТБ скаже «ТИСНИ!», хто швидший — +5 🪙</div></div><button class="btn-sm btn-primary" id="mini-start">Грати</button></div><div class="row" style="margin-top:8px"><div class="grow"><b>🧩 Пам\'ять</b><div class="small muted">ТБ показує 4 кольори, повтори на телефоні швидше за всіх — +5 🪙</div></div><button class="btn-sm btn-primary" id="memory-start">Грати</button></div><div class="row" style="margin-top:8px"><div class="grow"><b>🧠 Бліц</b><div class="small muted">5 прикладів чи слів за віком, хто більше й швидше — +5 🪙, усе йде в розумні відповіді</div></div><button class="btn-sm btn-primary" id="quiz-start">Грати</button></div></div>';
     h += worldBossHtml(); h += goalHtml(); h += giftHtml();
     var lob = state.lobby;
     var raidOf = {}; (lob.raids || []).forEach(function (r) { raidOf[r.id] = r; });
@@ -186,8 +186,15 @@
     if (!c.targets.length) return '';
     return '<div class="card chal"><h3>⚔️ Кинути виклик</h3><div class="small muted">Телефон суперника задзижчить, ТБ оголосить. Прийняв — обоє вже в лобі дуелі.</div><div class="row wrap">' + c.targets.map(function (t) { return '<button class="btn-sm" data-to="' + esc(t.id) + '">' + esc(t.icon) + ' ' + esc(t.name) + '</button>'; }).join('') + '</div></div>';
   }
+  var MEM_COLORS = ['#e74c3c', '#2ecc71', '#3498db', '#f1c40f'], MEM_NAMES = ['🔴', '🟢', '🔵', '🟡'];
   function miniHtml(m) {
     var me = m.me || {};
+    if (m.kind === 'memory') {
+      if (m.phase === 'done') return '<div class="card mini"><h3>🧩 Пам\'ять: підсумки</h3><div class="row" style="margin-bottom:8px">' + (m.seq || []).map(function (c) { return '<span class="mpad small-pad" style="background:' + MEM_COLORS[c] + '"></span>'; }).join('') + '</div>' + (m.ranking.length ? m.ranking.map(function (r, i) { return '<div class="q"><span class="ic">' + (['🥇', '🥈', '🥉'][i] || (i + 1)) + '</span><div class="grow"><b>' + esc(r.name) + '</b></div><b>' + (r.ms / 1000).toFixed(1) + ' с</b></div>'; }).join('') : '<div class="muted">Ніхто не повторив 😅</div>') + (m.faults.length ? '<div class="small muted">Помилились: ' + esc(m.faults.join(', ')) + '</div>' : '') + (state.me.blocked ? '' : '<button class="btn-block btn-primary" id="memory-start" style="margin-top:8px">🧩 Ще раз</button>') + '</div>';
+      var pads = '<div class="mpads">' + MEM_COLORS.map(function (c, i) { return '<button class="mpad" data-c="' + i + '" style="background:' + c + '" ' + (m.phase !== 'go' || me.fault || me.tapped !== null ? 'disabled' : '') + '>' + MEM_NAMES[i] + '</button>'; }).join('') + '</div>';
+      var st = m.phase === 'wait' ? '<div class="big">👀 Дивись на ТБ і запам\'ятовуй</div>' : me.fault ? '<div class="big">😅 Не той колір</div><div class="small muted">Наступного разу вийде</div>' : me.tapped !== null ? '<div class="big">✅ ' + (me.tapped / 1000).toFixed(1) + ' с</div><div class="small muted">Чекаємо інших…</div>' : '<div class="big">Повтори!</div><div class="small muted">' + me.pressed + ' з ' + m.len + '</div>';
+      return '<div class="card mini"><h3>🧩 Пам\'ять · запустив ' + esc(m.by) + '</h3>' + st + pads + '</div>';
+    }
     if (m.kind === 'quiz') {
       if (m.phase === 'done') return '<div class="card mini"><h3>🧠 Бліц: підсумки</h3>' + (m.ranking.length ? m.ranking.map(function (r, i) { return '<div class="q"><span class="ic">' + (['🥇', '🥈', '🥉'][i] || (i + 1)) + '</span><div class="grow"><b>' + esc(r.name) + '</b></div><b>✅ ' + r.correct + ' з ' + m.n + (r.ms !== null ? ' · ' + Math.round(r.ms / 1000) + ' с' : '') + '</b></div>'; }).join('') : '<div class="muted">Ніхто не відповів 😅</div>') + (state.me.blocked ? '' : '<button class="btn-block btn-primary" id="quiz-start" style="margin-top:8px">🧠 Ще раз</button>') + '</div>';
       var hdr = '<div class="card mini"><h3>🧠 Бліц · запустив ' + esc(m.by) + ' · ще ' + m.left + ' с</h3>';
@@ -465,6 +472,8 @@
     var rs = $('#restore'); if (rs) rs.onchange = function (ev) { var f = ev.target.files[0]; if (!f) return; var pin = prompt('PIN батьків, щоб відновити дані з «' + f.name + '». Поточні дані буде замінено.'); if (!pin) return; var rd = new FileReader(); rd.onload = function () { var data; try { data = JSON.parse(rd.result); } catch (e) { toast('Це не JSON-файл', 3000); return; } act('/admin/restore', { pin: pin, data: data }, '💾 Відновлено, увійди знову'); }; rd.readAsText(f); };
     on('#mini-start', function () { act('/me/mini/start', { kind: 'reaction' }); });
     on('#quiz-start', function () { act('/me/mini/start', { kind: 'quiz' }); });
+    on('#memory-start', function () { act('/me/mini/start', { kind: 'memory' }); });
+    on('[data-c]', function (el) { act('/me/mini/press', { color: +el.dataset.c }); });
     on('[data-a]', function (el) { act('/me/mini/answer', { answer: el.dataset.a }); });
     on('#mini-tap', function () { api('/me/mini/tap', {}).catch(function () {}); });
     on('[data-to]', function (el) { act('/me/challenge', { to: el.dataset.to }, '⚔️ Виклик надіслано!'); });

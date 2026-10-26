@@ -61,8 +61,22 @@
   }
   // ---------- церемонія закриття сезону ----------
   var ceremonyTimer = null;
+  var MEM_COLORS = ['#e74c3c', '#2ecc71', '#3498db', '#f1c40f'], memTimers = [];
   function showMini(m, pm) {
     var h;
+    if (m.kind === 'memory') {
+      var pads = '<div class="mpads">' + MEM_COLORS.map(function (c, i) { return '<div class="mpad" id="mpad' + i + '" style="background:' + c + '"></div>'; }).join('') + '</div>';
+      if (m.phase === 'done') h = '<div class="banner mini done"><div class="big">🧩 Пам’ять: хто найуважніший</div><div class="mseq">' + (m.seq || []).map(function (c) { return '<span style="background:' + MEM_COLORS[c] + '"></span>'; }).join('') + '</div>' + (m.ranking.length ? '<div class="rank">' + m.ranking.map(function (r, i) { return '<div><span class="pl">' + (['🥇', '🥈', '🥉'][i] || (i + 1)) + '</span> <b>' + esc(r.name) + '</b><span class="ms">' + (r.ms / 1000).toFixed(1) + ' с</span></div>'; }).join('') + '</div>' : '<div class="sub">Ніхто не повторив 😅</div>') + (m.faults.length ? '<div class="sub">Помилились: ' + esc(m.faults.join(', ')) + '</div>' : '') + '</div>';
+      else if (m.phase === 'go') h = '<div class="banner mini memgo"><div class="big">🧩 ПОВТОРИ на телефоні!</div>' + pads + '<div class="sub">' + (m.players.length ? m.players.map(function (p) { return esc(p.name) + ': ' + (p.fault ? '😅' : p.done ? '✅' : p.pressed + '/' + m.len); }).join(' · ') : 'чекаємо…') + '</div></div>';
+      else h = '<div class="banner mini memwait"><div class="big">🧩 ПАМ’ЯТЬ · запам’ятай ' + m.len + ' кольори</div>' + pads + '<div class="sub">Запустив ' + esc(m.by) + '. Повторювати на телефоні, коли ТБ скаже</div></div>';
+      overlay.innerHTML = h; overlay.className = 'on'; introUntil = Date.now() + 2000;
+      if (m.phase === 'wait' && (!pm || pm.phase !== 'wait' || pm.at !== m.at)) {
+        memTimers.forEach(clearTimeout); memTimers = [];
+        (m.seq || []).forEach(function (c, i) { memTimers.push(setTimeout(function () { var el = document.getElementById('mpad' + c); if (el) { el.className = 'mpad lit'; beep(330 + c * 110, 250, 'sine', 0.06); setTimeout(function () { el.className = 'mpad'; }, m.step - 250); } }, 600 + i * m.step)); });
+      }
+      if (m.phase === 'done' && (!pm || pm.phase !== 'done')) { beep(523, 120, 'triangle', 0.08); setTimeout(function () { beep(784, 200, 'triangle', 0.08); }, 150); }
+      return;
+    }
     if (m.kind === 'quiz') {
       if (m.phase === 'done') h = '<div class="banner mini done"><div class="big">🧠 Бліц: хто найрозумніший</div>' + (m.ranking.length ? '<div class="rank">' + m.ranking.map(function (r, i) { return '<div><span class="pl">' + (['🥇', '🥈', '🥉'][i] || (i + 1)) + '</span> <b>' + esc(r.name) + '</b><span class="ms">✅ ' + r.correct + ' з ' + m.n + (r.ms !== null ? ' · ' + Math.round(r.ms / 1000) + ' с' : '') + '</span></div>'; }).join('') + '</div>' : '<div class="sub">Ніхто не відповів 😅</div>') + '</div>';
       else h = '<div class="banner mini quiz"><div class="big">🧠 БЛІЦ · ' + m.n + ' питань</div><div class="sub">Запустив ' + esc(m.by) + '. Питання на телефонах, у кожного свої за віком · ще ' + m.left + ' с</div><div class="rank">' + (m.players.length ? m.players.map(function (p) { return '<div><b>' + esc(p.name) + '</b><span class="ms">' + (p.done ? '✅ готово · ' : '') + p.i + '/' + m.n + ' · правильних ' + p.correct + '</span></div>'; }).join('') : '<div class="sub">Чекаємо перших відповідей…</div>') + '</div></div>';
