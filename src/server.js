@@ -10,7 +10,7 @@ import { Store } from './store.js';
 import { Game, err } from './game.js';
 import { Avatars } from './avatar.js';
 
-export const VERSION = '0.26.0';
+export const VERSION = '0.27.0';
 const PUBLIC = new URL('../public/', import.meta.url);
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.ico': 'image/x-icon', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' };
 
@@ -146,6 +146,7 @@ export function createApp({ dataDir, avatars: avatarsOpt, baseUrl, alertToken = 
     // --- гравець ---
     if (path === '/me') return send(200, game.playerState(need()));
     if (path === '/logout' && req.method === 'POST') { game.logout(token); return ok(); }
+    if (path === '/me/deck/auto' && req.method === 'POST') { return ok({ deck: game.autoDeck(need()) }); }
     if (path === '/me/deck' && req.method === 'PUT') { game.setDeck(need(), body.deck); return ok(); }
     if (path === '/me/cards') return send(200, { cards: game.allowedCards(need()) });
     if (path === '/me/equip' && req.method === 'POST') { game.equip(need(), body.itemId); return ok(); }

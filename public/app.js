@@ -300,7 +300,7 @@
     if (!ui.deck) ui.deck = me.deck.slice();
     if (!ui.allowed) { api('/me/cards').then(function (r) { ui.allowed = r.cards; render(); }); return head() + '<div class="muted">Завантажую карти…</div>'; }
     var count = {}; ui.deck.forEach(function (id) { count[id] = (count[id] || 0) + 1; });
-    var h = head() + '<div class="row"><b>Колода: ' + ui.deck.length + '/20</b><button class="btn-sm btn-primary right" id="savedeck" ' + (ui.deck.length === 20 ? '' : 'disabled') + '>Зберегти</button><button class="btn-sm" id="resetdeck">Скинути</button></div><div class="small muted">Тисни на карту: + в колоду, до 2 однакових. Рідкісні карти відкриваються з босів.</div>';
+    var h = head() + '<div class="row"><b>Колода: ' + ui.deck.length + '/20</b><button class="btn-sm btn-primary right" id="savedeck" ' + (ui.deck.length === 20 ? '' : 'disabled') + '>Зберегти</button><button class="btn-sm" id="resetdeck">Скинути</button></div><div class="row" style="margin:6px 0"><button class="btn-sm btn-blue" id="autodeck">✨ Зібрати за мене</button><span class="small muted">найкращі карти зі знайдених, з розумною кривою мани</span></div><div class="small muted">Тисни на карту: + в колоду, до 2 однакових. Рідкісні карти відкриваються з босів.</div>';
     h += '<div class="deckgrid">' + ui.allowed.map(function (c) { var n = count[c.id] || 0; return '<div class="dcard ' + (n ? 'in' : '') + '" data-dc="' + c.id + '"><div>' + (c.image ? '<img class="cimg" src="' + esc(c.image) + '" alt="">' : esc(c.icon)) + ' <b class="r-' + c.rarity + '">' + esc(c.name) + '</b> <span class="muted">(' + c.cost + ')</span></div><div class="muted">' + esc(c.text) + '</div><div>' + (n ? '✅ ×' + n : '') + '</div></div>'; }).join('') + '</div>';
     h += customCardsHtml();
     return h;
@@ -441,6 +441,7 @@
     on('[data-dc]', function (el) { var id = el.dataset.dc, n = ui.deck.filter(function (x) { return x === id; }).length; if (n >= 2) ui.deck = ui.deck.filter(function (x) { return x !== id; }); else if (ui.deck.length < 20) ui.deck.push(id); else toast('Уже 20 карт, прибери якусь'); render(); });
     on('#savedeck', function () { act('/me/deck', { deck: ui.deck }, 'Колоду збережено').catch(function () { }); });
     on('#resetdeck', function () { ui.deck = state.me.deck.slice(); render(); });
+    on('#autodeck', function () { act('/me/deck/auto', {}, '✨ Колоду зібрано й збережено').then(function (r) { ui.deck = r.deck.slice(); render(); }); });
     on('[data-cardok]', function (el) { act('/admin/card/approve', { id: el.dataset.cardok, approve: true }, 'Карта в грі!'); });
     on('[data-cardno]', function (el) { act('/admin/card/approve', { id: el.dataset.cardno, approve: false }, 'Відхилено'); });
     on('#cc-go', function (el) {
