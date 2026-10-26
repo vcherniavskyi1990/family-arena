@@ -147,7 +147,7 @@
     var hp = Math.max(0, Math.round(100 * f.hp / f.maxHp));
     return '<div class="f ' + (f.alive ? '' : 'dead') + (f.kind === 'boss' ? ' boss' : '') + (f.raged ? ' rage' : '') + '" id="f-' + cssId(f.id) + '">' + av(f) +
       '<div class="n">' + esc(f.name) + (f.kind === 'boss' ? ' 👑' : '') + '</div>' +
-      '<div class="tags">' + (f.level ? f.level + ' рів. ' : '') + (f.shield ? '🛡' + f.shield + ' ' : '') + (f.poison ? '☠️ ' : '') + (f.stunned ? '💫 ' : '') + (f.buff > 0 ? '💪 ' : '') + (f.raged ? '😡 ЛЮТЬ ' : '') + (f.minions.length ? '<span class="minions">' + f.minions.map(function (m) { return m.icon; }).join('') + '</span>' : '') + (f.kind === 'player' && f.alive ? (f.ready ? ' ✅' : ' ⏳') : '') + '</div>' +
+      '<div class="tags">' + (f.level ? f.level + ' рів. ' : '') + (f.shield ? '🛡' + f.shield + ' ' : '') + (f.poison ? '☠️ ' : '') + (f.stunned ? '💫 ' : '') + (f.buff > 0 ? '💪 ' : '') + (f.raged ? '😡 ЛЮТЬ ' : '') + (f.fora ? '🤝 +' + f.fora + '% ' : '') + (f.secondWind ? '💨 ' : '') + (f.minions.length ? '<span class="minions">' + f.minions.map(function (m) { return m.icon; }).join('') + '</span>' : '') + (f.kind === 'player' && f.alive ? (f.ready ? ' ✅' : ' ⏳') : '') + '</div>' +
       '<div class="bar ' + (f.team ? 'red' : '') + '"><i style="width:' + hp + '%"></i><b>' + f.hp + ' / ' + f.maxHp + '</b></div>' + (f.maxMana ? '<div class="bar mana"><i style="width:' + Math.round(100 * f.mana / f.maxMana) + '%"></i></div>' : '') + '</div>';
   }
   function cssId(s) { return s.replace(/[^a-zA-Z0-9_-]/g, '_'); }

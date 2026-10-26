@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { makeRng } from './engine/rng.js';
 import { VERSION_DATA } from './version.js';
 import { statSync } from 'node:fs';
-import { createBattle, fighterFromPlayer, fighterFromMob, submitMove, resolveRound, publicFighter, alive, enemiesOf, MAX_CARDS_PER_TURN } from './engine/combat.js';
+import { createBattle, applyFora, fighterFromPlayer, fighterFromMob, submitMove, resolveRound, publicFighter, alive, enemiesOf, MAX_CARDS_PER_TURN } from './engine/combat.js';
 import { newPlayer, addXp, xpForLevel, equipmentBonus, genItem, genCard, equip, unequip, craft, checkAchievements, setDeck, autoDeck, sellPrice, genPet, grantPet, petView, petOf, activePetIcon } from './engine/progress.js';
 import { makeQuiz, checkQuiz } from './engine/quiz.js';
 import { CLASSES, CARDS, DUNGEONS, QUESTS, ACHIEVEMENTS, DAILY, FAMILY, WORLDBOSS, PETS, CAMPAIGN, COSMETICS, MUTATORS, ITEMS, petById, ZONES, ZONE_NAMES, classById, dungeonById, mobById, questById, cardById, starterDeck, allowedCards } from './engine/content.js';
@@ -547,8 +547,8 @@ export class Game {
     const fighters = (list) => list.map(id => { const p = this.players[id]; return fighterFromPlayer({ ...p, bonus: equipmentBonus(p), icon: this.publicPlayer(p).icon, pet: activePetIcon(p), cry: this.publicPlayer(p).cry }, this.rng); });
     this.seed = (this.seed * 7919 + 13) % 2147483647; this.rng = makeRng(this.seed);
     this.run = { mode: 'duel', players: [m.a, m.b], tournament: t.current, startedAt: this.now(), frames: [] };
-    this.battle = createBattle({ teams: [fighters([m.a]), fighters([m.b])], seed: this.seed, mode: 'duel' });
-    this.roundEvents = []; this.recordFrame();
+    this.battle = createBattle({ teams: this.duelTeams(fighters([m.a]), fighters([m.b])), seed: this.seed, mode: 'duel' });
+    this.roundEvents = []; this.recordFrame(); this.feedFora();
     this.lobby.players = {};
     this.startRound();
   }
@@ -588,9 +588,9 @@ export class Game {
     if (this.lobby.mode === 'duel') {
       const t0 = ids.filter(id => this.lobby.players[id].team === 0), t1 = ids.filter(id => this.lobby.players[id].team === 1);
       this.run = { mode: 'duel', players: ids, startedAt: this.now(), frames: [] };
-      this.battle = createBattle({ teams: [fighters(t0), fighters(t1)], seed: this.seed, mode: 'duel' });
+      this.battle = createBattle({ teams: this.duelTeams(fighters(t0), fighters(t1)), seed: this.seed, mode: 'duel' });
       this.roundEvents = [];
-      this.recordFrame();
+      this.recordFrame(); this.feedFora();
     } else {
       const ch = this.lobby.mode === 'campaign' ? this.campaignChapter() : null;
       const d = dungeonById[ch ? ch.dungeon : this.lobby.mode === 'practice' ? 'practice' : this.lobby.dungeonId];
@@ -601,6 +601,17 @@ export class Game {
     this.lobby.players = {};
     this.feed(this.run.mode === 'duel' ? `Дуель: ${this.run.players.map(id => this.players[id].name).join(' проти ')}` : `${ids.map(id => this.players[id].name).join(', ')}: у «${dungeonById[this.run.dungeon].name}»`);
     this.startRound();
+  }
+  /** Фора в дуелі (слабшій команді) і «друге дихання» (3 поразки поспіль). */
+  duelTeams(t0, t1) {
+    const losses = {}; for (const f of [...t0, ...t1]) losses[f.id] = this.players[f.id].lossStreak || 0;
+    return applyFora([t0, t1], losses);
+  }
+  feedFora() {
+    for (const f of this.battle.fighters) {
+      if (f.fora) this.feed(`🤝 Фора: ${f.name} +${f.fora} % здоров’я`);
+      if (f.secondWind) this.feed(`💨 Друге дихання: ${f.name} +20 % здоров’я і сили`);
+    }
   }
   nextRoom() {
     const r = this.run;
@@ -750,7 +761,7 @@ export class Game {
       const winners = b.fighters.filter(f => f.team === b.winner).map(f => f.id);
       for (const pid of r.players) {
         const p = this.players[pid]; const f = b.fighters.find(x => x.id === pid); const won = winners.includes(pid);
-        p.stats.duels += 1; if (won) p.stats.duelWins += 1;
+        p.stats.duels += 1; if (won) p.stats.duelWins += 1; p.lossStreak = won ? 0 : (p.lossStreak || 0) + 1;
         this.addSeasonPoints(pid, won ? SEASON_POINTS.duelWin : SEASON_POINTS.duelLoss);
         p.stats.crits += f.stats.crits; p.stats.blocks += f.stats.blocks; p.stats.heals += f.stats.heals;
         ev.push(...addXp(p, won ? 40 : 15)); p.gold += won ? 12 : 4;
