@@ -373,8 +373,11 @@ test('друзі в гостях: герой на вечір, без очок с
   let guard = 0; while (g.battle && guard++ < 400) g.fire('round');
   assert.ok(g.history.battles[0].players.includes(gst.id), 'гість бився');
   g.expireGuests(); assert.ok(g.players[gst.id], 'того ж дня лишається');
+  const gm = g.createCustomMob(gst, { name: 'Гостьомонстр', str: 4, hp: 3, trick: 3 }); g.approveCustomMob(dad, gm.id, true);
+  assert.equal(g.customMobs().length, 1);
   g.advance(24 * 3600 * 1000); g.tick();
   assert.ok(!g.players[gst.id], 'наступного дня пішов');
+  assert.equal(g.customMobs().length, 0, 'монстр гостя пішов разом із ним');
   assert.throws(() => { for (let i = 0; i < 4; i++) g.createGuest(dad, { name: 'Гість' + i }); }, /не більше/);
 });
 
@@ -1159,7 +1162,7 @@ test('фора в дуелі слабшому й «друге дихання» �
   assert.ok(fb.secondWind && !fa.secondWind);
   assert.ok(fb.maxHp > fa.maxHp, 'слабший має більше здоров’я за рахунок фори');
   const pub = g.tvState().battle.fighters.find(f => f.id === b.id);
-  assert.equal(pub.fora, 50); assert.equal(pub.secondWind, true);
+  assert.equal(pub.fora, 50); assert.equal(pub.secondWind, 20);
   assert.ok(g.feedView ? true : true);
   let guard = 0;
   while (g.battle && guard++ < 200) { g.move(a, { attack: 'head', blocks: ['chest', 'belt'], cards: [] }); if (g.battle && !g.battle.over) g.fire('round'); if (g.battle) g.fire('round'); }
@@ -1261,3 +1264,21 @@ test('повернення після паузи: подарунок, збере
   g.updateSettings({ freeze: false }); assert.equal(g.streakView(g.players[a.id]).days, d0, 'після розморозки серія ціла');
   g.touchStreak(g.players[a.id]); assert.equal(g.streakView(g.players[a.id]).days, d0 + 1);
 });
+
+test('«друге дихання» і в підземеллі: після 3 поразок +20 %, після 6 — +40 %, перемога скидає', () => {
+  const g = makeGame();
+  const dad = g.createPlayer({ name: 'Тато', classId: 'warrior', role: 'parent', pin: '0000' });
+  const a = g.createPlayer({ name: 'Віктор', classId: 'archer', age: 10, pin: '1111' });
+  const run = () => { g.setMode(dad, { mode: 'dungeon', dungeonId: 'kitchen_caves' }); g.join(dad); g.join(a); g.ready(dad, true); g.ready(a, true); const fa = g.battle.fighters.find(f => f.id === a.id); const sw = fa.secondWind || 0; let guard = 0; while (g.battle && guard++ < 400) g.fire('round'); g.fire('results'); return sw; };
+  assert.equal(run(), 0, 'спочатку без допомоги');
+  g.players[a.id].dungeonLosses = 3; g.players[dad.id].dungeonLosses = 6;
+  g.setMode(dad, { mode: 'dungeon', dungeonId: 'kitchen_caves' }); g.join(dad); g.join(a); g.ready(dad, true); g.ready(a, true);
+  const fa = g.battle.fighters.find(f => f.id === a.id), fd = g.battle.fighters.find(f => f.id === dad.id);
+  assert.equal(fa.secondWind, 20); assert.equal(fd.secondWind, 40, 'кожні 3 поразки ще +20 %');
+  assert.ok(!fa.fora && !fd.fora, 'фори за рівнем у підземеллі немає');
+  assert.ok(g.history.feed.some(t => /Друге дихання: Тато \+40 %/.test(t.text)));
+  let guard = 0; while (g.battle && guard++ < 400) g.fire('round');
+  const won = g.results.won; g.fire('results');
+  assert.equal(g.players[a.id].dungeonLosses, won ? 0 : 4);
+});
+
