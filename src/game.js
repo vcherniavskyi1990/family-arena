@@ -110,7 +110,8 @@ export class Game {
     for (const m of this.history.customMobs) if (m.approved) this.registerMob(m);
     if (!this.history.customDungeons) this.history.customDungeons = [];   // майстерня підземель: {id, name, icon, text, rooms, boss, level, owner, author, approved, runs, wins}
     for (const d of this.history.customDungeons) if (d.approved) this.registerDungeon(d);
-    this.announce = null;
+    this._announce = null;
+    this.voiceN = 0; this.voice = [];   // черга для голосу ведучого (пульт забирає GET /api/voice): {n, at, text}
     this.party = null;   // «Вечір ігор»: {by, i, points:{pid: n}, phase: run|done, ranking}
     this.mini = null;   // міні-гра «Реакція»: {phase: wait|go|done, by, at, goAt, taps:{pid: ms}, faults:{pid: true}, ranking}
     this.challenges = [];   // виклики на дуель (лише в пам'яті): {id, from, to, at}
@@ -662,6 +663,7 @@ export class Game {
     }
     this.lobby.players = {};
     this.feed(this.run.mode === 'duel' ? `Дуель: ${this.run.players.map(id => this.players[id].name).join(' проти ')}` : `${ids.map(id => this.players[id].name).join(', ')}: у «${dungeonById[this.run.dungeon].name}»`);
+    this.say(this.run.mode === 'duel' ? `Дуель! ${this.run.players.map(id => this.players[id].name).join(' проти ')}. Бій починається!` : `${ids.map(id => this.players[id].name).join(', ')} вирушають у ${dungeonById[this.run.dungeon].name}. Хай щастить!`);
     this.startRound();
   }
   /** Фора в дуелі (слабшій команді) і «друге дихання» (3 поразки поспіль). */
@@ -864,6 +866,7 @@ export class Game {
       this.results = { mode: 'dungeon', won, raid: !!d.raid, worldBoss: wb, campaign: camp, mutator: mutDef ? { name: mutDef.name, icon: mutDef.icon } : null, dungeon: dungeonById[r.dungeon].name, xp: Math.round(r.xp / r.players.length), gold: Math.round(r.gold / r.players.length), kills: r.kills.length,
         loot: r.loot.map(l => ({ ...l, name: this.players[l.pid].name, cardName: l.card ? cardById[l.card].name : undefined, petName: l.pet ? petById[l.pet].name : undefined, petIcon: l.pet ? petById[l.pet].icon : undefined })), events: ev.map(e => ({ ...e, whoName: this.players[e.who] && this.players[e.who].name })), players: r.players.map(id => this.publicPlayer(this.players[id])) };
       this.feed(won ? `${d.raid ? '🗿' : '🏆'} ${r.players.map(id => this.players[id].name).join(', ')} пройшли «${dungeonById[r.dungeon].name}»` : `💀 «${dungeonById[r.dungeon].name}» виявилось сильнішим`);
+      this.say(won ? `Перемога! ${r.players.map(id => this.players[id].name).join(', ')} пройшли ${dungeonById[r.dungeon].name}!` : `${dungeonById[r.dungeon].name} цього разу сильніше. Наступного разу вийде!`);
       if (d.custom) { d.runs = (d.runs || 0) + 1; if (won) { d.wins = (d.wins || 0) + 1; if (d.wins === 1) this.moment('🏗️', `Сім'я вперше пройшла підземелля «${d.name}» від гравця ${d.author}`, d.owner); } this.store.save('history'); }
       }
     } else {
@@ -883,6 +886,7 @@ export class Game {
       for (const e of this.checkEnvelopes()) ev.push({ t: 'envelope', ...e });
       const wb = this.hitWorldBoss(r.players, 0, ev, (pid) => winners.includes(pid) ? WORLD_BOSS.duelWin : WORLD_BOSS.duelLoss, b.fighters);
       let tr = null; if (r.tournament !== undefined && this.tournament) { tr = this.tournamentAfterDuel(winners); if (tr.achievements) ev.push(...tr.achievements); }
+      this.say(winners.length ? `Дуель виграв ${winners.map(id => this.players[id].name).join(' і ')}!` : 'Дуель закінчилась унічию!');
       this.results = { mode: 'duel', worldBoss: wb, tournament: tr ? { ...this.tournamentView(), done: tr.done } : null, winners: winners.map(id => this.players[id].name), xp: 40, gold: 12, events: ev.map(e => ({ ...e, whoName: this.players[e.who] && this.players[e.who].name })), players: r.players.map(id => this.publicPlayer(this.players[id])) };
       this.feed(`⚔️ Дуель виграв: ${winners.map(id => this.players[id].name).join(', ')}`);
     }
@@ -1330,6 +1334,17 @@ export class Game {
     }
   }
   customDungeonsView() { return this.customDungeons().map(d => this.dungeonView(d)); }
+
+  // ---------- голос ведучого: оголошення на ТБ і ключові моменти бою йдуть у чергу, пульт озвучує на саундбарі ----------
+  get announce() { return this._announce; }
+  set announce(v) { this._announce = v; if (v && v.text && !/^(🚨|⏸|▶|✅ Відбій)/.test(v.text)) this.say(v.text); }   // тривогу й відбій каже сам пульт
+  say(text) {
+    const t = String(text).replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, '').replace(/\s+/g, ' ').trim();
+    if (!t) return;
+    this.voice.push({ n: ++this.voiceN, at: this.now(), text: t }); this.voice = this.voice.slice(-50);
+  }
+  /** Що сказати: після номера since і не старіше 10 хв (після перезапуску пульта старе не читається). */
+  voiceView(since = 0) { const fresh = this.now() - 10 * 60 * 1000; return { n: this.voiceN, items: this.voice.filter(v => v.n > since && v.at >= fresh) }; }
 
   // ---------- книга сім'ї: рекорди і пам'ятні моменти ----------
   moment(icon, text, who = null) {

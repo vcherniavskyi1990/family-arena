@@ -1317,3 +1317,20 @@ test('майстерня підземель: дитина збирає, бать
   const b = JSON.parse(JSON.stringify(g.backup())); g.restore(dad, b);
   assert.ok(g.lobbyView().custom.some(x => x.id === d2.id), 'після відновлення підземелля в списку');
 });
+
+test('голос ведучого: початок і кінець бою та оголошення йдуть у чергу без емодзі, старе й тривога не читаються', () => {
+  const g = makeGame();
+  const dad = g.createPlayer({ name: 'Тато', classId: 'warrior', role: 'parent', pin: '0000' });
+  const a = g.createPlayer({ name: 'Віктор', classId: 'archer', age: 10, pin: '1111' });
+  assert.deepEqual(g.voiceView(), { n: 0, items: [] });
+  g.setMode(dad, { mode: 'dungeon', dungeonId: 'kitchen_caves' }); g.join(dad); g.join(a); g.ready(dad, true); g.ready(a, true);
+  let v = g.voiceView(); assert.equal(v.items.length, 1); assert.match(v.items[0].text, /^Тато, Віктор вирушають у Кухонні печери/);
+  let guard = 0; while (g.battle && guard++ < 400) g.fire('round');
+  v = g.voiceView(1); assert.ok(v.items.length >= 1); assert.match(v.items[v.items.length - 1].text, /Перемога|сильніше/);
+  const before = g.voiceN;
+  g.setAlert(true); assert.equal(g.voiceN, before, 'тривогу читає пульт, не арена'); g.setAlert(false);
+  g.announce = { text: '🎉 Чемпіон вечора ігор: Віктор!', by: 'Арена', at: g.now() };
+  v = g.voiceView(before); assert.equal(v.items.length, 1); assert.equal(v.items[0].text, 'Чемпіон вечора ігор: Віктор!');
+  assert.equal(g.voiceView(g.voiceN).items.length, 0, 'після since нічого');
+  g.advance(11 * 60 * 1000); assert.equal(g.voiceView(0).items.length, 0, 'старіше 10 хв не читається');
+});
