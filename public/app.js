@@ -591,6 +591,15 @@
     });
     on('#g-go', function () { api('/admin/guest', { name: $('#g-name').value, classId: $('#g-class').value }).then(function (r) { toast('Гість ' + r.player.name + ', PIN ' + r.pin, 6000); ui.players = null; render(); }).catch(function (e) { toast(e.message, 3000); }); });
     on('[data-done]', function (el) { act('/quests/done', { questId: el.dataset.done }, 'Надіслано батькам'); });
+    // поле «файл» без англійського «No file chosen»: кнопка «📷 Фото» і назва вибраного файлу
+    var fins = document.querySelectorAll('input.file');
+    for (var fi = 0; fi < fins.length; fi++) (function (inp) {
+      if (inp.parentNode.classList.contains('filebox')) return;
+      var box = document.createElement('label'); box.className = 'filebox'; inp.parentNode.insertBefore(box, inp); box.appendChild(inp);
+      var btn = document.createElement('span'); btn.className = 'btn'; btn.textContent = '📷 Фото'; var nm = document.createElement('span'); nm.className = 'small muted'; nm.textContent = 'не вибрано, можна без фото';
+      box.appendChild(btn); box.appendChild(nm);
+      inp.addEventListener('change', function () { nm.textContent = inp.files[0] ? '✅ ' + inp.files[0].name : 'не вибрано, можна без фото'; });
+    })(fins[fi]);
     var qins = document.querySelectorAll('[data-qphoto]');
     for (var qi = 0; qi < qins.length; qi++) qins[qi].onchange = function (ev) { var inp = ev.target, f = inp.files[0]; if (!f) return; toast('📷 Надсилаю…'); shrink(f, function (b64, mime) { act('/quests/done', { questId: inp.dataset.qphoto, image: b64, mime: mime }, 'Фото надіслано батькам'); }, 640); };
     on('[data-approve]', function (el) { var a = el.dataset.approve.split('|'); act('/quests/approve', { playerId: a[0], questId: a[1] }).then(function (r) { toast('Зараховано: ' + r.reward.item.name, 3000); }); });
