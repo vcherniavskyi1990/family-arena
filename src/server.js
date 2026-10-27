@@ -10,7 +10,7 @@ import { Store } from './store.js';
 import { Game, err } from './game.js';
 import { Avatars } from './avatar.js';
 
-export const VERSION = '0.53.0';
+export const VERSION = '0.54.0';
 const PUBLIC = new URL('../public/', import.meta.url);
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.ico': 'image/x-icon', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' };
 
@@ -27,6 +27,8 @@ export function createApp({ dataDir, avatars: avatarsOpt, baseUrl, alertToken = 
   const clients = new Set(); // {res, token|null, tv}
   game.tvOnline = () => { for (const c of clients) if (c.tv) return true; return false; };
   let pushScheduled = false;
+  /** Адреса, яку показує ТБ і кодує QR: ARENA_URL у /etc/arena.env, коли гра доступна поза домом. */
+  const publicUrl = () => (baseUrl || process.env.ARENA_URL || '').replace(/\/+$/, '') || null;
   const pushAll = () => {
     if (pushScheduled) return; pushScheduled = true;
     setImmediate(() => { pushScheduled = false; for (const c of clients) sendState(c); });
@@ -35,7 +37,7 @@ export function createApp({ dataDir, avatars: avatarsOpt, baseUrl, alertToken = 
   const sendState = (c) => {
     try {
       let payload;
-      if (c.tv) payload = game.tvState();
+      if (c.tv) payload = { ...game.tvState(), url: publicUrl() };
       else { const p = game.auth(c.token); if (!p) { c.res.write(`event: logout\ndata: {}\n\n`); return; } payload = game.playerState(p); }
       c.res.write(`data: ${JSON.stringify(payload)}\n\n`);
     } catch (e) { console.error(e); }
@@ -105,7 +107,7 @@ export function createApp({ dataDir, avatars: avatarsOpt, baseUrl, alertToken = 
         return send(200, avatars.fallbackSvg(p), 'image/svg+xml');
       }
       if (path === '/qr.svg') {
-        const base = baseUrl || process.env.ARENA_URL || `http://${req.headers.host || lanAddress()}`;
+        const base = publicUrl() || `http://${req.headers.host || lanAddress()}`;
         const pid = url.searchParams.get('p'); const dark = url.searchParams.get('dark') === '1';
         const target = base + '/' + (pid && game.players[pid] ? `?p=${pid}` : '');
         return send(200, await QRCode.toString(target, { type: 'svg', margin: 1, color: dark ? { dark: '#000000', light: '#ffffff' } : { dark: '#ffffff', light: '#00000000' } }), 'image/svg+xml');
@@ -148,7 +150,7 @@ export function createApp({ dataDir, avatars: avatarsOpt, baseUrl, alertToken = 
       return ok({ token: game.login(p.id, body.pin), player: game.publicPlayer(p) });
     }
     if (path === '/login' && req.method === 'POST') { const t = game.login(body.playerId, body.pin); return ok({ token: t, player: game.publicPlayer(game.players[body.playerId]) }); }
-    if (path === '/tv') return send(200, game.tvState());
+    if (path === '/tv') return send(200, { ...game.tvState(), url: publicUrl() });
 
     // --- гравець ---
     if (path === '/me') return send(200, game.playerState(need()));

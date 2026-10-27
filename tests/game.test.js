@@ -23,6 +23,16 @@ test('гравці: створення, вхід за PIN, токен', () => {
   assert.throws(() => g.login(dad.id, '9999'), /PIN/);
   const tok = g.login(dad.id, '1234');
   assert.equal(g.auth(tok).id, dad.id);
+  // захист від перебору: 5 невдач → пауза 30 с, далі подвоюється; успішний вхід скидає
+  for (let i = 0; i < 5; i++) assert.throws(() => g.login(dad.id, '0000'), /PIN/);
+  assert.throws(() => g.login(dad.id, '1234'), /зачекай 30 с/, 'після 5 невдач навіть правильний PIN чекає');
+  g.advance(31000);
+  assert.throws(() => g.login(dad.id, '0000'), /PIN/);
+  assert.throws(() => g.login(dad.id, '1234'), /зачекай 60 с/);
+  g.advance(61000);
+  assert.ok(g.login(dad.id, '1234'), 'після паузи правильний PIN заходить');
+  assert.throws(() => g.login(dad.id, '0000'), /PIN/, 'лічильник скинуто: одна невдача без паузи');
+  assert.ok(g.login(dad.id, '1234'));
   assert.equal(g.players[dad.id].deck.length, 20);
 });
 

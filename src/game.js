@@ -88,6 +88,7 @@ export class Game {
     this.players = store.get('players', () => ({}));
     this.migratePlayers();
     this.tokens = store.get('tokens', () => ({}));
+    this.loginFails = {};   // лише в пам'яті: перезапуск знімає паузу
     this.settings = { ...DEFAULT_SETTINGS, ...store.get('settings', () => ({})) };
     this.history = store.get('history', () => ({ battles: [], legendaries: [], feed: [] }));
     if (!this.history.season) this.history.season = { n: 1, startedAt: this.now(), points: {} };
@@ -173,9 +174,23 @@ export class Game {
     this.emit();
     return p;
   }
+  /** Захист від перебору PIN (гра може бути доступна ззовні): після LOGIN_FAILS невдач пауза, що подвоюється. */
+  loginLock(playerId) {
+    const f = this.loginFails[playerId]; if (!f) return 0;
+    return Math.max(0, Math.ceil((f.until - this.now()) / 1000));
+  }
   login(playerId, pin) {
     const p = this.players[playerId];
-    if (!p || p.pinHash !== hashPin(String(pin), p.id)) throw err('Неправильний PIN', 401);
+    if (!p) throw err('Неправильний PIN', 401);
+    const wait = this.loginLock(playerId);
+    if (wait > 0) throw err(`Забагато спроб: зачекай ${wait} с`, 429);
+    if (p.pinHash !== hashPin(String(pin), p.id)) {
+      const f = this.loginFails[playerId] || (this.loginFails[playerId] = { n: 0, until: 0 });
+      f.n++;
+      if (f.n >= LOGIN_FAILS) { const k = Math.min(LOGIN_LOCK_MAX, LOGIN_LOCK_SEC * 2 ** (f.n - LOGIN_FAILS)); f.until = this.now() + k * 1000; }
+      throw err('Неправильний PIN', 401);
+    }
+    delete this.loginFails[playerId];
     const token = 't' + randomBytes(16).toString('hex');
     this.tokens[token] = { playerId, at: this.now() };
     this.store.save('tokens');
@@ -1716,4 +1731,5 @@ export class Game {
   emit() { for (const fn of this.listeners) { try { fn(); } catch (e) { console.error(e); } } }
 }
 
+export const LOGIN_FAILS = 5, LOGIN_LOCK_SEC = 30, LOGIN_LOCK_MAX = 900;   // 5 невдач → 30 с, далі 60, 120 … до 15 хв
 export function err(message, status = 400) { const e = new Error(message); e.status = status; return e; }
