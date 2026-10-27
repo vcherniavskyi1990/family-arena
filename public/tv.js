@@ -44,7 +44,7 @@
   // ---------- екран спокою: зал трофеїв + QR ----------
   function renderIdle() {
     var h = '<div class="hdr"><div class="t">⚔️ Родинна арена</div><div class="s">' + esc(state.season) + '</div><div class="r">Скануй QR телефоном,<br>щоб зайти в лобі</div></div>';
-    h += '<div class="qr big"><img src="/qr.svg"><div>' + esc(location.host) + '</div></div>';
+    h += '<div class="qr big"><img src="/qr.svg"><div>' + esc(state.url ? state.url.replace(/^https?:\/\//, '') : location.host) + '</div></div>';
     var evn = state.event || {}; if (evn.today) h += '<div class="evline">' + esc(evn.today.icon) + ' <b>' + esc(evn.today.name) + '</b> · ' + esc(evn.today.text) + '</div>'; else if (evn.tomorrow) h += '<div class="evline soon">' + esc(evn.tomorrow.icon) + ' Завтра: <b>' + esc(evn.tomorrow.name) + '</b> · ' + esc(evn.tomorrow.text) + '</div>';
     if (state.campaign && state.campaign.pending) h += '<div class="campline">📖 Розвилка: ' + esc(state.campaign.pending.text) + ' · обирайте на телефоні</div>';
     else if (state.campaign) h += '<div class="campline">📖 ' + (state.campaign.book === 2 ? 'Книга 2, р' : 'Р') + 'озділ ' + state.campaign.n + '/' + state.campaign.of + ': ' + esc(state.campaign.title) + (state.campaign.runs ? ' · ' + state.campaign.runs + '-й раз' : '') + '</div>';
