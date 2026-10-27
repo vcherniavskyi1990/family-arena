@@ -195,7 +195,17 @@ export class Game {
     this.store.save('players'); this.emit();
     return p;
   }
-  deletePlayer(id) { delete this.players[id]; delete this.lobby.players[id]; this.store.save('players'); this.emit(); }
+  deletePlayer(id) {
+    delete this.players[id]; delete this.lobby.players[id];
+    // Карти й монстри гравця йдуть разом із ним (інакше після кожного гостя лишались би «сирітські» моби в підземеллях).
+    const gone = [...this.history.customCards.filter(x => x.owner === id), ...this.history.customMobs.filter(x => x.owner === id)];
+    if (gone.length) {
+      this.history.customCards = this.history.customCards.filter(x => x.owner !== id); this.history.customMobs = this.history.customMobs.filter(x => x.owner !== id);
+      for (const x of gone) { if (cardById[x.id]) { delete cardById[x.id]; const i = CARDS.findIndex(c => c.id === x.id); if (i >= 0) CARDS.splice(i, 1); } delete mobById[x.id]; if (x.image && this.cardsDir) { const f = join(this.cardsDir, x.image.split('/').pop()); if (existsSync(f)) unlinkSync(f); } }
+      this.store.save('history');
+    }
+    this.store.save('players'); this.emit();
+  }
   // ---------- друзі в гостях: герой на один вечір, без прогресу в сезоні ----------
   createGuest(parent, { name, classId, age }) {
     if (!this.isParent(parent)) throw err('лише батьки', 403);
@@ -216,9 +226,14 @@ export class Game {
 
   // ---------- час, ліміти, тиша ----------
   kyiv(ts = this.now()) {
-    const f = new Intl.DateTimeFormat('en-GB', { timeZone: this.settings.tz, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', weekday: 'short' });
-    const o = Object.fromEntries(f.formatToParts(ts).map(x => [x.type, x.value]));
-    return { day: `${o.year}-${o.month}-${o.day}`, hm: `${o.hour === '24' ? '00' : o.hour}:${o.minute}`, weekend: o.weekday === 'Sat' || o.weekday === 'Sun', weekday: o.weekday };
+    // Форматер і остання відповідь кешуються: один стан гравця кличе kyiv() ~40 разів, а Intl.DateTimeFormat дорогий (0,15 мс на 2 ядрах CT 106).
+    const tz = this.settings.tz; const c = this._kyivCache;
+    if (c && c.tz === tz && c.ts === ts) return c.out;
+    if (!c || c.tz !== tz) this._kyivCache = { tz, ts: null, out: null, f: new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', weekday: 'short' }) };
+    const o = Object.fromEntries(this._kyivCache.f.formatToParts(ts).map(x => [x.type, x.value]));
+    const out = { day: `${o.year}-${o.month}-${o.day}`, hm: `${o.hour === '24' ? '00' : o.hour}:${o.minute}`, weekend: o.weekday === 'Sat' || o.weekday === 'Sun', weekday: o.weekday };
+    this._kyivCache.ts = ts; this._kyivCache.out = out;
+    return out;
   }
   /** Ключ тижня (понеділок) за Києвом для щотижневих рейдів. */
   weekKey(ts = this.now()) {
@@ -632,8 +647,10 @@ export class Game {
       const ch = this.lobby.mode === 'campaign' ? this.campaignChapter() : null;
       const d = dungeonById[ch ? ch.dungeon : this.lobby.mode === 'practice' ? 'practice' : this.lobby.dungeonId];
       const mut = ch && ch.mutator ? MUTATORS.find(m => m.id === ch.mutator) : d.raid || d.practice ? null : this.mutatorToday();
-      this.run = { mode: 'dungeon', mutator: mut ? mut.id : null, campaign: ch ? ch.n : undefined, campaignId: ch && ch.id ? ch.id : undefined, dungeon: d.id, players: ids, room: 0, rooms: [...d.rooms, [d.boss]], team: fighters(ids), loot: [], xp: 0, gold: 0, kills: [], startedAt: this.now(), frames: [] };
-      this.nextRoom();
+      const losses = {}; for (const id of ids) losses[id] = d.practice ? 0 : (this.players[id].dungeonLosses || 0);
+      const [team] = applyFora([fighters(ids), []], losses);   // лише «друге дихання»: фора за рівнем у підземеллі не рахується (друга команда порожня)
+      this.run = { mode: 'dungeon', mutator: mut ? mut.id : null, campaign: ch ? ch.n : undefined, campaignId: ch && ch.id ? ch.id : undefined, dungeon: d.id, players: ids, room: 0, rooms: [...d.rooms, [d.boss]], team, loot: [], xp: 0, gold: 0, kills: [], startedAt: this.now(), frames: [] };
+      this.nextRoom(); this.feedFora();
     }
     this.lobby.players = {};
     this.feed(this.run.mode === 'duel' ? `Дуель: ${this.run.players.map(id => this.players[id].name).join(' проти ')}` : `${ids.map(id => this.players[id].name).join(', ')}: у «${dungeonById[this.run.dungeon].name}»`);
@@ -647,7 +664,7 @@ export class Game {
   feedFora() {
     for (const f of this.battle.fighters) {
       if (f.fora) this.feed(`🤝 Фора: ${f.name} +${f.fora} % здоров’я`);
-      if (f.secondWind) this.feed(`💨 Друге дихання: ${f.name} +20 % здоров’я і сили`);
+      if (f.secondWind) this.feed(`💨 Друге дихання: ${f.name} +${f.secondWind} % здоров’я і сили`);
     }
   }
   nextRoom() {
@@ -792,6 +809,7 @@ export class Game {
         p.gold += gold; ev.push(...addXp(p, xp));
         p.stats.kills += f.stats.kills; p.stats.crits += f.stats.crits; p.stats.blocks += f.stats.blocks; p.stats.heals += f.stats.heals;
         if (won) { p.stats.dungeons += 1; p.stats.bossKills += 1; if (r.dungeon === 'bathroom_kraken') p.stats.dragonKills += 1; }
+        if (!d.practice) p.dungeonLosses = won ? 0 : (p.dungeonLosses || 0) + 1;
         if (f && f.stats) this.setRecord('runKills', f.stats.kills, pid, `${p.name}: ${f.stats.kills} ворогів у «${dungeonById[r.dungeon].name}»`);
         this.addSeasonPoints(pid, won ? 4 + dungeonById[r.dungeon].level : SEASON_POINTS.dungeonLoss);
         for (const l of r.loot.filter(x => x.pid === pid)) {
