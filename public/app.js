@@ -5,7 +5,7 @@
   var app = $('#app');
   var token = localStorage.getItem('arena.token') || null;
   var content = null, state = null, es = null, tab = localStorage.getItem('arena.tab') || 'arena';
-  var ui = { sound: (function () { try { return localStorage.getItem('arena.sound') === '1'; } catch (e) { return false; } })(), move: { attack: null, blocks: [], cards: [], target: null }, sent: false, craftSel: [], deck: null, pick: null, pin: '', loginPlayer: null, setup: false, heroView: 'gear', avatarCands: null, timerId: null, mobPts: { str: 4, hp: 4, trick: 2 } };
+  var ui = { sound: (function () { try { return localStorage.getItem('arena.sound') === '1'; } catch (e) { return false; } })(), move: { attack: null, blocks: [], cards: [], target: null }, sent: false, craftSel: [], deck: null, pick: null, pin: '', loginPlayer: null, setup: false, heroView: 'gear', avatarCands: null, timerId: null, mobPts: { str: 4, hp: 4, trick: 2 }, cd: { icon: null, rooms: [[]], boss: null, room: 0, name: '', text: '' } };
   var RAR = { common: 'Звичайний', uncommon: 'Незвичайний', rare: 'Рідкісний', epic: 'Епічний', legendary: 'Легендарний' };
   var STAT = { atk: 'удар', def: 'захист', hp: 'здоров’я', mana: 'мана', crit: 'крит' };
 
@@ -145,12 +145,13 @@
     var lob = state.lobby;
     var raidOf = {}; (lob.raids || []).forEach(function (r) { raidOf[r.id] = r; });
     var dungeons = content.dungeons.filter(function (d) { return !d.practice; }).map(function (d) { var r = raidOf[d.id], lk = (lob.locked || []).indexOf(d.id) >= 0; return '<option value="' + d.id + '"' + (lob.dungeonId === d.id ? ' selected' : '') + (r && !r.available || lk ? ' disabled' : '') + '>' + (lk ? '✉️ ???' : d.icon + ' ' + esc(d.name)) + ' (рівень ' + d.level + ')' + (r && !r.available ? ' 🔒' : lk ? ' · у конверті' : '') + '</option>'; }).join('');
+    if (lob.custom && lob.custom.length) dungeons += '<optgroup label="🏗️ Побудовані сім’єю">' + lob.custom.map(function (d) { return '<option value="' + d.id + '"' + (lob.dungeonId === d.id ? ' selected' : '') + '>' + esc(d.icon) + ' ' + esc(d.name) + ' (рівень ' + d.level + ', від ' + esc(d.author) + ')</option>'; }).join('') + '</optgroup>';
     var mine = lob.players.filter(function (p) { return p.id === me.id; })[0];
     h += '<div class="card"><h3>Режим</h3><div class="row wrap"><button class="btn-sm ' + (lob.mode === 'dungeon' ? 'btn-blue' : '') + '" data-mode="dungeon">🏰 Підземелля</button><button class="btn-sm ' + (lob.mode === 'duel' ? 'btn-blue' : '') + '" data-mode="duel">⚔️ Дуель</button><button class="btn-sm ' + (lob.mode === 'campaign' ? 'btn-blue' : '') + '" data-mode="campaign">📖 Кампанія</button><button class="btn-sm ' + (lob.mode === 'tournament' ? 'btn-blue' : '') + '" data-mode="tournament">🏆 Турнір</button><button class="btn-sm ' + (lob.mode === 'practice' ? 'btn-blue' : '') + '" data-mode="practice">🎯 Тренування</button></div>' +
       (lob.mode === 'practice' ? '<div class="small muted">🎯 Манекен у дворі: без нагород і очок, можна одному. Спробуй удари, блоки й карти; у простому режимі є підказки.</div>' : '') +
       (lob.mode === 'tournament' ? '<div class="small muted">3 або 4 гравці в лобі. Троє — кожен з кожним, четверо — два півфінали й фінал. Дуелі йдуть одна за одною самі, чемпіон +8 очок сезону.</div>' : '') +
       (lob.mode === 'campaign' ? campaignHtml(lob.campaign) : '') +
-      (lob.mode === 'dungeon' ? '<select id="dungeon">' + dungeons + '</select><div class="small muted">' + esc(lob.dungeon.text) + ' · кімнат: ' + lob.dungeon.rooms.length + ' + бос</div>' + (lob.mutator && !(lob.raid && lob.raid.raid) ? '<div class="card mut">' + esc(lob.mutator.icon) + ' <b>Мутатор дня: ' + esc(lob.mutator.name) + '</b><div class="small">' + esc(lob.mutator.text) + '</div></div>' : '') + (lob.raid && lob.raid.raid ? '<div class="card warn" style="margin:8px 0 0">🗿 Рейд: мінімум ' + (lob.raid.minPlayers || 2) + ' гравці, бос сильнішає з кожним. Раз на тиждень.' + (lob.raid.available ? '' : ' ' + esc(lob.raid.reason)) + '</div>' : '') : lob.mode === 'campaign' || lob.mode === 'tournament' || lob.mode === 'practice' ? '' : '<div class="small muted">Дві команди. Перемикай команду кнопкою нижче.</div>') + '</div>';
+      (lob.mode === 'dungeon' ? '<select id="dungeon">' + dungeons + '</select><div class="small muted">' + esc(lob.dungeon.text) + ' · кімнат: ' + lob.dungeon.rooms.length + ' + бос' + (lob.dungeon.custom ? ' · 🏗️ збудував ' + esc(lob.dungeon.author) : '') + '</div>' + (lob.mutator && !(lob.raid && lob.raid.raid) ? '<div class="card mut">' + esc(lob.mutator.icon) + ' <b>Мутатор дня: ' + esc(lob.mutator.name) + '</b><div class="small">' + esc(lob.mutator.text) + '</div></div>' : '') + (lob.raid && lob.raid.raid ? '<div class="card warn" style="margin:8px 0 0">🗿 Рейд: мінімум ' + (lob.raid.minPlayers || 2) + ' гравці, бос сильнішає з кожним. Раз на тиждень.' + (lob.raid.available ? '' : ' ' + esc(lob.raid.reason)) + '</div>' : '') : lob.mode === 'campaign' || lob.mode === 'tournament' || lob.mode === 'practice' ? '' : '<div class="small muted">Дві команди. Перемикай команду кнопкою нижче.</div>') + '</div>';
     h += '<div class="card"><h3>Лобі (' + lob.players.length + ')</h3>' + (lob.players.length ? lob.players.map(function (p) { return '<div class="row" style="padding:4px 0">' + avatarHtml(p) + '<div class="grow"><b>' + esc(p.name) + '</b> <span class="small muted">' + p.level + ' рів.' + (lob.mode === 'duel' ? ' · команда ' + (p.team ? '🔴' : '🔵') : '') + '</span></div><div>' + (p.ready ? '✅' : '⏳') + '</div></div>'; }).join('') : '<div class="muted">Ще нікого. Подивись на ТБ!</div>') + '</div>';
     if (me.blocked) h += '<div class="card warn">🔒 ' + esc(me.blocked) + '</div>';
     else if (!mine) h += '<button class="btn-primary btn-block" id="join">Зайти в лобі</button>' + challengeOutHtml();
@@ -374,6 +375,7 @@
     h += '<div class="deckgrid">' + ui.allowed.map(function (c) { var n = count[c.id] || 0; return '<div class="dcard ' + (n ? 'in' : '') + '" data-dc="' + c.id + '"><div>' + (c.image ? '<img class="cimg" src="' + esc(c.image) + '" alt="">' : esc(c.icon)) + ' <b class="r-' + c.rarity + '">' + esc(c.name) + '</b> <span class="muted">(' + c.cost + ')</span></div><div class="muted">' + esc(c.text) + '</div><div>' + (n ? '✅ ×' + n : '') + '</div></div>'; }).join('') + '</div>';
     h += customCardsHtml();
     h += customMobsHtml();
+    h += customDungeonsHtml();
     return h;
   }
   function bookHtml() {
@@ -398,6 +400,25 @@
     if (others.length) h += '<div class="small" style="margin-top:8px"><b>Монстри сім’ї:</b> ' + others.map(function (m) { return (m.image ? '<img class="cimg" src="' + esc(m.image) + '" alt="">' : '👾 ') + esc(m.name) + ' <span class="muted">(' + esc(m.author) + ', ' + m.level + ' рів.)</span>'; }).join(' · ') + '</div>';
     return h + '</div>';
   }
+  function customDungeonsHtml() {
+    var mine = state.customDungeons || [], cat = state.dungeonCatalog || { mobs: [], bosses: [], icons: [], max: 2, roomsMax: 3, roomMobsMax: 3 }, c = ui.cd;
+    if (!c.icon) c.icon = cat.icons[0] || '🏰';
+    var h = '<div class="card"><h3>🏗️ Своє підземелля (' + mine.length + '/' + cat.max + ')</h3><div class="small muted">Збери підземелля з кімнат і монстрів, обери боса. Батьки підтвердять, і воно з’явиться у списку підземель для всієї сім’ї.</div>';
+    h += mine.map(function (d) { return '<div class="row small" style="padding:4px 0"><span>' + esc(d.icon) + '</span><div class="grow"><b>' + esc(d.name) + '</b> <span class="muted">' + d.level + ' рів. · кімнат ' + d.rooms.length + ' + ' + esc(d.boss.icon) + (d.approved ? ' · пройдено ' + d.wins + ' з ' + d.runs : ' · ⏳ чекає батьків') + '</span></div><button class="btn-sm" data-cddel="' + d.id + '">✕</button></div>'; }).join('');
+    if (mine.length < cat.max) {
+      h += '<input id="cd-name" placeholder="Назва підземелля" maxlength="28" value="' + esc(c.name) + '"><div class="row wrap" style="padding:4px 0">' + cat.icons.map(function (i) { return '<button class="btn-sm ' + (c.icon === i ? 'btn-blue' : '') + '" data-cdicon="' + esc(i) + '">' + esc(i) + '</button>'; }).join('') + '</div>';
+      h += '<input id="cd-text" placeholder="Що тут сталося? (один рядок на ТБ)" maxlength="120" value="' + esc(c.text) + '">';
+      h += c.rooms.map(function (r, i) { return '<div class="card" style="margin:6px 0;padding:8px"><div class="row"><b class="grow">Кімната ' + (i + 1) + '</b>' + (c.rooms.length > 1 ? '<button class="btn-sm" data-cdroomdel="' + i + '">✕</button>' : '') + '</div><div class="row wrap">' + (r.length ? r.map(function (id, j) { var m = catMob(cat, id); return '<button class="btn-sm btn-blue" data-cdmobdel="' + i + '|' + j + '">' + mobIcon(m) + ' ' + esc(m ? m.name : id) + ' ✕</button>'; }).join('') : '<span class="small muted">порожньо: тисни монстра нижче</span>') + '</div></div>'; }).join('');
+      if (c.rooms.length < cat.roomsMax) h += '<button class="btn-sm" id="cd-room">+ кімната</button>';
+      h += '<div class="small muted" style="margin-top:6px">Монстри в кімнату ' + (c.room + 1) + ' (до ' + cat.roomMobsMax + '): ' + (c.rooms.length > 1 ? c.rooms.map(function (r, i) { return '<button class="btn-sm ' + (c.room === i ? 'btn-blue' : '') + '" data-cdroom="' + i + '">' + (i + 1) + '</button>'; }).join(' ') : '') + '</div><div class="row wrap">' + cat.mobs.map(function (m) { return '<button class="btn-sm" data-cdmob="' + esc(m.id) + '">' + mobIcon(m) + ' ' + esc(m.name) + ' <span class="muted">' + m.level + '</span></button>'; }).join('') + '</div>';
+      h += '<div class="small muted" style="margin-top:6px">Бос:</div><div class="row wrap">' + cat.bosses.map(function (m) { return '<button class="btn-sm ' + (c.boss === m.id ? 'btn-blue' : '') + '" data-cdboss="' + esc(m.id) + '">' + esc(m.icon) + ' ' + esc(m.name) + ' <span class="muted">' + m.level + '</span></button>'; }).join('') + '</div>';
+      var ready = c.boss && c.rooms.every(function (r) { return r.length; });
+      h += '<button class="btn-primary btn-block" id="cd-go" ' + (ready ? '' : 'disabled') + ' style="margin-top:8px">🏗️ Збудувати підземелля</button>';
+    }
+    return h + '</div>';
+  }
+  function catMob(cat, id) { var all = cat.mobs.concat(cat.bosses); for (var i = 0; i < all.length; i++) if (all[i].id === id) return all[i]; return null; }
+  function mobIcon(m) { return m ? (m.image ? '<img class="cimg" src="' + esc(m.image) + '" alt="">' : esc(m.icon)) : '👾'; }
   function customCardsHtml() {
     var me = state.me, mine = state.customCards || [], t = state.cardTemplates || {};
     var h = '<div class="card"><h3>🖍️ Свої карти (' + mine.length + '/3)</h3><div class="small muted">Намалюй карту на папері, сфотографуй, дай назву й обери, що вона робить. Батьки підтвердять, і карта з’явиться в колоді (рідкісна, до 2 у колоді).</div>';
@@ -422,6 +443,7 @@
     var me = state.me, h = head();
     if (state.pendingQuests && state.pendingQuests.length) h += '<div class="card warn"><h3>' + (me.isParent ? 'Чекають підтвердження' : '👨‍👩‍👦 Справи батьків: підтверди ти') + '</h3>' + state.pendingQuests.map(function (q) { return '<div class="q"><span class="ic">' + esc(q.quest.icon) + '</span><div class="grow"><b>' + esc(q.name) + '</b>: ' + esc(q.quest.name) + (q.photo ? '<div><a href="' + esc(q.photo) + '" target="_blank"><img class="qimg" src="' + esc(q.photo) + '" alt="фото"></a></div>' : '<div class="small muted">без фото</div>') + '</div><button class="btn-sm btn-green" data-approve="' + q.pid + '|' + q.quest.id + '">✅</button><button class="btn-sm" data-reject="' + q.pid + '|' + q.quest.id + '">✕</button></div>'; }).join('') + '</div>';
     if (me.isParent && state.pendingCoupons && state.pendingCoupons.length) h += '<div class="card warn"><h3>🎟 Куплені бажання</h3>' + state.pendingCoupons.map(function (o) { return '<div class="q"><span class="ic">' + esc(o.icon) + '</span><div class="grow"><b>' + esc(o.name) + '</b>: ' + esc(o.title) + ' <span class="small muted">' + o.price + ' 🪙 · ' + fmtAt(o.at) + '</span></div><button class="btn-sm btn-green" data-cdone="' + esc(o.id) + '" title="Виконано">✅</button><button class="btn-sm" data-crefund="' + esc(o.id) + '" title="Повернути золото">↩️</button></div>'; }).join('') + '</div>';
+    if (me.isParent && state.pendingDungeons && state.pendingDungeons.length) h += '<div class="card warn"><h3>🏗️ Нові підземелля дітей</h3>' + state.pendingDungeons.map(function (d) { return '<div class="q"><span class="ic">' + esc(d.icon) + '</span><div class="grow"><b>' + esc(d.author) + '</b>: «' + esc(d.name) + '» <span class="small muted">' + d.level + ' рів.</span><div class="small muted">' + d.rooms.map(function (r, i) { return (i + 1) + ': ' + r.map(function (m) { return esc(m.icon) + ' ' + esc(m.name); }).join(', '); }).join(' · ') + ' · бос ' + esc(d.boss.icon) + ' ' + esc(d.boss.name) + (d.text ? '<br>«' + esc(d.text) + '»' : '') + '</div></div><button class="btn-sm btn-green" data-cdok="' + d.id + '">✅</button><button class="btn-sm" data-cdno="' + d.id + '">✕</button></div>'; }).join('') + '</div>';
     if (me.isParent && state.pendingMobs && state.pendingMobs.length) h += '<div class="card warn"><h3>👾 Нові монстри дітей</h3>' + state.pendingMobs.map(function (m) { return '<div class="q">' + (m.image ? '<img class="cimg" src="' + esc(m.image) + '" alt="">' : '<span class="ic">👾</span>') + '<div class="grow"><b>' + esc(m.author) + '</b>: «' + esc(m.name) + '» <span class="small muted">' + m.level + ' рів. · 💪' + m.pts.str + ' ❤️' + m.pts.hp + ' 🦊' + m.pts.trick + '</span></div><button class="btn-sm btn-green" data-mobok="' + m.id + '">✅</button><button class="btn-sm" data-mobno="' + m.id + '">✕</button></div>'; }).join('') + '</div>';
     if (me.isParent && state.pendingCards && state.pendingCards.length) h += '<div class="card warn"><h3>🖍️ Нові карти дітей</h3>' + state.pendingCards.map(function (c) { return '<div class="q">' + (c.image ? '<img class="cimg" src="' + esc(c.image) + '" alt="">' : '<span class="ic">🖍️</span>') + '<div class="grow"><b>' + esc(c.author) + '</b>: «' + esc(c.name) + '» <span class="small muted">' + esc(c.text) + '</span></div><button class="btn-sm btn-green" data-cardok="' + c.id + '">✅</button><button class="btn-sm" data-cardno="' + c.id + '">✕</button></div>'; }).join('') + '</div>';
     if (state.daily && state.daily.length) h += '<div class="card"><h3>📅 Завдання дня</h3>' + state.daily.map(function (t) { return '<div class="q ' + (t.done ? 'done' : '') + '"><span class="ic">' + esc(t.icon) + '</span><div class="grow"><b>' + esc(t.name) + '</b><div class="small muted">' + (t.done ? 'виконано' : t.progress + ' з ' + t.n) + ' · +' + t.gold + ' 🪙, +' + t.xp + ' досвіду</div><div class="bar xp"><i style="width:' + Math.round(100 * Math.min(1, t.progress / t.n)) + '%"></i></div></div><span>' + (t.done ? '✅' : '') + '</span></div>'; }).join('') + '</div>';
@@ -577,6 +599,22 @@
     on('[data-mobok]', function (el) { act('/admin/mob/approve', { id: el.dataset.mobok, approve: true }, 'Монстр у грі!'); });
     on('[data-mobno]', function (el) { act('/admin/mob/approve', { id: el.dataset.mobno, approve: false }, 'Відхилено'); });
     on('[data-mobpt]', function (el) { var a = el.dataset.mobpt.split('|'), k = a[0], d = +a[1], p = ui.mobPts, tot = state.mobPoints || 10, sum = p.str + p.hp + p.trick; if (d > 0 && sum >= tot) return; if (p[k] + d < 0 || p[k] + d > tot) return; p[k] += d; render(); });
+    var cdn = $('#cd-name'); if (cdn) cdn.oninput = function () { ui.cd.name = cdn.value; };
+    var cdt = $('#cd-text'); if (cdt) cdt.oninput = function () { ui.cd.text = cdt.value; };
+    on('[data-cdicon]', function (el) { ui.cd.icon = el.dataset.cdicon; render(); });
+    on('[data-cdroom]', function (el) { ui.cd.room = +el.dataset.cdroom; render(); });
+    on('#cd-room', function () { ui.cd.rooms.push([]); ui.cd.room = ui.cd.rooms.length - 1; render(); });
+    on('[data-cdroomdel]', function (el) { ui.cd.rooms.splice(+el.dataset.cdroomdel, 1); ui.cd.room = Math.min(ui.cd.room, ui.cd.rooms.length - 1); render(); });
+    on('[data-cdmob]', function (el) { var r = ui.cd.rooms[ui.cd.room], max = (state.dungeonCatalog || {}).roomMobsMax || 3; if (r.length >= max) { toast('У кімнаті вже ' + max + ' монстри'); return; } r.push(el.dataset.cdmob); render(); });
+    on('[data-cdmobdel]', function (el) { var a = el.dataset.cdmobdel.split('|'); ui.cd.rooms[+a[0]].splice(+a[1], 1); render(); });
+    on('[data-cdboss]', function (el) { ui.cd.boss = el.dataset.cdboss; render(); });
+    on('#cd-go', function (el) {
+      el.disabled = true; var c = ui.cd;
+      act('/me/dungeon', { name: c.name, icon: c.icon, text: c.text, rooms: c.rooms, boss: c.boss }, state.me.isParent ? 'Підземелля в списку!' : 'Надіслано батькам').then(function () { ui.cd = { icon: null, rooms: [[]], boss: null, room: 0, name: '', text: '' }; render(); }).catch(function () { el.disabled = false; });
+    });
+    on('[data-cddel]', function (el) { act('/me/dungeon/delete', { id: el.dataset.cddel }, 'Прибрано'); });
+    on('[data-cdok]', function (el) { act('/admin/dungeon/approve', { id: el.dataset.cdok, approve: true }, 'Підземелля в грі!'); });
+    on('[data-cdno]', function (el) { act('/admin/dungeon/approve', { id: el.dataset.cdno, approve: false }, 'Відхилено'); });
     on('#cm-go', function (el) {
       var name = $('#cm-name').value, f = $('#cm-file').files[0], p = ui.mobPts;
       el.disabled = true;
