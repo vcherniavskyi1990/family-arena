@@ -10,7 +10,7 @@ import { Store } from './store.js';
 import { Game, err } from './game.js';
 import { Avatars } from './avatar.js';
 
-export const VERSION = '0.52.0';
+export const VERSION = '0.53.0';
 const PUBLIC = new URL('../public/', import.meta.url);
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.ico': 'image/x-icon', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' };
 
@@ -64,6 +64,12 @@ export function createApp({ dataDir, avatars: avatarsOpt, baseUrl, alertToken = 
       }
       if (path === '/api/tv/replay' && req.method === 'POST') { if (game.replay) game.stopReplay(); else game.startReplay(null, { fromTv: true }); return send(200, { ok: true, replay: !!game.replay }); }
       if (path === '/api/tv/book') return send(200, game.bookView(14));
+      if (path === '/api/voice') {
+        // черга для голосу ведучого (пульт озвучує на саундбарі): той самий токен; ?since=N = після номера N
+        if (!alertToken) return send(503, { error: 'ARENA_ALERT_TOKEN не задано в /etc/arena.env' });
+        if ((req.headers['x-arena-token'] || url.searchParams.get('token')) !== alertToken) return send(403, { error: 'токен' });
+        return send(200, game.voiceView(parseInt(url.searchParams.get('since') || '0', 10) || 0));
+      }
       if (path === '/api/tv/hero') { const h = game.heroProfile(url.searchParams.get('id')); return h ? send(200, h) : send(404, { error: 'немає героя' }); }
       if (path === '/api/alert') {
         // тривога з дому: пульт (192.168.1.21) шле POST з токеном; гра сама нікуди не ходить
