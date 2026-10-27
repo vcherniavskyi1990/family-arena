@@ -1282,3 +1282,38 @@ test('«друге дихання» і в підземеллі: після 3 п�
   assert.equal(g.players[a.id].dungeonLosses, won ? 0 : 4);
 });
 
+
+test('майстерня підземель: дитина збирає, батьки підтверджують, сім\'я проходить, гість забирає свого моба з кімнат', () => {
+  const g = makeGame();
+  const dad = g.createPlayer({ name: 'Тато', classId: 'warrior', role: 'parent', pin: '0000' });
+  const a = g.createPlayer({ name: 'Віктор', classId: 'archer', age: 10, pin: '1111' });
+  const cat = g.dungeonCatalog();
+  assert.ok(cat.mobs.some(m => m.id === 'zombie') && cat.bosses.some(b => b.id === 'boss_ravager') && !cat.bosses.some(b => b.id === 'raid_dragon'), 'каталог за рівнем сім\'ї, без рейдових босів');
+  assert.throws(() => g.createCustomDungeon(a, { name: 'Х', rooms: [['zombie']], boss: 'boss_ravager' }), /від 2 літер/);
+  assert.throws(() => g.createCustomDungeon(a, { name: 'Замок', rooms: [[]], boss: 'boss_ravager' }), /хоч один монстр/);
+  assert.throws(() => g.createCustomDungeon(a, { name: 'Замок', rooms: [['zombie']], boss: 'raid_dragon' }), /боса зі списку/);
+  const d = g.createCustomDungeon(a, { name: 'Замок Віктора', icon: '🌋', text: 'Лава всюди!', rooms: [['zombie', 'spider', 'nope'], ['slime']], boss: 'boss_ravager' });
+  assert.equal(d.rooms[0].length, 2, 'чужий id викинуто'); assert.ok(!d.approved); assert.equal(d.level, 2);
+  assert.equal(g.lobbyView().custom.length, 0, 'до підтвердження в лобі нема');
+  assert.throws(() => g.setMode(a, { mode: 'dungeon', dungeonId: d.id }), /підземелля/);
+  assert.equal(g.playerState(dad).pendingDungeons.length, 1);
+  g.approveCustomDungeon(dad, d.id, true);
+  assert.ok(g.lobbyView().custom.some(x => x.id === d.id && x.author === 'Віктор'));
+  assert.ok(g.history.feed.some(f => /збудував підземелля «Замок Віктора»/.test(f.text)));
+  g.setMode(dad, { mode: 'dungeon', dungeonId: d.id }); g.join(dad); g.join(a); g.ready(dad, true); g.ready(a, true);
+  assert.equal(g.run.dungeon, d.id); assert.equal(g.run.rooms.length, 3, '2 кімнати + бос');
+  let guard = 0; while (g.battle && guard++ < 400) g.fire('round');
+  assert.equal(d.runs, 1); g.fire('results');
+  assert.throws(() => { g.createCustomDungeon(a, { name: 'Друге', rooms: [['zombie']], boss: 'boss_ravager' }); g.createCustomDungeon(a, { name: 'Третє', rooms: [['zombie']], boss: 'boss_ravager' }); }, /не більше 2/);
+  // гість намалював моба, дитина поклала його в кімнату, гість пішов: моба в кімнаті нема, підземелля лишається
+  const gst = g.createGuest(dad, { name: 'Максим' });
+  const m = g.createCustomMob(gst, { name: 'Гостьозавр', str: 4, hp: 3, trick: 3 }); g.approveCustomMob(dad, m.id, true);
+  const d2 = g.createCustomDungeon(dad, { name: 'Підземелля тата', rooms: [[m.id, 'zombie'], [m.id]], boss: 'boss_ravager' });
+  assert.ok(d2.approved, 'батьківське без підтвердження'); assert.equal(d2.rooms.length, 2);
+  g.advance(24 * 3600 * 1000); g.tick();
+  const d2n = g.history.customDungeons.find(x => x.id === d2.id);
+  assert.deepEqual(d2n.rooms, [['zombie']], 'моб гостя вийнято, порожня кімната зникла');
+  g.deleteCustomDungeon(a, d.id); assert.ok(!g.history.customDungeons.some(x => x.id === d.id) && !g.lobbyView().custom.some(x => x.id === d.id));
+  const b = JSON.parse(JSON.stringify(g.backup())); g.restore(dad, b);
+  assert.ok(g.lobbyView().custom.some(x => x.id === d2.id), 'після відновлення підземелля в списку');
+});
