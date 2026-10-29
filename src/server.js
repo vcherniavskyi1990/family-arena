@@ -10,7 +10,7 @@ import { Store } from './store.js';
 import { Game, err } from './game.js';
 import { Avatars } from './avatar.js';
 
-export const VERSION = '0.54.0';
+export const VERSION = '0.55.0';
 const PUBLIC = new URL('../public/', import.meta.url);
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.ico': 'image/x-icon', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' };
 
@@ -49,7 +49,7 @@ export function createApp({ dataDir, avatars: avatarsOpt, baseUrl, alertToken = 
     const path = url.pathname;
     const send = (code, body, type = 'application/json') => { res.writeHead(code, { 'Content-Type': type, 'Cache-Control': 'no-store' }); res.end(type.startsWith('application/json') ? JSON.stringify(body) : body); };
     try {
-      if (path === '/health') return send(200, { ok: true, version: VERSION, uptimeSec: Math.round(process.uptime()), players: game.playerList.length, phase: game.tvState().phase, paused: game.paused, tv: game.tvOnline() });
+      if (path === '/health') { res.setHeader('Access-Control-Allow-Origin', '*'); return send(200, { ok: true, version: VERSION, uptimeSec: Math.round(process.uptime()), players: game.playerList.length, phase: game.tvState().phase, paused: game.paused, tv: game.tvOnline() }); }
       if (path === '/api/digest' || path === '/api/digest.txt') {
         // дайджест дня для бота пульта: лише з токеном інтеграції (той самий, що для тривоги)
         if (!alertToken) return send(503, { error: 'ARENA_ALERT_TOKEN не задано в /etc/arena.env' });
