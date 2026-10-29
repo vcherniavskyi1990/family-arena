@@ -6,6 +6,10 @@
 # Same flow as the pult's domains/media/tvdev.sh: first time dev/install registers the app, then the files are copied
 # straight into the app's directory (dev/install over an installed app leaves the old index.html). The game server
 # itself (CT 106) never talks to the TV: this script is run from pult-core by claude-ops.
+# Live 30.10.2026 (first install): on this TV luna-send answers with nothing and listApps/getAppInfo never list a dev
+# app, so «installed» = the app's directory on the TV with our appinfo.json; the tile shows up after the TV is rebooted.
+# The install goes through the Homebrew Channel root path (SSH as root), never LG Developer Mode.
+# The checkout to copy from CT 106 is /opt/arena/current (the live release), not /opt/arena/src.
 set -u
 cd "$(dirname "$0")/.." || exit 1
 H=${TVAPP_HOME:-/home/pult}; KEY=$H/.ssh/tv_key; PACK=${TVAPP_PACK:-$H/media/ipk.py}
