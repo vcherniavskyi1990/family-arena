@@ -9,7 +9,7 @@ const player = (id, cls, extra = {}) => ({ id, name: id, class: cls, level: 1, d
 test('контент цілісний: карти класів, моби підземель', () => {
   for (const c of CARDS) assert.ok(c.class === 'all' || CLASSES.some(k => k.id === c.class), c.id);
   for (const d of DUNGEONS) { for (const r of d.rooms) for (const m of r) assert.ok(mobById[m], m); assert.ok(mobById[d.boss] && mobById[d.boss].boss, d.boss); }
-  for (const k of CLASSES) assert.equal(starterDeck(k.id).length, 20, k.id);
+  for (const k of CLASSES) assert.equal(starterDeck(k.id).length, 12, k.id);
 });
 
 test('дуель детермінована за зерном і завершується', () => {
@@ -28,7 +28,7 @@ test('блок зони зупиняє удар, карта з pierce ні', () 
   const a = fighterFromPlayer(player('a', 'warrior'), rng);
   const d = fighterFromPlayer(player('d', 'warrior'), rng);
   const b = createBattle({ teams: [[a], [d]], seed: 3 });
-  a.hand = ['netherite_axe']; a.mana = 10; a.crit = 0; d.crit = 0; a.dodge = 0; d.dodge = 0;
+  a.hand = ['netherite_axe']; a.mana = 20; a.crit = 0; d.crit = 0; a.dodge = 0; d.dodge = 0;
   assert.equal(submitMove(b, 'a', { target: 'd', attack: 'head', blocks: ['head', 'chest'], cards: ['netherite_axe'] }), null);
   assert.equal(submitMove(b, 'd', { target: 'a', attack: 'head', blocks: ['head', 'chest'], cards: [] }), null);
   const ev = resolveRound(b);
@@ -41,8 +41,9 @@ test('хід перевіряється: мана, карти в руці', () =
   const rng = makeRng(1);
   const a = fighterFromPlayer(player('a', 'mage'), rng);
   const b = createBattle({ teams: [[a], [fighterFromMob('zombie', 0)]], seed: 1 });
-  a.hand = ['fireball', 'fireball']; a.mana = 3;
-  assert.match(submitMove(b, 'a', { cards: ['fireball', 'fireball'] }), /мани/);
+  a.hand = ['fireball', 'fireball']; a.mana = 5;
+  assert.match(submitMove(b, 'a', { cards: ['fireball'] }), /мани/);
+  a.mana = 6;
   assert.match(submitMove(b, 'a', { cards: ['lightning'] }), /немає в руці/);
   assert.equal(submitMove(b, 'a', { cards: ['fireball'] }), null);
 });
@@ -51,10 +52,10 @@ test('відсутній хід робиться автоматично, ман�
   const rng = makeRng(5);
   const a = fighterFromPlayer(player('a', 'archer'), rng);
   const b = createBattle({ teams: [[a], [fighterFromMob('slime', 0)]], seed: 5 });
-  assert.equal(a.mana, 1);
+  assert.equal(a.mana, 2);
   resolveRound(b);
   assert.equal(a.mana >= 1, true);
-  assert.ok(a.hand.length >= 3);
+  assert.ok(a.hand.length >= 3 && a.hand.length <= 4, 'рука до 4');
 });
 
 test('бос лютує на половині здоров’я, а крипер вибухає', () => {
@@ -86,7 +87,7 @@ test('усі карти зіграються без помилок', () => {
     const rng = makeRng(11);
     const a = fighterFromPlayer(player('a', c.class === 'all' ? 'warrior' : c.class), rng);
     const b = createBattle({ teams: [[a], [fighterFromMob('zombie', 0), fighterFromMob('skeleton', 1)]], seed: 11 });
-    a.hand = [c.id]; a.mana = 10;
+    a.hand = [c.id]; a.mana = 20;
     assert.equal(submitMove(b, 'a', { cards: [c.id] }), null, c.id);
     resolveRound(b);
     assert.ok(b.log[0].some(e => e.t === 'card' && e.card === c.id), c.id);

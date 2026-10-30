@@ -1,6 +1,7 @@
 /* Родинна арена: телефон гравця. Один файл, без збірки. Стан приходить потоком /api/events, команди йдуть POST-ами. */
 (function () {
   'use strict';
+  var DECK = 12;   // v0.57: колода 12 карт
   var $ = function (sel) { return document.querySelector(sel); };
   var app = $('#app');
   var token = localStorage.getItem('arena.token') || null;
@@ -285,7 +286,8 @@
     h += '<h3>⚔️ Удар (одна зона)</h3><div class="zones">' + content.zones.map(function (z) { return '<button data-att="' + z + '" class="' + (m.attack === z ? 'sel' : '') + '">' + esc(content.zoneNames[z]) + '</button>'; }).join('') + '</div>';
     h += '<h3>🛡 Блок (дві зони)</h3><div class="zones">' + content.zones.map(function (z) { return '<button data-blk="' + z + '" class="' + (m.blocks.indexOf(z) >= 0 ? 'selb' : '') + '">' + esc(content.zoneNames[z]) + '</button>'; }).join('') + '</div>';
     var spent = m.cards.reduce(function (s, id) { return s + cardOf(id).cost; }, 0);
-    h += '<h3>🃏 Карти (мана ' + (me.mana - spent) + ', до 3 за хід)</h3><div class="hand">' + me.hand.map(function (c, i) { var key = c.id + '#' + i; var sel = m.cards.indexOf(key) >= 0; var can = sel || (c.cost <= me.mana - spent && m.cards.length < 3); return '<div class="hcard ' + (sel ? 'sel' : '') + (can ? '' : ' off') + '" data-card="' + key + '"><div class="cost">' + c.cost + '</div><div class="ico">' + (c.image ? '<img src="' + esc(c.image) + '" alt="">' : esc(c.icon)) + '</div><div class="nm r-' + c.rarity + '">' + esc(c.name) + '</div><div class="muted">' + esc(c.text) + '</div></div>'; }).join('') + '</div>';
+    var handIdx = me.hand.map(function (c, i) { return { c: c, i: i }; }).sort(function (x, y) { var ax = x.c.cost <= me.mana ? 0 : 1, ay = y.c.cost <= me.mana ? 0 : 1; return ax - ay || x.c.cost - y.c.cost || x.i - y.i; });   // доступні першими
+    h += '<h3>🃏 Карти (мана ' + (me.mana - spent) + ', одна за хід)</h3><div class="hand">' + handIdx.map(function (ci) { var c = ci.c, i = ci.i; var key = c.id + '#' + i; var sel = m.cards.indexOf(key) >= 0; var can = sel || (c.cost <= me.mana - spent && m.cards.length < 1); return '<div class="hcard ' + (sel ? 'sel' : '') + (can ? '' : ' off') + '" data-card="' + key + '"><div class="cost">' + c.cost + '</div><div class="ico">' + (c.image ? '<img src="' + esc(c.image) + '" alt="">' : esc(c.icon)) + '</div><div class="nm r-' + c.rarity + '">' + esc(c.name) + '</div><div class="muted">' + esc(c.text) + '</div></div>'; }).join('') + '</div>';
     if (me.quiz) h += '<div class="card quiz"><h3>🧠 Розумна карта: ' + (me.quiz.kind === 'english' ? 'англійська' : 'математика') + '</h3><div class="big">' + esc(me.quiz.q) + '</div><div class="row">' + me.quiz.choices.map(function (c) { return '<button class="btn-sm grow ' + (String(m.quiz) === String(c) ? 'btn-blue' : '') + '" data-quiz="' + esc(c) + '">' + esc(c) + '</button>'; }).join('') + '</div><div class="small muted">Правильна відповідь: удар у півтора раза сильніший. Можна пропустити.</div></div>';
     var ok = m.attack && m.blocks.length === 2;
     h += '<button class="btn-primary btn-block" id="go" ' + (ok ? '' : 'disabled') + '>' + (ok ? '⚡ Зробити хід' : 'Обери удар і 2 блоки') + '</button>';
@@ -372,7 +374,7 @@
     if (!ui.deck) ui.deck = me.deck.slice();
     if (!ui.allowed) { api('/me/cards').then(function (r) { ui.allowed = r.cards; render(); }); return head() + '<div class="muted">Завантажую карти…</div>'; }
     var count = {}; ui.deck.forEach(function (id) { count[id] = (count[id] || 0) + 1; });
-    var h = head() + '<div class="row"><b>Колода: ' + ui.deck.length + '/20</b><button class="btn-sm btn-primary right" id="savedeck" ' + (ui.deck.length === 20 ? '' : 'disabled') + '>Зберегти</button><button class="btn-sm" id="resetdeck">Скинути</button></div><div class="row" style="margin:6px 0"><button class="btn-sm btn-blue" id="autodeck">✨ Зібрати за мене</button><span class="small muted">найкращі карти зі знайдених, з розумною кривою мани</span></div><div class="small muted">Тисни на карту: + в колоду, до 2 однакових. Рідкісні карти відкриваються з босів.</div>';
+    var h = head() + '<div class="row"><b>Колода: ' + ui.deck.length + '/' + DECK + '</b><button class="btn-sm btn-primary right" id="savedeck" ' + (ui.deck.length === DECK ? '' : 'disabled') + '>Зберегти</button><button class="btn-sm" id="resetdeck">Скинути</button></div><div class="row" style="margin:6px 0"><button class="btn-sm btn-blue" id="autodeck">✨ Зібрати за мене</button><span class="small muted">найкращі карти зі знайдених, з розумною кривою мани</span></div><div class="small muted">Тисни на карту: + в колоду, до 2 однакових. Рідкісні карти відкриваються з босів.</div>';
     h += '<div class="deckgrid">' + ui.allowed.map(function (c) { var n = count[c.id] || 0; return '<div class="dcard ' + (n ? 'in' : '') + '" data-dc="' + c.id + '"><div>' + (c.image ? '<img class="cimg" src="' + esc(c.image) + '" alt="">' : esc(c.icon)) + ' <b class="r-' + c.rarity + '">' + esc(c.name) + '</b> <span class="muted">(' + c.cost + ')</span></div><div class="muted">' + esc(c.text) + '</div><div>' + (n ? '✅ ×' + n : '') + '</div></div>'; }).join('') + '</div>';
     h += customCardsHtml();
     h += customMobsHtml();
@@ -591,7 +593,7 @@
       var go = function (image, mime) { act('/me/avatar', { description: desc, image: image, mime: mime, parentPin: ppin }).then(function (r) { if (r.fallback) toast('ШІ-художник не налаштований: дав блоковий аватар', 4000); else { ui.avatarCands = r.candidates; ui.pick = null; } render(); }).catch(function () { render(); }); };
       if (f) shrink(f, function (b64, mime) { go(b64, mime); }); else go(null, null);
     });
-    on('[data-dc]', function (el) { var id = el.dataset.dc, n = ui.deck.filter(function (x) { return x === id; }).length; if (n >= 2) ui.deck = ui.deck.filter(function (x) { return x !== id; }); else if (ui.deck.length < 20) ui.deck.push(id); else toast('Уже 20 карт, прибери якусь'); render(); });
+    on('[data-dc]', function (el) { var id = el.dataset.dc, n = ui.deck.filter(function (x) { return x === id; }).length; if (n >= 2) ui.deck = ui.deck.filter(function (x) { return x !== id; }); else if (ui.deck.length < DECK) ui.deck.push(id); else toast('Уже ' + DECK + ' карт, прибери якусь'); render(); });
     on('#savedeck', function () { act('/me/deck', { deck: ui.deck }, 'Колоду збережено').catch(function () { }); });
     on('#resetdeck', function () { ui.deck = state.me.deck.slice(); render(); });
     on('#autodeck', function () { act('/me/deck/auto', {}, '✨ Колоду зібрано й збережено').then(function (r) { ui.deck = r.deck.slice(); render(); }); });

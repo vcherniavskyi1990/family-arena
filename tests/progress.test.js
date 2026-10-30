@@ -53,10 +53,10 @@ test('досягнення й титул', () => {
   assert.equal(checkAchievements(p).length, 0, 'двічі не дається');
 });
 
-test('колода: 20 карт, ≤2 однакових, лише свій клас і знайдені рідкісні', () => {
+test('колода: 12 карт, ≤2 однакових, лише свій клас і знайдені рідкісні', () => {
   const p = newPlayer({ id: 'a', name: 'A', classId: 'mage' });
   assert.equal(setDeck(p, starterDeck('mage')), null);
-  assert.match(setDeck(p, starterDeck('mage').slice(0, 19)), /20/);
+  assert.match(setDeck(p, starterDeck('mage').slice(0, 11)), /12/);
   const d = starterDeck('mage'); d[0] = 'rage';
   assert.match(setDeck(p, d), /класу/);
   const d2 = starterDeck('mage'); d2[0] = 'lightning';

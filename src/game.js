@@ -10,7 +10,7 @@ import { createBattle, applyFora, fighterFromPlayer, fighterFromMob, submitMove,
 import { newPlayer, addXp, xpForLevel, equipmentBonus, genItem, genCard, equip, unequip, craft, checkAchievements, setDeck, autoDeck, sellPrice, genPet, grantPet, petView, petOf, activePetIcon } from './engine/progress.js';
 import { makeQuiz, checkQuiz } from './engine/quiz.js';
 import { showMs, showTotal } from './engine/show.js';
-import { CLASSES, CARDS, DUNGEONS, MOBS, QUESTS, ACHIEVEMENTS, DAILY, FAMILY, WORLDBOSS, PETS, CAMPAIGN, CAMPAIGN2, camp2ById, COSMETICS, MUTATORS, EVENTS, ENVELOPES, ITEMS, petById, ZONES, ZONE_NAMES, classById, dungeonById, mobById, questById, cardById, starterDeck, allowedCards } from './engine/content.js';
+import { CLASSES, CARDS, DUNGEONS, MOBS, QUESTS, ACHIEVEMENTS, DAILY, FAMILY, WORLDBOSS, PETS, CAMPAIGN, CAMPAIGN2, camp2ById, COSMETICS, MUTATORS, EVENTS, ENVELOPES, ITEMS, petById, ZONES, ZONE_NAMES, classById, dungeonById, mobById, questById, cardById, starterDeck, allowedCards, DECK_SIZE } from './engine/content.js';
 
 export const ROUND_SECONDS = 30;
 const cryText = (id) => { const c = COSMETICS.cries.find(x => x.id === id); return c ? c.text : null; };
@@ -26,11 +26,11 @@ const DUNGEON_ROOMS_MAX = 3, DUNGEON_ROOM_MOBS_MAX = 3;
 const DUNGEON_ICONS = ['🏰', '🌋', '🧊', '🌲', '🕸️', '🚀', '🏴‍☠️', '🎪', '🧁', '👻'];
 /** Шаблони «своїх карт»: дитина малює картинку й дає назву, сила з шаблону, щоб баланс не ламався. */
 export const CARD_TEMPLATES = {
-  strike: { name: 'Удар', cost: 2, type: 'damage', value: 12, text: '12 шкоди.' },
-  big_strike: { name: 'Могутній удар', cost: 4, type: 'damage', value: 24, critBonus: 0.2, text: '24 шкоди, шанс криту +20 %.' },
-  shield: { name: 'Щит', cost: 2, type: 'shield', value: 14, text: 'Щит на 14.' },
-  heal: { name: 'Зцілення', cost: 3, type: 'heal', value: 18, text: '+18 здоров’я.' },
-  poison: { name: 'Отрута', cost: 2, type: 'poison', value: 5, turns: 3, text: '5 отрути на 3 ходи.' },
+  strike: { name: 'Удар', cost: 4, type: 'damage', value: 24, text: '24 шкоди.' },
+  big_strike: { name: 'Могутній удар', cost: 8, type: 'damage', value: 48, critBonus: 0.2, text: '48 шкоди, шанс криту +20 %.' },
+  shield: { name: 'Щит', cost: 4, type: 'shield', value: 28, text: 'Щит на 28.' },
+  heal: { name: 'Зцілення', cost: 6, type: 'heal', value: 36, text: '+36 здоров’я.' },
+  poison: { name: 'Отрута', cost: 4, type: 'poison', value: 10, turns: 3, text: '10 отрути на 3 ходи.' },
 };
 const SEASON_POINTS = { duelWin: 3, duelLoss: 1, dungeonLoss: 1, quest: 1, worldBoss: 5, chapter: 3, champion: 8, party: 3 };
 const PARTY_GAMES = ['reaction', 'memory', 'quiz'];   // «Вечір ігор»: три міні-гри поспіль
@@ -108,7 +108,8 @@ export class Game {
     if (!this.history.campaign) this.history.campaign = { chapter: 0, runs: 0, done: [] };
     this.campaignMigrate();
     if (!this.history.envelopes) this.history.envelopes = [];   // відкриті конверти-сюрпризи: {id, at}   // сюжетна кампанія: chapter = індекс наступного розділу   // журнал по днях для звіту тижня: {день: {гравець: {minutes, battles, wins, quests, smart, kills}}}
-    for (const c of this.history.customCards) if (c.approved) this.registerCard(c);
+    for (const c of this.history.customCards) { if (!c.scale2) { c.cost *= 2; c.value *= 2; c.scale2 = true; c.text = String(c.text || '').replace(/\d+/, (n) => String(Number(n) * 2)); this.store.save('history'); }   // v0.57: дитячі карти за тим самим правилом ×2
+      if (c.approved) this.registerCard(c); }
     for (const m of this.history.customMobs) if (m.approved) this.registerMob(m);
     if (!this.history.customDungeons) this.history.customDungeons = [];   // майстерня підземель: {id, name, icon, text, rooms, boss, level, owner, author, approved, runs, wins}
     for (const d of this.history.customDungeons) if (d.approved) this.registerDungeon(d);
@@ -139,7 +140,7 @@ export class Game {
       for (const k of Object.keys(tpl)) if (p[k] === undefined) { p[k] = JSON.parse(JSON.stringify(tpl[k])); changed = true; }
       for (const k of Object.keys(tpl.stats)) if (p.stats[k] === undefined) { p.stats[k] = k === 'level' ? p.level : 0; changed = true; }
       if (!classById[p.class]) { p.class = 'warrior'; p.deck = starterDeck('warrior'); changed = true; }
-      if (!Array.isArray(p.deck) || p.deck.length !== 20 || p.deck.some(id => !cardById[id])) { p.deck = starterDeck(p.class); changed = true; }
+      if (!Array.isArray(p.deck) || p.deck.length !== DECK_SIZE || p.deck.some(id => !cardById[id])) { p.deck = autoDeck(p); if (!p.deck.length) p.deck = starterDeck(p.class); changed = true; }   // v0.57: 20 → 12, збираємо найкращі зі знайдених
     }
     if (changed) this.store.save('players');
   }

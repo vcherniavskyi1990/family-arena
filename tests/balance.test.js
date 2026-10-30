@@ -33,47 +33,46 @@ test('дуелі класів збалансовані (35–65 % перемог
   }
 });
 
-test('перше підземелля проходять двоє новачків у >50 % випадків, а бос не падає за 2 ходи', () => {
-  const d = DUNGEONS[0];
-  let wins = 0, rounds = 0;
-  for (let i = 0; i < 60; i++) {
+const bonusGear = { atk: 4, def: 2, hp: 20, mana: 0, crit: 0.02 };   // ≈ 2 предмети незвичайної якості
+function runDungeon(id, lvl, bonus, n = 60) {
+  const d = DUNGEONS.find(x => x.id === id); assert.ok(d, id);
+  let wins = 0, bossRounds = 0;
+  for (let i = 0; i < n; i++) {
     const rng = makeRng(500 + i);
-    const team = [fighterFromPlayer(player('a', 'warrior'), rng), fighterFromPlayer(player('b', 'healer'), rng)];
+    const team = [fighterFromPlayer({ ...player('a', 'warrior', lvl), bonus }, rng), fighterFromPlayer({ ...player('b', 'healer', lvl), bonus }, rng)];
     let ok = true;
     for (const room of [...d.rooms, [d.boss]]) {
-      const mobs = room.map((m, j) => fighterFromMob(m, j));
+      const mobs = room.map((m, j) => fighterFromMob(m, j, room[0] === d.boss ? 1.1 : 1));
       const b = createBattle({ teams: [team, mobs], seed: 900 + i });
       while (!b.over) resolveRound(b);
-      if (room[0] === d.boss) rounds += b.round;
+      if (room[0] === d.boss) bossRounds += b.round;
       if (b.winner !== 0) { ok = false; break; }
       // між кімнатами команда трохи відновлюється
-      for (const f of team) { f.hp = Math.min(f.maxHp, f.hp + Math.round(f.maxHp * 0.3)); f.alive = f.hp > 0; f.move = null; }
+      for (const f of team) { f.hp = Math.min(f.maxHp, f.hp + Math.round(f.maxHp * 0.3)); f.alive = f.hp > 0; f.move = null; f.shield = 0; f.buffs = []; f.effects = {}; f.minions = []; }
     }
     if (ok) wins++;
   }
-  console.log(`  підземелля «${d.name}»: ${wins}/60 перемог, бос у середньому ${(rounds / 60).toFixed(1)} раундів`);
-  assert.ok(wins / 60 > 0.5, `перемог ${wins}/60`);
-  assert.ok(rounds / 60 >= 3, 'бос надто слабкий');
+  const r = { wins: wins / n, bossRounds: bossRounds / n };
+  console.log(`  «${d.name}» lvl${lvl}${bonus ? '+спорядження' : ''}: ${(100 * r.wins).toFixed(0)} % перемог, бос ${r.bossRounds.toFixed(1)} раундів`);
+  return r;
+}
+
+// Складність (рішення Віктора 30.10: «перемагати має коштувати зусиль, або доки не станеш сильнішим чи не вдінеш шмотку»):
+// двоє новачків без спорядження проходять перше підземелля приблизно в половині спроб, зі спорядженням і +2 рівні майже завжди;
+// підземелля свого рівня без спорядження дають 15–60 %, бос падає за 4–12 раундів (щоб показ на ТБ не тягнувся).
+test('перше підземелля: двоє новачків ≈50 %, зі спорядженням ≥85 %, бос 4–8 раундів', () => {
+  const fresh = runDungeon('kitchen_caves', 1);
+  assert.ok(fresh.wins >= 0.4 && fresh.wins <= 0.72, `новачки: ${(100 * fresh.wins).toFixed(0)} %`);
+  assert.ok(fresh.bossRounds >= 4 && fresh.bossRounds <= 8, 'бос: ' + fresh.bossRounds);
+  const geared = runDungeon('kitchen_caves', 3, bonusGear);
+  assert.ok(geared.wins >= 0.85, `зі спорядженням: ${(100 * geared.wins).toFixed(0)} %`);
+  assert.ok(geared.wins - fresh.wins >= 0.2, 'спорядження має відчуватись');
 });
 
-test('нові підземелля (спальня 4, гараж 7) проходяться двома гравцями свого рівня, гараж не легший за балкон', () => {
-  for (const [id, lvl, min] of [['bedroom_nightmares', 5, 0.5], ['garage_machines', 9, 0.35]]) {
-    const d = DUNGEONS.find(x => x.id === id); assert.ok(d, id);
-    let wins = 0;
-    for (let i = 0; i < 40; i++) {
-      const rng = makeRng(700 + i);
-      const team = [fighterFromPlayer({ ...player('a', 'warrior'), level: lvl }, rng), fighterFromPlayer({ ...player('b', 'healer'), level: lvl }, rng)];
-      let ok = true;
-      for (const room of [...d.rooms, [d.boss]]) {
-        const mobs = room.map((m, j) => fighterFromMob(m, j));
-        const b = createBattle({ teams: [team, mobs], seed: 1900 + i });
-        while (!b.over) resolveRound(b);
-        if (b.winner !== 0) { ok = false; break; }
-        for (const f of team) { f.hp = Math.min(f.maxHp, f.hp + Math.round(f.maxHp * 0.3)); f.alive = f.hp > 0; f.move = null; }
-      }
-      if (ok) wins++;
-    }
-    console.log(`  підземелля «${d.name}»: ${wins}/40 перемог`);
-    assert.ok(wins / 40 >= min, `${id}: перемог ${wins}/40`);
+test('підземелля свого рівня без спорядження: 10–85 % перемог, боси ≤ 12 раундів', () => {
+  for (const [id, lvl] of [['lego_castle', 2], ['wardrobe_shadows', 3], ['bedroom_nightmares', 5], ['dad_office', 7], ['garage_machines', 9], ['balcony_citadel', 10]]) {
+    const r = runDungeon(id, lvl, undefined, 40);
+    assert.ok(r.wins >= 0.1 && r.wins <= 0.85, `${id}: перемог ${(100 * r.wins).toFixed(0)} %`);   // пізні підземелля без спорядження лишаються стіною
+    assert.ok(r.bossRounds <= 12, `${id}: бос ${r.bossRounds} раундів`);
   }
 });

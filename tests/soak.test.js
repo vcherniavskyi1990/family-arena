@@ -41,7 +41,7 @@ test('1500 випадкових дій: жодного винятку, стан 
       }
     });
     // інваріанти
-    for (const q of ps) { const Q = g.players[q.id]; assert.ok(Q.gold >= 0, 'золото не від’ємне'); assert.equal(Q.deck.length, 20); assert.ok(Q.level >= 1 && Q.level <= 20); }
+    for (const q of ps) { const Q = g.players[q.id]; assert.ok(Q.gold >= 0, 'золото не від’ємне'); assert.equal(Q.deck.length, 12); assert.ok(Q.level >= 1 && Q.level <= 20); }
     if (g.battle) for (const f of g.battle.fighters) assert.ok(f.hp >= 0 && f.hp <= f.maxHp + 1, `hp ${f.hp}/${f.maxHp}`);
     JSON.stringify(g.tvState()); for (const q of ps) JSON.stringify(g.playerState(g.players[q.id]));
   }

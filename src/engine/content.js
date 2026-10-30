@@ -33,16 +33,17 @@ export const ZONES = ['head', 'chest', 'belt', 'legs'];
 export const ZONE_NAMES = { head: 'Голова', chest: 'Груди', belt: 'Пояс', legs: 'Ноги' };
 export const RARITY_ORDER = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
 
-/** Стартова колода класу: 20 карт, лише звичайні й незвичайні, свого класу або спільні. */
+export const DECK_SIZE = 12;   // v0.57: 12 карт замість 20
+/** Стартова колода класу: 12 карт, лише звичайні й незвичайні, свого класу або спільні. */
 export function starterDeck(classId) {
   const own = CARDS.filter(c => c.class === classId && (c.rarity === 'common' || c.rarity === 'uncommon'));
   const shared = CARDS.filter(c => c.class === 'all' && (c.rarity === 'common' || c.rarity === 'uncommon'));
   const deck = [];
-  // карти класу двічі, далі спільні по одній, доки не буде 20
-  for (const c of own) deck.push(c.id, c.id);
-  for (const c of shared) { if (deck.length < 20) deck.push(c.id); }
-  for (const c of shared) { if (deck.length < 20) deck.push(c.id); }
-  return deck.slice(0, 20);
+  // карти класу по одній, далі спільні по одній, доки не буде 12
+  for (const c of own) { if (deck.length < DECK_SIZE) deck.push(c.id); }
+  for (const c of shared) { if (deck.length < DECK_SIZE) deck.push(c.id); }
+  for (const c of own) { if (deck.length < DECK_SIZE) deck.push(c.id); }
+  return deck.slice(0, DECK_SIZE);
 }
 
 /** Карти, які гравець може класти в колоду: спільні, свого класу, і ті, що він знайшов (collection). */
