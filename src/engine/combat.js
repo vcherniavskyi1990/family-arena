@@ -164,7 +164,8 @@ export function resolveRound(b) {
       const c = cardById[id];
       f.hand.splice(f.hand.indexOf(id), 1); f.discard.push(id); f.mana -= c.cost;
       played.push({ f, c });
-      ev.push({ t: 'card', who: f.id, card: id, name: c.name, icon: c.icon, image: c.image || undefined, text: c.custom ? c.text : undefined });
+      const aimed = ['damage', 'poison', 'stun', 'weaken'].includes(c.type) && !c.aoe ? byId(b, f.move.target) : null;
+      ev.push({ t: 'card', who: f.id, card: id, name: c.name, icon: c.icon, image: c.image || undefined, text: c.custom ? c.text : undefined, target: aimed ? aimed.id : undefined, aoe: !!c.aoe });
     }
   }
   const phase = (types) => played.filter(p => types.includes(p.c.type));
@@ -200,11 +201,13 @@ export function resolveRound(b) {
     ev.push({ t: 'summon', who: f.id, name: c.minion.name, icon: c.minion.icon });
   }
 
-  // 2. Удари: зона vs блок
-  for (const f of order) {
-    if (!f.alive) continue;
+  // 2. Удари двома хвилями: спершу герої (команда 0), потім монстри; ТБ показує кожен удар окремо
+  for (const team of [0, 1]) {
+   ev.push({ t: 'wave', team });
+   for (const f of order) {
+    if (!f.alive || f.team !== team) continue;
     const t = byId(b, f.move.target);
-    if (!t || !t.alive) continue;
+    if (!t || !t.alive) { ev.push({ t: 'skip', who: f.id, why: 'noTarget' }); continue; }
     if (f.effects.stunned) { ev.push({ t: 'skip', who: f.id }); continue; }
     const zone = f.move.attack;
     if (t.move && t.move.blocks.includes(zone) && !(f.raged && rng.chance(0.3))) {
@@ -225,9 +228,11 @@ export function resolveRound(b) {
     if (f.mob && mobById[f.mob].aoe && f.raged) {
       for (const o of enemiesOf(b, f)) if (o !== t && o.alive) hurt(b, f, o, Math.round(dmg * 0.4), ev, 'breath');
     }
+   }
   }
 
   // 3. Прислужники
+  if (order.some(f => f.alive && f.minions.length)) ev.push({ t: 'wave', team: 2 });
   for (const f of order) {
     if (!f.alive) continue;
     for (const m of f.minions) {
