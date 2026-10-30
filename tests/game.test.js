@@ -168,7 +168,8 @@ test('розумні карти: правильна відповідь подв�
   assert.equal(g.players[b.id].stats.smart, 0);
   // раунди 2 і 3 без завдання, раунд 4 знову з ним
   const seen = {}; let guard = 0;
-  while (g.battle && !g.battle.over && guard++ < 20) { g.fire('round'); if (g.battle && g.roundEnds) seen[g.battle.round + 1] = !!g.playerState(a).battle.me.quiz; if (g.battle && g.battle.round >= 3 && g.roundEnds) break; }
+  while (g.battle && !g.battle.over && guard++ < 20) { for (const f of g.battle.fighters) { f.maxHp = 5000; f.hp = 5000; }   // щоб бій дожив до 4-го раунду
+    g.fire('round'); if (g.battle && g.roundEnds) seen[g.battle.round + 1] = !!g.playerState(a).battle.me.quiz; if (g.battle && g.battle.round >= 3 && g.roundEnds) break; }
   assert.deepEqual(seen, { 2: false, 3: false, 4: true }, JSON.stringify(seen));
   // без розумних карт питання немає
   g.updateSettings({ smartCards: false });
