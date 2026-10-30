@@ -248,7 +248,7 @@
     var e = el(id); if (!e) return;
     var r = e.getBoundingClientRect(), d = document.createElement('div');
     d.className = 'float ' + (cls || ''); d.textContent = text;
-    d.style.left = (r.left + r.width / 2 - 40 + (Math.random() * 80 - 40)) + 'px'; d.style.top = (r.top + 20) + 'px';
+    d.style.left = (r.left + r.width / 2 - 40 + (Math.random() * 80 - 40)) + 'px'; d.style.top = (r.top + (canvasOn ? Math.round(r.height * 0.3) : 20)) + 'px';
     document.body.appendChild(d); setTimeout(function () { d.remove(); }, 1400);
   }
   function say(t) { ticker.innerHTML = '<div>' + t + '</div>'; }
