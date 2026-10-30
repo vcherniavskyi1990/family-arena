@@ -149,3 +149,4 @@ body.cvon #ticker { left: 720px; text-align: center; font-size: 30px; }
 .plan-svg .pm { font-size: 1100px; text-anchor: middle; }
 .plan-label { font-size: 26px; color: #c9d4e0; text-align: center; margin-top: 4px; }
 .room-intro .plan { position: static; width: 760px; height: 400px; margin: 20px auto 0; } .room-intro .plan .plan-svg { width: 760px; height: 360px; }
+body.cvon .float { font-size: 72px; z-index: 7; } body.cvon .float.crit { font-size: 96px; }
