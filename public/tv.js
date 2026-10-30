@@ -26,6 +26,7 @@
   function onState() {
     var phase = state.phase;
     if (!prev || prev.phase !== phase) { shownRound = 0; queue = []; roomShown = null; playing = false; stage.removeAttribute('data-next'); }
+    if (phase !== 'battle' && phase !== 'replay') document.body.classList.remove('cvon');
     if (phase === 'battle' || phase === 'replay') renderBattle(); else if (phase === 'lobby') renderLobby(); else if (phase === 'results') renderResults(); else renderIdle();
     if (state.announce && (!prev || !prev.announce || prev.announce.at !== state.announce.at)) showAnnounce(state.announce);
     var cl = document.getElementById('closing'); if (state.closing) { if (!cl) { cl = document.createElement('div'); cl.id = 'closing'; document.body.appendChild(cl); } cl.textContent = state.closing.text; } else if (cl) cl.remove();
@@ -166,6 +167,43 @@
       '<div class="bar ' + (f.team ? 'red' : '') + '"><i style="width:' + hp + '%"></i><b>' + f.hp + ' / ' + f.maxHp + '</b></div>' + (f.maxMana ? '<div class="bar mana"><i style="width:' + Math.round(100 * f.mana / f.maxMana) + '%"></i></div>' : '') + '</div>';
   }
   function cssId(s) { return s.replace(/[^a-zA-Z0-9_-]/g, '_'); }
+  var canvasOn = false;
+  /** Позиція фігурки на полотні: герої зліва сходами, вороги справа; бос один великий по центру свого боку. */
+  function figPos(i, n, right, boss) {
+    if (boss && n === 1) return { x: 1330, y: 300 };
+    // дві колонки сходами: сусіди в різних колонках, тож фігурки (≈300 px заввишки) не накладаються
+    var step = n <= 2 ? 300 : n === 3 ? 260 : 210;
+    var y = (n <= 2 ? 240 : 110) + i * step;
+    var x = right ? 1470 - (i % 2) * 240 : 200 + (i % 2) * 240;
+    return { x: x, y: y };
+  }
+  function figHtml(f, i, n, right) {
+    var hp = Math.max(0, Math.round(100 * f.hp / f.maxHp)); var boss = f.kind === 'boss'; var p = figPos(i, n, right, boss);
+    return '<div class="fig ' + (f.alive ? '' : 'dead') + (boss ? ' boss' : '') + (f.raged ? ' rage' : '') + (right ? ' r' : ' l') + '" id="f-' + cssId(f.id) + '" data-x="' + p.x + '" data-y="' + p.y + '" style="left:' + p.x + 'px;top:' + p.y + 'px">' +
+      av(f, 'fav') + '<div class="n">' + esc(f.name) + (boss ? ' 👑' : '') + '</div>' +
+      '<div class="tags">' + (f.shield ? '🛡' + f.shield + ' ' : '') + (f.poison ? '☠️ ' : '') + (f.stunned ? '💫 ' : '') + (f.buff > 0 ? '💪 ' : '') + (f.raged ? '😡 ' : '') + (f.minions.length ? '<span class="minions">' + f.minions.map(function (m) { return m.icon; }).join('') + '</span>' : '') + (f.kind === 'player' && f.alive ? (f.ready ? (f.auto ? ' 🤖' : ' ✅') : ' ⏳') : '') + '</div>' +
+      '<div class="bar ' + (f.team ? 'red' : '') + '"><i style="width:' + hp + '%"></i><b>' + f.hp + ' / ' + f.maxHp + '</b></div>' + (f.maxMana ? '<div class="bar mana"><i style="width:' + Math.round(100 * f.mana / f.maxMana) + '%"></i></div>' : '') + '</div>';
+  }
+  function fighterOf(id) { return (state.battle && state.battle.fighters || []).filter(function (x) { return x.id === id; })[0]; }
+  /** Рух на полотні: ближній підбігає, б'є, відбігає; дальній стоїть і пускає снаряд. ms = тривалість події. */
+  function strike(fromId, toId, kind, ms) {
+    var a = el(fromId), b = el(toId); if (!a || !b) return;
+    var f = fighterOf(fromId) || {}; var ranged = kind === 'card' || f.ranged || kind === 'minion';
+    var ax = +a.getAttribute('data-x'), ay = +a.getAttribute('data-y'), bx = +b.getAttribute('data-x'), by = +b.getAttribute('data-y');
+    var right = ax < bx; var t = Math.min(900, ms - 300);
+    a.classList.add('attacking');
+    if (ranged) {
+      var s = document.createElement('div'); s.className = 'proj'; s.textContent = kind === 'card' ? '✨' : kind === 'minion' ? '🐾' : (f.shot || '💢');
+      s.style.left = (ax + 75) + 'px'; s.style.top = (ay + 60) + 'px'; stage.appendChild(s);
+      setTimeout(function () { s.style.left = (bx + (right ? 20 : 130)) + 'px'; s.style.top = (by + 60) + 'px'; }, 30);
+      setTimeout(function () { s.remove(); a.classList.remove('attacking'); }, Math.max(450, t));
+    } else {
+      var dx = (bx - ax) + (right ? -170 : 170), dy = by - ay;
+      a.style.transition = 'transform .32s ease-in'; a.style.transform = 'translate(' + dx + 'px,' + dy + 'px)'; a.style.zIndex = 5;
+      setTimeout(function () { a.style.transition = 'transform .35s ease-out'; a.style.transform = ''; }, Math.min(650, t));
+      setTimeout(function () { a.style.zIndex = ''; a.classList.remove('attacking'); }, Math.min(650, t) + 400);
+    }
+  }
   function renderBattle() {
     var b = state.battle;
     var t0 = b.fighters.filter(function (f) { return f.team === 0; }), t1 = b.fighters.filter(function (f) { return f.team === 1; });
@@ -175,9 +213,18 @@
     if (fresh) { var was = {}; prev.battle.fighters.forEach(function (f) { was[f.id] = f; }); var keep = function (f) { var w = was[f.id]; return w ? { hp: w.hp, alive: w.alive, shield: w.shield, raged: w.raged, poison: w.poison, stunned: w.stunned, buff: w.buff, minions: w.minions } : {}; };
       t0 = t0.map(function (f) { var o = {}; for (var k in f) o[k] = f[k]; var kk = keep(f); for (var k2 in kk) o[k2] = kk[k2]; return o; }); t1 = t1.map(function (f) { var o = {}; for (var k in f) o[k] = f[k]; var kk = keep(f); for (var k2 in kk) o[k2] = kk[k2]; return o; }); }
     var h = '<div class="hdr"><div class="t">' + (b.replay ? '📼 ПОВТОР · ' : '') + title + '</div><div class="s">' + esc(state.season) + '</div>' + (b.replay ? '<div class="r">Повтор останнього бою</div>' : '') + '</div>';
-    h += '<div class="arena"><div class="team l">' + t0.map(function (f) { return fighterHtml(f, false); }).join('') + '</div>';
-    h += '<div class="mid"><div class="round">раунд ' + (b.round + 1) + '</div><div class="timer" id="timer">' + (b.roundEnds ? Math.max(0, Math.round((b.roundEnds - Date.now()) / 1000)) : '…') + '</div><div class="vs">VS</div></div>';
-    h += '<div class="team r">' + t1.map(function (f) { return fighterHtml(f, true); }).join('') + '</div></div>';
+    var mid = '<div class="mid"><div class="round">раунд ' + (b.round + 1) + '</div><div class="timer" id="timer">' + (b.roundEnds ? Math.max(0, Math.round((b.roundEnds - Date.now()) / 1000)) : '…') + '</div><div class="vs">VS</div></div>';
+    canvasOn = !!(b.meta && b.meta.canvas);
+    document.body.classList.toggle('cvon', canvasOn);
+    if (canvasOn) {
+      // v0.59: полотно бою для босів і кампанії: сцена кімнати, фігурки, рух як у Heroes
+      h += '<div class="cv' + (b.meta.scene ? '' : ' nobg') + '">' + (b.meta.scene ? '<img class="cv-bg" src="' + esc(b.meta.scene) + '" alt="">' : '') + '<div class="cv-floor"></div>' + mid;
+      h += t0.map(function (f, i) { return figHtml(f, i, t0.length, false); }).join('') + t1.map(function (f, i) { return figHtml(f, i, t1.length, true); }).join('') + '</div>';
+    } else {
+      h += '<div class="arena"><div class="team l">' + t0.map(function (f) { return fighterHtml(f, false); }).join('') + '</div>';
+      h += mid;
+      h += '<div class="team r">' + t1.map(function (f) { return fighterHtml(f, true); }).join('') + '</div></div>';
+    }
     if (!playing || !prev || prev.phase !== state.phase) { stage.innerHTML = h; } else { stage.setAttribute('data-next', h); }
     clearInterval(timerId);
     timerId = setInterval(function () { var t = document.getElementById('timer'); if (!t || !state.battle) return; if (!state.battle.roundEnds) { t.textContent = state.battle.replay ? '📼' : playing ? '▶' : '…'; t.className = 'timer show'; return; } var left = Math.max(0, Math.round((state.battle.roundEnds - Date.now()) / 1000)); t.textContent = left; t.className = 'timer' + (left <= 10 ? ' low' : ''); if (left === 5) beep(880, 80); }, 400);
@@ -204,6 +251,7 @@
   var WAVE = { 0: '⚔️ Герої б’ють', 1: '👹 Монстри б’ють', 2: '✨ Прислужники' };
   function arrows() { var a = document.getElementById('arrows'); if (!a) { a = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); a.setAttribute('id', 'arrows'); a.innerHTML = '<defs><marker id="ah" markerUnits="userSpaceOnUse" markerWidth="34" markerHeight="34" refX="26" refY="17" orient="auto"><path d="M0,0 L34,17 L0,34 z" fill="#ffd166"/></marker></defs>'; document.body.appendChild(a); } return a; }
   function arrow(fromId, toId, cls, ms) {
+    if (canvasOn) return strike(fromId, toId, cls, ms);
     var a = el(fromId), b = el(toId); if (!a || !b) return;
     var ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
     var fromRight = ra.left < rb.left;

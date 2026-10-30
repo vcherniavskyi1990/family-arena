@@ -80,9 +80,11 @@ const GOAL_GOLD = 30;   // золото кожній дитині, коли ці
 export const hashPin = (pin, salt) => createHash('sha256').update(`${salt}:${pin}`).digest('hex');
 
 export class Game {
-  constructor({ store, now = () => Date.now(), realTimers = true, cardsDir = null, seed = null }) {
+  constructor({ store, now = () => Date.now(), realTimers = true, cardsDir = null, artDir = null, seed = null }) {
     this.store = store;
     this.cardsDir = cardsDir; if (cardsDir) mkdirSync(cardsDir, { recursive: true });
+    this.artDir = artDir; if (artDir) mkdirSync(artDir, { recursive: true });   // v0.59: сцени кімнат і портрети босів (tools/gen-art.mjs або малюнки дітей)
+    this.artCache = {};
     this.tvOnline = () => true;
     this.now = now;
     this.realTimers = realTimers;
@@ -715,7 +717,8 @@ export class Game {
       f.move = null; f.shield = 0; f.buffs = []; f.effects = {}; f.minions = []; if (r.room > 0 && f.alive) f.hp = Math.min(f.maxHp, f.hp + Math.round(f.maxHp * heal)); if (!f.alive) { f.alive = true; f.hp = Math.round(f.maxHp * 0.5); }
       if (mut && mut.startMana) f.mana = Math.min(f.maxMana, mut.startMana);
     }
-    this.battle = createBattle({ teams: [r.team, mobs], seed: this.seed + r.room, mode: 'dungeon', meta: { room: r.room + 1, rooms: r.rooms.length, boss: r.room === r.rooms.length - 1 && !d.practice, practice: !!d.practice, dungeon: r.dungeon, raid: !!d.raid, scale, mutator: mut ? { id: mut.id, name: mut.name, icon: mut.icon } : null } });
+    const bossRoom = r.room === r.rooms.length - 1 && !d.practice;
+    this.battle = createBattle({ teams: [r.team, mobs], seed: this.seed + r.room, mode: 'dungeon', meta: { room: r.room + 1, rooms: r.rooms.length, boss: bossRoom, practice: !!d.practice, dungeon: r.dungeon, raid: !!d.raid, scale, campaign: !!r.campaign, canvas: bossRoom || !!r.campaign, scene: this.artFor('scene_' + r.dungeon), mutator: mut ? { id: mut.id, name: mut.name, icon: mut.icon } : null } });
     this.roundEvents = [{ t: 'room', n: r.room + 1, of: r.rooms.length, boss: r.room === r.rooms.length - 1 && !d.practice, practice: !!d.practice, names: mobs.map(m => m.name) }];
     this.recordFrame();
   }
@@ -1669,10 +1672,20 @@ export class Game {
     return { id: w.id, name: def.name, icon: def.icon, text: def.text, hp: w.hp, maxHp: w.maxHp, pct: Math.round(100 * w.hp / w.maxHp), killed: w.killed, top, daysLeft, week: w.week };
   }
   feed(text) { this.history.feed.unshift({ text, at: this.now() }); this.history.feed = this.history.feed.slice(0, 50); this.store.save('history'); }
+  /** Картинка з папки art: /art/<name>.png|jpg|webp, або null. Кеш 60 с, щоб не бити диск на кожну розсилку. */
+  artFor(name) {
+    if (!this.artDir || !name) return null;
+    const c = this.artCache[name]; const t = this.now();
+    if (c && t - c.at < 60000) return c.url;
+    let url = null;
+    for (const ext of ['png', 'jpg', 'webp']) if (existsSync(join(this.artDir, `${name}.${ext}`))) { url = `/art/${name}.${ext}`; break; }
+    this.artCache[name] = { url, at: t };
+    return url;
+  }
   battleView() {
     const b = this.battle; if (!b) return null;
     return { round: b.round, mode: b.mode, meta: b.meta, over: b.over, winner: b.winner, roundEnds: this.roundEnds, paused: this.paused, pauseReason: this.pauseReason,
-      fighters: b.fighters.map(publicFighter), lastRound: this.lastRound && this.lastRound.n === b.round ? this.lastRound : null, roomIntro: this.roundEvents && this.roundEvents[0] && this.roundEvents[0].t === 'room' ? this.roundEvents[0] : null };
+      fighters: b.fighters.map(f => { const pf = publicFighter(f); if (!pf.avatar && f.mob) pf.avatar = this.artFor('mob_' + f.mob); return pf; }), lastRound: this.lastRound && this.lastRound.n === b.round ? this.lastRound : null, roomIntro: this.roundEvents && this.roundEvents[0] && this.roundEvents[0].t === 'room' ? this.roundEvents[0] : null };
   }
   lobbyView() {
     const camp = this.campaignView(); const mut = this.mutatorToday();

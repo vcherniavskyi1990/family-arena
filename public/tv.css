@@ -112,3 +112,27 @@ html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; backgro
 .wave.t0 { color: #7dffb0; } .wave.t1 { color: #ff7b7b; } .wave.t2 { color: #c9d4e0; }
 @keyframes wavein { from { opacity: 0; transform: translateY(-30px) } to { opacity: 1; transform: none } }
 .mid .timer.show { font-size: 90px; color: #9fb0c3; }
+
+/* v0.59: полотно бою (боси й кампанія) */
+.cv { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; overflow: hidden; }
+.cv.nobg { background: radial-gradient(ellipse at 50% 40%, #3a2a1a 0%, #140f0a 75%); }
+.cv-bg { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; object-fit: cover; }
+.cv-floor { position: absolute; left: 0; right: 0; bottom: 0; height: 520px; background: linear-gradient(to top, #0b0f14ee 0%, #0b0f1488 55%, transparent 100%); }
+.cv .mid { top: 110px; left: 860px; } .cv .mid .round { text-shadow: 0 0 8px #000; } .cv .mid .vs { display: none; }
+.fig { position: absolute; width: 230px; text-align: center; will-change: transform; }
+.fig .fav { width: 150px; height: 150px; margin: 0 auto; border-radius: 50%; background: #1b2430dd; border: 5px solid #33445a; font-size: 92px; line-height: 140px; overflow: hidden; box-shadow: 0 12px 30px #000a; }
+.fig .fav img { width: 100%; height: 100%; object-fit: cover; display: block; } .fig .fav .pet { position: absolute; font-size: 36px; margin-left: -40px; }
+.fig.l .fav { border-color: #2ecc71; } .fig.r .fav { border-color: #e74c3c; }
+.fig .n { font-size: 30px; font-weight: 800; margin-top: 6px; text-shadow: 0 0 8px #000, 0 2px 4px #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fig .tags { font-size: 24px; height: 30px; color: #c9d4e0; text-shadow: 0 0 6px #000; }
+.fig .bar { height: 20px; margin: 4px 10px 0; } .fig .bar b { font-size: 16px; }
+.fig.boss { width: 420px; } .fig.boss .fav { width: 340px; height: 340px; font-size: 220px; line-height: 330px; border-color: #ff8000; border-width: 8px; box-shadow: 0 0 60px #ff800077, 0 20px 40px #000; }
+.fig.boss .n { font-size: 44px; color: #ff8000; white-space: normal; line-height: 1.1; } .fig.boss .bar { height: 34px; } .fig.boss .bar b { font-size: 24px; top: 2px; }
+.fig.dead { opacity: .3; filter: grayscale(1); } .fig.hit .fav { animation: shake .4s; border-color: #ffd166; } .fig.healed .fav { border-color: #7dffb0; } .fig.blocked .fav { border-color: #8ecbff; }
+.fig.attacking .fav { box-shadow: 0 0 50px #ffd166cc; }
+.fig.rage .fav { animation: rage .6s infinite alternate; }
+.proj { position: absolute; font-size: 64px; z-index: 6; pointer-events: none; transition: left .4s ease-in, top .4s ease-in; text-shadow: 0 0 12px #ffd166; }
+/* на полотні підпис унизу по центру (угорі бігає ближній боєць), стрічка внизу праворуч, щоб не лягати на нижнього героя */
+body.cvon .caption { bottom: 140px; left: 680px; width: 560px; font-size: 40px; }
+body.cvon .caption b { font-size: 60px; } body.cvon .caption.crit b { font-size: 70px; }
+body.cvon #ticker { left: 720px; text-align: center; font-size: 30px; }

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store } from '../src/store.js';
@@ -1352,4 +1352,27 @@ test('голос ведучого: початок і кінець бою та о
   v = g.voiceView(before); assert.equal(v.items.length, 1); assert.equal(v.items[0].text, 'Чемпіон вечора ігор: Віктор!');
   assert.equal(g.voiceView(g.voiceN).items.length, 0, 'після since нічого');
   g.advance(11 * 60 * 1000); assert.equal(g.voiceView(0).items.length, 0, 'старіше 10 хв не читається');
+});
+
+test('v0.59 полотно: бос і кампанія вмикають canvas, сцена з artDir, дальні класи й моби позначені', () => {
+  const artDir = mkdtempSync(join(tmpdir(), 'arena-art-'));
+  let now = Date.UTC(2026, 9, 26, 15, 0);
+  const g = new Game({ store: new Store(mkdtempSync(join(tmpdir(), 'arena-'))), now: () => now, realTimers: false, seed: 11, artDir });
+  const a = g.createPlayer({ name: 'A', classId: 'warrior', age: 40, pin: '1111', role: 'parent' });
+  const b = g.createPlayer({ name: 'B', classId: 'archer', age: 10, pin: '2222' });
+  g.setMode(a, { mode: 'dungeon', dungeonId: 'kitchen_caves' });
+  g.join(a); g.join(b); g.ready(a, true); g.ready(b, true);
+  assert.equal(g.battle.meta.canvas, false, 'звичайна кімната без полотна');
+  assert.equal(g.battle.meta.scene, null, 'сцени ще нема');
+  const fa = g.battle.fighters.find(f => f.id === a.id), fb = g.battle.fighters.find(f => f.id === b.id);
+  assert.equal(fa.ranged, false); assert.equal(fb.ranged, true); assert.equal(fb.shot, '🏹');
+  const pub = g.battleView().fighters.find(f => f.id === b.id); assert.equal(pub.ranged, true, 'ознака дальнього йде на ТБ');
+  // кладемо сцену й портрет боса, стрибаємо в кімнату боса
+  writeFileSync(join(artDir, 'scene_kitchen_caves.png'), 'x'); g.artCache = {}; // кеш 60 с: нова картинка підхоплюється за хвилину
+  g.run.room = g.run.rooms.length - 1; g.nextRoom(); g.startRound();
+  assert.equal(g.battle.meta.boss, true); assert.equal(g.battle.meta.canvas, true, 'бос на полотні');
+  assert.equal(g.battle.meta.scene, '/art/scene_kitchen_caves.png');
+  const boss = g.battle.fighters.find(f => f.kind === 'boss');
+  writeFileSync(join(artDir, 'mob_' + boss.mob + '.png'), 'x'); g.artCache = {};
+  const pb = g.battleView().fighters.find(f => f.kind === 'boss'); assert.equal(pb.avatar, '/art/mob_' + boss.mob + '.png', 'портрет боса з artDir');
 });

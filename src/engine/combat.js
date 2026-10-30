@@ -23,7 +23,7 @@ export function fighterFromPlayer(player, rng) {
   const deck = rng.shuffle(player.deck && player.deck.length ? player.deck : []);
   const f = {
     id: player.id, name: player.name, icon: player.icon || cls.icon, avatar: player.avatar || null, team: 0, kind: 'player', pet: player.pet || null, frame: player.cosmetics && player.cosmetics.frame || null, cry: player.cry || null,
-    class: cls.id, level: lvl,
+    class: cls.id, level: lvl, ranged: !!cls.ranged, shot: cls.shot || null,
     maxHp, hp: maxHp,
     atk: Math.round((cls.atk + (lvl - 1) * HERO_GROWTH.atk + (eq.atk || 0) * 2) * h.dmg), def: cls.def + (eq.def || 0),   // v0.57: удари вдвічі сильніші, бій 4–7 раундів
     crit: cls.crit + (eq.crit || 0), dodge: cls.dodge, spell: cls.spell || 1, healMult: cls.heal || 1,
@@ -66,7 +66,7 @@ export function fighterFromMob(mobId, index, scale = 1) {
   const maxHp = Math.round(m.hp * scale * MOB_SCALE.hp * (m.boss ? MOB_SCALE.bossHp : 1));
   return {
     id: `${mobId}#${index}`, name: m.name, icon: m.icon, avatar: m.image || null, team: 1, kind: m.boss ? 'boss' : 'mob', mob: m.id, custom: !!m.custom, author: m.author || null,
-    level: m.level, maxHp, hp: maxHp, atk: Math.round(m.atk * (1 + (scale - 1) * 0.5) * MOB_SCALE.atk * (m.boss ? MOB_SCALE.bossAtk : 1)), def: m.def,   // більше гравців: здоров'я монстрів росте повністю, удар лише наполовину
+    level: m.level, ranged: !!m.ranged, shot: m.shot || null, maxHp, hp: maxHp, atk: Math.round(m.atk * (1 + (scale - 1) * 0.5) * MOB_SCALE.atk * (m.boss ? MOB_SCALE.bossAtk : 1)), def: m.def,   // більше гравців: здоров'я монстрів росте повністю, удар лише наполовину
     crit: m.crit || 0.05, dodge: m.dodge || 0.03, spell: 1, healMult: 1,
     maxMana: 0, mana: 0, deck: [], hand: [], discard: [], shield: 0, buffs: [], minions: [], effects: {},
     alive: true, move: null, raged: false, stats: { dmgDealt: 0, dmgTaken: 0, blocks: 0, crits: 0, heals: 0, kills: 0 },
@@ -298,7 +298,7 @@ function hurt(b, from, to, dmg, ev, kind, extra = {}) {
 /** Публічний вигляд бійця (без руки й колоди). */
 export function publicFighter(f) {
   return {
-    id: f.id, name: f.name, icon: f.icon, avatar: f.avatar, team: f.team, kind: f.kind, class: f.class, level: f.level, pet: f.pet || null, frame: f.frame || null, cry: f.cry || null,
+    id: f.id, name: f.name, icon: f.icon, avatar: f.avatar, team: f.team, kind: f.kind, class: f.class, level: f.level, ranged: !!f.ranged, shot: f.shot || null, mob: f.mob || null, pet: f.pet || null, frame: f.frame || null, cry: f.cry || null,
     hp: f.hp, maxHp: f.maxHp, mana: f.mana, maxMana: f.maxMana, shield: f.shield, alive: f.alive, raged: !!f.raged, fora: f.fora || 0, secondWind: f.secondWind || 0, custom: !!f.custom, author: f.author || null,
     minions: f.minions.map(m => ({ name: m.name, icon: m.icon, atk: m.atk })), ready: !!f.move, auto: !!(f.move && f.move.auto),
     poison: !!f.effects.poison, stunned: !!f.effects.stunned, buff: f.buffs.reduce((s, x) => s + x.atk, 0), handSize: f.hand.length,

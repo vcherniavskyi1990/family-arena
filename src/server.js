@@ -10,7 +10,7 @@ import { Store } from './store.js';
 import { Game, err } from './game.js';
 import { Avatars } from './avatar.js';
 
-export const VERSION = '0.58.0';
+export const VERSION = '0.59.0';
 const PUBLIC = new URL('../public/', import.meta.url);
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.ico': 'image/x-icon', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' };
 
@@ -22,7 +22,7 @@ export function lanAddress() {
 export function createApp({ dataDir, avatars: avatarsOpt, baseUrl, alertToken = process.env.ARENA_ALERT_TOKEN } = {}) {
   const dir = dataDir || process.env.ARENA_DATA || join(process.cwd(), 'data');
   const store = new Store(dir);
-  const game = new Game({ store, cardsDir: join(dir, 'cards') });
+  const game = new Game({ store, cardsDir: join(dir, 'cards'), artDir: join(dir, 'art') });
   const avatars = avatarsOpt || new Avatars(join(dir, 'avatars'));
   const clients = new Set(); // {res, token|null, tv}
   game.tvOnline = () => { for (const c of clients) if (c.tv) return true; return false; };
@@ -93,10 +93,10 @@ export function createApp({ dataDir, avatars: avatarsOpt, baseUrl, alertToken = 
         return;
       }
       if (path.startsWith('/api/')) return await api(req, res, url, send);
-      if (path.startsWith('/avatars/') || path.startsWith('/cards/')) {
+      if (path.startsWith('/avatars/') || path.startsWith('/cards/') || path.startsWith('/art/')) {
         const name = path.split('/')[2] || '';
         if (!/^[\w.-]+$/.test(name)) return send(404, 'no', 'text/plain');
-        const f = join(path.startsWith('/cards/') ? game.cardsDir : avatars.dir, name);
+        const f = join(path.startsWith('/cards/') ? game.cardsDir : path.startsWith('/art/') ? game.artDir : avatars.dir, name);
         if (!existsSync(f)) return send(404, 'no', 'text/plain');
         res.writeHead(200, { 'Content-Type': MIME[extname(name)] || 'application/octet-stream', 'Cache-Control': 'public, max-age=86400' });
         return res.end(await readFile(f));
