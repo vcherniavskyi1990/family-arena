@@ -115,3 +115,14 @@ test('QR-картки гравців: /print і /qr.svg?p=<id> ведуть на
   assert.equal(svg, expected, 'QR кодує адресу з id гравця');
   srv.closeAllConnections(); srv.close();
 });
+
+test('/art/: файл з artDir віддається, чужий шлях і відсутній файл 404', async () => {
+  const { server, base, close } = await start();
+  try {
+    const { writeFileSync } = await import('node:fs'); const { join } = await import('node:path');
+    writeFileSync(join(server.game.artDir, 'scene_test.png'), Buffer.from([137, 80, 78, 71]));
+    let r = await fetch(base + '/art/scene_test.png'); assert.equal(r.status, 200); assert.match(r.headers.get('content-type') || '', /image\/png/);
+    r = await fetch(base + '/art/nope.png'); assert.equal(r.status, 404);
+    r = await fetch(base + '/art/../package.json'); assert.notEqual(r.status, 200, 'вихід за межі теки заборонено');
+  } finally { close(); }
+});
