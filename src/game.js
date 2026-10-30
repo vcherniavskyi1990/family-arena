@@ -9,6 +9,7 @@ import { statSync } from 'node:fs';
 import { createBattle, applyFora, fighterFromPlayer, fighterFromMob, submitMove, resolveRound, publicFighter, alive, enemiesOf, MAX_CARDS_PER_TURN } from './engine/combat.js';
 import { newPlayer, addXp, xpForLevel, equipmentBonus, genItem, genCard, equip, unequip, craft, checkAchievements, setDeck, autoDeck, sellPrice, genPet, grantPet, petView, petOf, activePetIcon } from './engine/progress.js';
 import { makeQuiz, checkQuiz } from './engine/quiz.js';
+import { showMs, showTotal } from './engine/show.js';
 import { CLASSES, CARDS, DUNGEONS, MOBS, QUESTS, ACHIEVEMENTS, DAILY, FAMILY, WORLDBOSS, PETS, CAMPAIGN, CAMPAIGN2, camp2ById, COSMETICS, MUTATORS, EVENTS, ENVELOPES, ITEMS, petById, ZONES, ZONE_NAMES, classById, dungeonById, mobById, questById, cardById, starterDeck, allowedCards } from './engine/content.js';
 
 export const ROUND_SECONDS = 30;
@@ -768,15 +769,17 @@ export class Game {
     if (!this.battle.meta.practice) for (const e of ev) if (e.t === 'dmg' && e.kind === 'hit' && this.players[e.by]) { const t = this.battle.fighters.find(x => x.id === e.who); this.setRecord('bigHit', e.v, e.by, `${this.players[e.by].name}: ${e.v} шкоди ${t ? t.name : ''}${e.crit ? ' (крит)' : ''}`); }
     this.roundEnds = null;
     this.recordFrame();
-    const animMs = this.tvOnline() ? Math.min(12000, 1500 + ev.length * 450) : Math.min(4000, 1000 + ev.length * 150);
+    const animMs = this.tvOnline() ? showTotal(this.roundEvents) : Math.min(4000, 1000 + ev.length * 150);
     this.emit();
     if (this.battle.over) { this.setTimer('round', animMs, () => this.afterBattle()); return; }
     this.setTimer('round', animMs, () => this.startRound());
   }
   describe(e) {
     const name = (id) => { const f = this.battle.fighters.find(x => x.id === id); return f ? f.name : id; };
-    const d = { ...e, whoName: e.who ? name(e.who) : undefined, byName: e.by ? name(e.by) : undefined };
+    const d = { ...e, whoName: e.who ? name(e.who) : undefined, byName: e.by ? name(e.by) : undefined, ms: showMs(e) };
     if (e.zone) d.zoneName = ZONE_NAMES[e.zone];
+    if (e.target) d.targetName = name(e.target);
+    if (e.t === 'dmg' && e.card && cardById[e.card]) { d.cardName = cardById[e.card].name; d.cardIcon = cardById[e.card].icon; }
     return d;
   }
   afterBattle() {
@@ -1473,7 +1476,7 @@ export class Game {
     const rp = this.replay; if (!rp) return;
     if (rp.i >= rp.frames.length) { this.stopReplay(); return; }
     const fr = rp.frames[rp.i];
-    const ms = fr.roomIntro && !fr.lastRound ? 3000 : Math.min(12000, 1500 + ((fr.lastRound && fr.lastRound.events.length) || 0) * 450);
+    const ms = fr.roomIntro && !fr.lastRound ? 3000 : showTotal((fr.lastRound && fr.lastRound.events) || []);
     this.setTimer('replay', ms, () => { if (this.replay) { this.replay.i += 1; this.replayTick(); } });
     this.emit();
   }
@@ -1721,7 +1724,7 @@ export class Game {
   setTimer(name, ms, fn) {
     this.clearTimer(name);
     this.pending = this.pending || {};
-    this.pending[name] = fn;
+    this.pending[name] = fn; fn.ms = ms;   // ms видно тестам
     if (this.realTimers) { this.timers[name] = setTimeout(() => { delete this.pending[name]; fn(); }, ms); if (this.timers[name].unref) this.timers[name].unref(); }
   }
   clearTimer(name) { if (this.timers[name]) clearTimeout(this.timers[name]); delete this.timers[name]; if (this.pending) delete this.pending[name]; }

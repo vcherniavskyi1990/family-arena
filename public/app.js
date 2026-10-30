@@ -300,10 +300,11 @@
   function describeEvent(e) {
     var who = esc(e.whoName || ''), by = esc(e.byName || '');
     switch (e.t) {
-      case 'card': return '🃏 ' + by.replace(by, esc(e.whoName)) + ': ' + esc(e.icon) + ' ' + esc(e.name);
+      case 'card': return '🃏 ' + esc(e.whoName) + ': ' + esc(e.icon) + ' ' + esc(e.name) + (e.targetName ? ' → ' + esc(e.targetName) : '');
       case 'block': return '🛡 ' + who + ' заблокував удар ' + by + ' (' + esc(e.zoneName) + ')';
       case 'dodge': return '💨 ' + who + ' ухилився від ' + by;
-      case 'dmg': return (e.crit ? '💥 КРИТ! ' : '⚔️ ') + by + ' → ' + who + ': −' + e.v + (e.zoneName ? ' (' + esc(e.zoneName) + ')' : '') + (e.kind === 'poison' ? ' ☠️' : '') + (e.minion ? ' (' + esc(e.minion) + ')' : '');
+      case 'wave': return e.team === 0 ? '⚔️ Герої б’ють' : e.team === 1 ? '👹 Монстри б’ють' : '✨ Прислужники';
+      case 'dmg': return (e.crit ? '💥 КРИТ! ' : '⚔️ ') + by + ' → ' + who + ': −' + e.v + (e.zoneName ? ' (' + esc(e.zoneName) + ')' : '') + (e.cardName ? ' (' + esc(e.cardName) + ')' : '') + (e.kind === 'poison' ? ' ☠️' : '') + (e.minion ? ' (' + esc(e.minion) + ')' : '');
       case 'heal': return '💚 ' + who + ' +' + e.v;
       case 'death': return '💀 ' + who + ' повалено!';
       case 'rage': return '😡 ' + who + ' ЛЮТУЄ!';

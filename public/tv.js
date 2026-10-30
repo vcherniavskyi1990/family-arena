@@ -171,13 +171,16 @@
     var t0 = b.fighters.filter(function (f) { return f.team === 0; }), t1 = b.fighters.filter(function (f) { return f.team === 1; });
     var title = b.mode === 'duel' ? '⚔️ Дуель' : b.meta.practice ? '🎯 Тренування' : (b.meta.boss ? (b.meta.raid ? '🗿 РЕЙД-БОС' : '👑 БОС') : '🏰 Кімната ' + b.meta.room + ' з ' + b.meta.rooms) + (b.meta && b.meta.mutator ? ' · ' + b.meta.mutator.icon + ' ' + b.meta.mutator.name : '');
     if (state.tournament && !b.replay) title = '🏆 Турнір · бій ' + (state.tournament.current + 1) + ' з ' + state.tournament.of + (state.tournament.matches[state.tournament.current] && state.tournament.matches[state.tournament.current].final ? ' · ФІНАЛ' : '');
+    var fresh = b.lastRound && b.lastRound.n !== shownRound && prev && prev.battle && prev.battle.fighters && !b.replay;
+    if (fresh) { var was = {}; prev.battle.fighters.forEach(function (f) { was[f.id] = f; }); var keep = function (f) { var w = was[f.id]; return w ? { hp: w.hp, alive: w.alive, shield: w.shield, raged: w.raged, poison: w.poison, stunned: w.stunned, buff: w.buff, minions: w.minions } : {}; };
+      t0 = t0.map(function (f) { var o = {}; for (var k in f) o[k] = f[k]; var kk = keep(f); for (var k2 in kk) o[k2] = kk[k2]; return o; }); t1 = t1.map(function (f) { var o = {}; for (var k in f) o[k] = f[k]; var kk = keep(f); for (var k2 in kk) o[k2] = kk[k2]; return o; }); }
     var h = '<div class="hdr"><div class="t">' + (b.replay ? '📼 ПОВТОР · ' : '') + title + '</div><div class="s">' + esc(state.season) + '</div>' + (b.replay ? '<div class="r">Повтор останнього бою</div>' : '') + '</div>';
     h += '<div class="arena"><div class="team l">' + t0.map(function (f) { return fighterHtml(f, false); }).join('') + '</div>';
     h += '<div class="mid"><div class="round">раунд ' + (b.round + 1) + '</div><div class="timer" id="timer">' + (b.roundEnds ? Math.max(0, Math.round((b.roundEnds - Date.now()) / 1000)) : '…') + '</div><div class="vs">VS</div></div>';
     h += '<div class="team r">' + t1.map(function (f) { return fighterHtml(f, true); }).join('') + '</div></div>';
     if (!playing || !prev || prev.phase !== state.phase) { stage.innerHTML = h; } else { stage.setAttribute('data-next', h); }
     clearInterval(timerId);
-    timerId = setInterval(function () { var t = document.getElementById('timer'); if (!t || !state.battle) return; if (!state.battle.roundEnds) { t.textContent = state.battle.replay ? '📼' : '…'; return; } var left = Math.max(0, Math.round((state.battle.roundEnds - Date.now()) / 1000)); t.textContent = left; t.className = 'timer' + (left <= 10 ? ' low' : ''); if (left === 5) beep(880, 80); }, 400);
+    timerId = setInterval(function () { var t = document.getElementById('timer'); if (!t || !state.battle) return; if (!state.battle.roundEnds) { t.textContent = state.battle.replay ? '📼' : playing ? '▶' : '…'; t.className = 'timer show'; return; } var left = Math.max(0, Math.round((state.battle.roundEnds - Date.now()) / 1000)); t.textContent = left; t.className = 'timer' + (left <= 10 ? ' low' : ''); if (left === 5) beep(880, 80); }, 400);
     if (b.roomIntro && b.round === 0 && roomShown !== b.meta.room) {
       roomShown = b.meta.room;
       overlay.className = 'on'; introUntil = Date.now() + 2500;
@@ -197,34 +200,60 @@
     document.body.appendChild(d); setTimeout(function () { d.remove(); }, 1400);
   }
   function say(t) { ticker.innerHTML = '<div>' + t + '</div>'; }
+  // v0.56: читабельний удар: нападник світиться, до цілі летить стрілка, у центрі великий підпис «хто → кому −скільки»
+  var WAVE = { 0: '⚔️ Герої б’ють', 1: '👹 Монстри б’ють', 2: '✨ Прислужники' };
+  function arrows() { var a = document.getElementById('arrows'); if (!a) { a = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); a.setAttribute('id', 'arrows'); a.innerHTML = '<defs><marker id="ah" markerUnits="userSpaceOnUse" markerWidth="34" markerHeight="34" refX="26" refY="17" orient="auto"><path d="M0,0 L34,17 L0,34 z" fill="#ffd166"/></marker></defs>'; document.body.appendChild(a); } return a; }
+  function arrow(fromId, toId, cls, ms) {
+    var a = el(fromId), b = el(toId); if (!a || !b) return;
+    var ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+    var fromRight = ra.left < rb.left;
+    var x1 = fromRight ? ra.right : ra.left, x2 = fromRight ? rb.left : rb.right, y1 = ra.top + ra.height / 2, y2 = rb.top + rb.height / 2;
+    var l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    l.setAttribute('x1', x1); l.setAttribute('y1', y1); l.setAttribute('x2', x2); l.setAttribute('y2', y2); l.setAttribute('class', 'arrow ' + (cls || '')); l.setAttribute('marker-end', 'url(#ah)');
+    arrows().appendChild(l); a.classList.add('attacking'); setTimeout(function () { l.remove(); a.classList.remove('attacking'); }, Math.max(300, ms - 200));
+  }
+  function caption(html, cls, ms) {
+    var old = document.querySelector('.caption'); if (old) old.remove();
+    var d = document.createElement('div'); d.className = 'caption ' + (cls || ''); d.innerHTML = html;
+    document.body.appendChild(d); setTimeout(function () { d.remove(); }, Math.max(300, ms - 150));
+  }
+  function wave(team, ms) {
+    var d = document.createElement('div'); d.className = 'wave t' + team; d.textContent = WAVE[team] || '';
+    document.body.appendChild(d); setTimeout(function () { d.remove(); }, ms - 100);
+  }
   function setHp(id, hp) { var e = el(id); if (!e) return; var f = state.battle && state.battle.fighters.filter(function (x) { return x.id === id; })[0]; if (!f) return; var i = e.querySelector('.bar i'), b = e.querySelector('.bar b'); if (i) i.style.width = Math.max(0, Math.round(100 * hp / f.maxHp)) + '%'; if (b) b.textContent = hp + ' / ' + f.maxHp; }
   function playNext() {
     var e = queue.shift();
     if (!e) { playing = false; var next = stage.getAttribute('data-next'); if (next) { stage.innerHTML = next; stage.removeAttribute('data-next'); } if (state && state.phase !== 'battle' && state.phase !== 'replay') onState(); return; }
     playing = true;
-    var wait = 450, who = esc(e.whoName), by = esc(e.byName);
+    var wait = e.ms || 450, who = esc(e.whoName), by = esc(e.byName), ms = wait;
     switch (e.t) {
-      case 'round': say('<b>Раунд ' + e.n + '</b>: усі розкривають ходи!'); wait = 700; break;
-      case 'reinforce': say('🧟 ' + (e.dm ? '<b>Ведучий</b> кличе' : '<b>' + who + '</b> кличе підмогу') + ': ' + esc((e.names || []).join(', ')) + ' ' + esc((e.icons || []).join(''))); beep(200, 300, 'sawtooth', 0.07); wait = 1200; break;
-      case 'smart': floatText(e.who, '🧠 ×1.5', 'heal'); say('🧠 <b>' + who + '</b> розв’язав розумну карту: удар у півтора раза сильніший!'); beep(900, 150, 'sine', 0.06); wait = 900; break;
-      case 'card': showCard(e); say('🃏 ' + who + ' грає <b>' + esc(e.name) + '</b>'); beep(520, 120, 'triangle'); wait = 1100; break;
-      case 'block': flash(e.who, 'blocked'); floatText(e.who, '🛡 БЛОК', 'block'); say('🛡 ' + who + ' заблокував удар ' + by + ' (' + ZONE[e.zone] + ')'); beep(300, 80); break;
-      case 'dodge': floatText(e.who, 'повз!', 'miss'); say('💨 ' + who + ' ухилився від ' + by); break;
-      case 'absorb': floatText(e.who, '🛡 −' + e.v, 'block'); wait = 250; break;
+      case 'round': say('<b>Раунд ' + e.n + '</b>: усі розкривають ходи!'); caption('Раунд ' + e.n, 'rnd', ms); break;
+      case 'wave': wave(e.team, ms); say('<b>' + WAVE[e.team] + '</b>'); break;
+      case 'reinforce': say('🧟 ' + (e.dm ? '<b>Ведучий</b> кличе' : '<b>' + who + '</b> кличе підмогу') + ': ' + esc((e.names || []).join(', ')) + ' ' + esc((e.icons || []).join(''))); beep(200, 300, 'sawtooth', 0.07); break;
+      case 'smart': floatText(e.who, '🧠 ×1.5', 'heal'); say('🧠 <b>' + who + '</b> розв’язав розумну карту: удар у півтора раза сильніший!'); beep(900, 150, 'sine', 0.06); break;
+      case 'card': showCard(e); if (e.target) arrow(e.who, e.target, 'card', ms); say('🃏 ' + who + ' грає <b>' + esc(e.name) + '</b>' + (e.targetName ? ' на ' + esc(e.targetName) : e.aoe ? ' на всіх' : '')); beep(520, 120, 'triangle'); break;
+      case 'block': flash(e.who, 'blocked'); if (e.by) arrow(e.by, e.who, 'blocked', ms); floatText(e.who, '🛡 БЛОК', 'block'); caption(by + ' → ' + who + '<br><span class="blk">🛡 БЛОК · ' + ZONE[e.zone] + '</span>', 'blk', ms); say('🛡 ' + who + ' заблокував удар ' + by + ' (' + ZONE[e.zone] + ')'); beep(300, 80); break;
+      case 'dodge': if (e.by) arrow(e.by, e.who, 'blocked', ms); floatText(e.who, 'повз!', 'miss'); caption(by + ' → ' + who + '<br><span class="blk">💨 ухилився</span>', 'blk', ms); say('💨 ' + who + ' ухилився від ' + by); break;
+      case 'absorb': floatText(e.who, '🛡 −' + e.v, 'block'); break;
       case 'dmg': flash(e.who, 'hit'); floatText(e.who, '−' + e.v, e.crit ? 'crit' : ''); setHp(e.who, e.hp);
+        if (e.by && e.by !== e.who && (e.kind === 'hit' || e.kind === 'card' || e.kind === 'minion' || e.kind === 'breath')) arrow(e.by, e.who, e.kind, ms);
         if (e.crit && e.by) { var cf = (state.battle && state.battle.fighters || []).filter(function (x) { return x.id === e.by; })[0]; if (cf && cf.cry) floatText(e.by, '«' + cf.cry + '»', 'cry'); }
-        say((e.crit ? '💥 <b>КРИТ!</b> ' : '⚔️ ') + by + ' → ' + who + ': <b>−' + e.v + '</b>' + (e.zone ? ' у ' + ZONE[e.zone] : '') + (e.kind === 'poison' ? ' (отрута)' : e.kind === 'minion' ? ' (' + esc(e.minion) + ')' : e.kind === 'explode' ? ' (вибух!)' : ''));
-        beep(e.crit ? 180 : 240, e.crit ? 220 : 100, 'square', e.crit ? 0.09 : 0.05); if (e.crit) wait = 800; break;
+        var how = e.kind === 'hit' ? (e.zone ? ZONE[e.zone] : '') : e.kind === 'card' ? (e.cardIcon ? esc(e.cardIcon) + ' ' : '🃏 ') + esc(e.cardName || 'карта') : e.kind === 'poison' ? '☠️ отрута' : e.kind === 'minion' ? esc(e.icon || '') + ' ' + esc(e.minion || '') : e.kind === 'explode' ? '💥 вибух' : e.kind === 'breath' ? '🐉 подих' : e.kind === 'self' ? 'ціна карти' : '';
+        if (e.kind === 'poison' || e.kind === 'self') caption(who + ' <b>−' + e.v + '</b><br><span class="blk">' + how + '</span>', 'dot', ms);
+        else caption(by + ' → ' + who + '<br><b>' + (e.crit ? '💥 КРИТ ' : '') + '−' + e.v + '</b>' + (how ? ' <span class="blk">' + how + '</span>' : ''), e.crit ? 'crit' : (e.kind === 'card' ? 'cardhit' : ''), ms);
+        say((e.crit ? '💥 <b>КРИТ!</b> ' : '⚔️ ') + by + ' → ' + who + ': <b>−' + e.v + '</b>' + (e.zone ? ' у ' + ZONE[e.zone] : '') + (e.kind === 'card' ? ' (' + esc(e.cardName || 'карта') + ')' : e.kind === 'poison' ? ' (отрута)' : e.kind === 'minion' ? ' (' + esc(e.minion) + ')' : e.kind === 'explode' ? ' (вибух!)' : ''));
+        beep(e.crit ? 180 : 240, e.crit ? 220 : 100, 'square', e.crit ? 0.09 : 0.05); break;
       case 'heal': flash(e.who, 'healed'); floatText(e.who, '+' + e.v, 'heal'); say('💚 ' + who + ' +' + e.v + ' здоров’я'); beep(700, 150, 'sine'); break;
       case 'shield': floatText(e.who, '🛡 +' + e.v, 'block'); say('🛡 ' + who + ' ставить щит ' + e.v + (e.aoe ? ' усій команді' : '')); break;
       case 'poison': floatText(e.who, '☠️', 'miss'); say('☠️ ' + who + ' отруєний'); break;
       case 'stun': floatText(e.who, '💫', 'miss'); say('💫 ' + who + ' оглушений і пропустить удар'); break;
-      case 'skip': say('💫 ' + who + ' не може вдарити'); break;
-      case 'summon': say('✨ ' + who + ' кличе ' + esc(e.icon) + ' <b>' + esc(e.name) + '</b>'); beep(600, 200, 'triangle'); wait = 800; break;
-      case 'rage': var r = el(e.who); if (r) r.classList.add('rage'); say('😡 <b>' + who + ' ЛЮТУЄ!</b> Удари в півтора раза сильніші'); beep(90, 700, 'sawtooth', 0.1); wait = 1500; break;
-      case 'death': var d = el(e.who); if (d) d.classList.add('dead'); say('💀 <b>' + who + '</b> повалено' + (e.boss ? '! БОСА ПЕРЕМОЖЕНО!' : '')); beep(e.boss ? 60 : 150, e.boss ? 1200 : 400, 'sawtooth', 0.08); wait = e.boss ? 2000 : 1000; break;
-      case 'end': say(e.winner === 0 ? '🏆 <b>ПЕРЕМОГА!</b>' : '💀 <b>Поразка…</b>'); wait = 1200; break;
-      default: wait = 100;
+      case 'skip': say(e.why === 'noTarget' ? '🌀 ' + who + ': ціль уже повалена, удар у повітря' : '💫 ' + who + ' не може вдарити'); break;
+      case 'summon': say('✨ ' + who + ' кличе ' + esc(e.icon) + ' <b>' + esc(e.name) + '</b>'); beep(600, 200, 'triangle'); break;
+      case 'rage': var r = el(e.who); if (r) r.classList.add('rage'); caption('😡 ' + who + ' ЛЮТУЄ!', 'crit', ms); say('😡 <b>' + who + ' ЛЮТУЄ!</b> Удари в півтора раза сильніші'); beep(90, 700, 'sawtooth', 0.1); break;
+      case 'death': var d = el(e.who); if (d) d.classList.add('dead'); caption('💀 ' + who + (e.boss ? '<br><b>БОСА ПЕРЕМОЖЕНО!</b>' : ' повалено'), e.boss ? 'crit' : 'dot', ms); say('💀 <b>' + who + '</b> повалено' + (e.boss ? '! БОСА ПЕРЕМОЖЕНО!' : '')); beep(e.boss ? 60 : 150, e.boss ? 1200 : 400, 'sawtooth', 0.08); break;
+      case 'end': caption(e.winner === 0 ? '🏆 ПЕРЕМОГА!' : '💀 Поразка…', e.winner === 0 ? 'crit' : 'dot', ms); say(e.winner === 0 ? '🏆 <b>ПЕРЕМОГА!</b>' : '💀 <b>Поразка…</b>'); break;
+      default: wait = e.ms || 100;
     }
     setTimeout(playNext, wait);
   }
@@ -232,8 +261,8 @@
     var old = document.querySelector('.cardpop'); if (old) old.remove();
     var card = state.content && state.content[e.card];
     var d = document.createElement('div'); d.className = 'cardpop';
-    d.innerHTML = '<div class="who">' + esc(e.whoName) + ' грає</div><div class="ic">' + (e.image ? '<img src="' + esc(e.image) + '" alt="">' : esc(e.icon)) + '</div><div class="nm">' + esc(e.name) + '</div>' + (card || e.text ? '<div class="tx">' + esc(e.text || card.text) + '</div>' : '') + (e.image ? '<div class="who">намалював ' + esc(e.whoName) + '</div>' : '');
-    stage.appendChild(d); setTimeout(function () { d.remove(); }, 1000);
+    d.innerHTML = '<div class="who">' + esc(e.whoName) + ' грає' + (e.targetName ? ' на ' + esc(e.targetName) : e.aoe ? ' на всіх' : '') + '</div><div class="ic">' + (e.image ? '<img src="' + esc(e.image) + '" alt="">' : esc(e.icon)) + '</div><div class="nm">' + esc(e.name) + '</div>' + (card || e.text ? '<div class="tx">' + esc(e.text || card.text) + '</div>' : '') + (e.image ? '<div class="who">намалював ' + esc(e.whoName) + '</div>' : '');
+    stage.appendChild(d); setTimeout(function () { d.remove(); }, Math.max(800, (e.ms || 1000) - 200));
   }
   // ---------- підсумки ----------
   function renderResults() {
