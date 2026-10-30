@@ -154,7 +154,10 @@
     h += '<div class="lobby"><div class="mode">' + (l.mode === 'practice' ? '🎯 Тренування <span>· манекен у дворі · без нагород</span>' : l.mode === 'tournament' ? '🏆 Турнір <span>· 3 або 4 гравці · дуелі одна за одною</span>' : l.mode === 'campaign' && l.campaign ? '📖 Розділ ' + l.campaign.n + ' з ' + l.campaign.of + ': ' + esc(l.campaign.title) + ' <span>· ' + esc(l.dungeon.name) + ', рівень ' + l.dungeon.level + '</span><div class="story">' + esc(l.campaign.intro) + '</div>' : l.mode === 'duel' ? '⚔️ Дуель <span>· дві команди</span>' : l.dungeon.icon + ' ' + esc(l.dungeon.name) + ' <span>· рівень ' + l.dungeon.level + ' · ' + (l.dungeon.raid ? 'РЕЙД: бос сильнішає з кожним гравцем' : l.dungeon.rooms.length + ' кімнати + бос') + (l.dungeon.custom ? ' · 🏗️ збудував ' + esc(l.dungeon.author) : '') + '</span>' + (l.mutator && !l.dungeon.raid ? '<div class="mutline">' + esc(l.mutator.icon) + ' Мутатор дня: <b>' + esc(l.mutator.name) + '</b> · ' + esc(l.mutator.text) + '</div>' : '') + '<div class="s" style="font-size:24px;color:#9fb0c3">' + esc(l.dungeon.text) + '</div>') + '</div>';
     h += l.players.map(function (p) { return '<div class="lp ' + (p.ready ? 'ready' : '') + '">' + (l.mode === 'duel' ? '<div class="team">' + (p.team ? '🔴' : '🔵') + '</div>' : '') + '<div class="rd">' + (p.ready ? '✅' : '⏳') + '</div>' + av(p) + '<div class="n">' + esc(p.name) + '</div><div class="c">' + esc(p.className) + ' · ' + p.level + ' рів.</div></div>'; }).join('');
     for (var i = l.players.length; i < 4; i++) h += '<div class="lp empty">вільне місце</div>';
-    h += '</div><div class="hint">' + (l.players.every(function (p) { return p.ready; }) ? 'Починаємо!' : 'Натисніть «Готовий» на телефонах') + '</div><div class="qr small"><img src="/qr.svg"></div>';
+    h += '</div>';
+    // v0.59 крок 3: план дому: де команда, і шлях кампанії по кімнатах
+    if (l.dungeon && typeof PLAN !== 'undefined') h += '<div class="plan">' + PLAN.svg({ at: l.dungeon.id, label: false, path: l.mode === 'campaign' && l.campaign ? l.campaign.chapters : null }) + '</div>';
+    h += '<div class="hint">' + (l.players.every(function (p) { return p.ready; }) ? 'Починаємо!' : 'Натисніть «Готовий» на телефонах') + '</div><div class="qr small"><img src="/qr.svg"></div>';
     stage.innerHTML = h; ticker.innerHTML = '';
     if (!prev || prev.phase !== 'lobby' || prev.lobby.players.length < l.players.length) beep(660, 120, 'triangle');
   }
@@ -230,10 +233,12 @@
     timerId = setInterval(function () { var t = document.getElementById('timer'); if (!t || !state.battle) return; if (!state.battle.roundEnds) { t.textContent = state.battle.replay ? '📼' : playing ? '▶' : '…'; t.className = 'timer show'; return; } var left = Math.max(0, Math.round((state.battle.roundEnds - Date.now()) / 1000)); t.textContent = left; t.className = 'timer' + (left <= 10 ? ' low' : ''); if (left === 5) beep(880, 80); }, 400);
     if (b.roomIntro && b.round === 0 && roomShown !== b.meta.room) {
       roomShown = b.meta.room;
-      overlay.className = 'on'; introUntil = Date.now() + 2500;
-      overlay.innerHTML = '<div class="room-intro"><div class="big">' + (b.roomIntro.practice ? '🎯 Тренування' : b.roomIntro.boss ? '👑 БОС!' : 'Кімната ' + b.roomIntro.n) + '</div><div class="sub">' + esc(b.roomIntro.names.join(', ')) + '</div></div>';
+      var withPlan = b.meta.room === 1 && b.meta.dungeon && typeof PLAN !== 'undefined'; var introMs = withPlan ? 4000 : 2500;
+      overlay.className = 'on'; introUntil = Date.now() + introMs;
+      overlay.innerHTML = '<div class="room-intro"><div class="big">' + (b.roomIntro.practice ? '🎯 Тренування' : b.roomIntro.boss ? '👑 БОС!' : 'Кімната ' + b.roomIntro.n) + '</div><div class="sub">' + esc(b.roomIntro.names.join(', ')) + '</div>' +
+        (withPlan ? '<div class="plan">' + PLAN.svg({ at: b.meta.dungeon, title: b.meta.dungeonName }) + '</div>' : '') + '</div>';
       beep(b.roomIntro.boss ? 110 : 330, 500, 'sawtooth', 0.08);
-      setTimeout(function () { if (!state.paused) overlay.className = ''; }, 2500);
+      setTimeout(function () { if (!state.paused) overlay.className = ''; }, introMs);
     }
     if (b.lastRound && b.lastRound.n !== shownRound) { shownRound = b.lastRound.n; queue = b.lastRound.events.slice(); if (!playing) playNext(); }
   }

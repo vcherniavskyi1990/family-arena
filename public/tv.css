@@ -136,3 +136,16 @@ html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; backgro
 body.cvon .caption { bottom: 140px; left: 680px; width: 560px; font-size: 40px; }
 body.cvon .caption b { font-size: 60px; } body.cvon .caption.crit b { font-size: 70px; }
 body.cvon #ticker { left: 720px; text-align: center; font-size: 30px; }
+/* v0.59 крок 3: план дому: де команда і шлях кампанії */
+.plan { position: absolute; left: 60px; top: 625px; width: 860px; height: 380px; }
+.plan .plan-svg { width: 860px; height: 370px; display: block; }
+.plan-svg .pz { fill: #1b2430; stroke: #33445a; stroke-width: 70; stroke-linejoin: round; }
+.plan-svg .pz.here { fill: #ff800033; stroke: #ff8000; animation: planglow 1.6s infinite alternate; }
+@keyframes planglow { from { fill: #ff800022; } to { fill: #ff800066; } }
+.plan-svg .pp { fill: none; stroke: #f1c40f99; stroke-width: 90; stroke-dasharray: 260 200; stroke-linecap: round; }
+.plan-svg .pn circle { fill: #243040; stroke: #9fb0c3; stroke-width: 60; } .plan-svg .pn text { fill: #fff; font-size: 420px; font-weight: 800; text-anchor: middle; }
+.plan-svg .pn.done circle { fill: #2ecc71; stroke: #2ecc71; } .plan-svg .pn.done text { fill: #0b0f14; }
+.plan-svg .pn.cur circle { fill: #ff8000; stroke: #ffd166; } .plan-svg .pn.cur text { fill: #0b0f14; }
+.plan-svg .pm { font-size: 1100px; text-anchor: middle; }
+.plan-label { font-size: 26px; color: #c9d4e0; text-align: center; margin-top: 4px; }
+.room-intro .plan { position: static; width: 760px; height: 400px; margin: 20px auto 0; } .room-intro .plan .plan-svg { width: 760px; height: 360px; }

@@ -13,4 +13,5 @@ test('tv.js: синтаксис не новіший за ES2019 (Chromium 79 н�
   assert.ok(!/\bgap\s*:/.test(readFileSync(new URL('../public/tv.css', import.meta.url), 'utf8')), 'без flex gap у tv.css');
   if (!acorn) return; // немає парсера: перевірили лише регулярками
   acorn.parse(src, { ecmaVersion: 2019, sourceType: 'script' });
+  acorn.parse(readFileSync(new URL('../public/plan.js', import.meta.url), 'utf8'), { ecmaVersion: 5, sourceType: 'script' });
 });
