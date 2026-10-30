@@ -8,7 +8,7 @@ import { VERSION_DATA } from './version.js';
 import { statSync } from 'node:fs';
 import { createBattle, applyFora, fighterFromPlayer, fighterFromMob, submitMove, resolveRound, publicFighter, alive, enemiesOf, MAX_CARDS_PER_TURN } from './engine/combat.js';
 import { newPlayer, addXp, xpForLevel, equipmentBonus, genItem, genCard, equip, unequip, craft, checkAchievements, setDeck, autoDeck, sellPrice, genPet, grantPet, petView, petOf, activePetIcon } from './engine/progress.js';
-import { makeQuiz, checkQuiz } from './engine/quiz.js';
+import { makeQuiz, checkQuiz, smartFor, smartRound } from './engine/quiz.js';
 import { showMs, showTotal } from './engine/show.js';
 import { CLASSES, CARDS, DUNGEONS, MOBS, QUESTS, ACHIEVEMENTS, DAILY, FAMILY, WORLDBOSS, PETS, CAMPAIGN, CAMPAIGN2, camp2ById, COSMETICS, MUTATORS, EVENTS, ENVELOPES, ITEMS, petById, ZONES, ZONE_NAMES, classById, dungeonById, mobById, questById, cardById, starterDeck, allowedCards, DECK_SIZE } from './engine/content.js';
 
@@ -733,7 +733,8 @@ export class Game {
     if (!this.battle || this.battle.over) return;
     if (this.paused) return;
     this.roundEnds = this.now() + this.settings.roundSeconds * 1000;
-    if (this.settings.smartCards) for (const f of this.battle.fighters) if (f.kind === 'player' && f.alive) f.quiz = makeQuiz(this.rng, this.players[f.id] ? this.players[f.id].age : null);
+    // v0.58: розумне завдання раз на 3 раунди і лише дітям (вік до 13 у профілі)
+    if (this.settings.smartCards && smartRound(this.battle.round)) for (const f of this.battle.fighters) if (f.kind === 'player' && f.alive && this.players[f.id] && smartFor(this.players[f.id].age) && !this.isParent(this.players[f.id])) f.quiz = makeQuiz(this.rng, this.players[f.id].age);
     // автобій: хід робиться сам за порадою, гравець може змінити його, поки раунд не закрито
     let autoAll = true;
     for (const f of this.battle.fighters) {
@@ -750,12 +751,12 @@ export class Game {
   move(p, mv) {
     if (!this.battle || this.battle.over) throw err('бій не йде');
     const f = this.battle.fighters.find(x => x.id === p.id);
-    let smart = false;
+    let smart = false, flop = false;
     if (f && f.quiz && mv && mv.quiz !== undefined && mv.quiz !== null && mv.quiz !== '') {
-      smart = checkQuiz(f.quiz, mv.quiz); f.quiz = null;
+      smart = checkQuiz(f.quiz, mv.quiz); flop = !smart; f.quiz = null;
       if (smart) { p.stats.smart = (p.stats.smart || 0) + 1; this.logDay(p.id, { smart: 1 }); }
     }
-    const e = submitMove(this.battle, p.id, { ...mv, smart });
+    const e = submitMove(this.battle, p.id, { ...mv, smart, flop });
     if (e) throw err(e);
     this.emit();
     const waiting = alive(this.battle, 0).concat(alive(this.battle, 1)).filter(f => f.kind === 'player' && !f.move);
@@ -765,6 +766,7 @@ export class Game {
     if (!this.battle || this.battle.over) return;
     this.clearTimer('round');
     const ev = resolveRound(this.battle);
+    for (const f of this.battle.fighters) f.quiz = null;   // невідповіджене завдання згорає з раундом
     this.roundEvents = ev.map(e => this.describe(e));
     this.lastRound = { n: this.battle.round, events: this.roundEvents, at: this.now() };
     if (!this.battle.meta.practice) for (const e of ev) if (e.t === 'dmg' && e.kind === 'hit' && this.players[e.by]) { const t = this.battle.fighters.find(x => x.id === e.who); this.setRecord('bigHit', e.v, e.by, `${this.players[e.by].name}: ${e.v} шкоди ${t ? t.name : ''}${e.crit ? ' (крит)' : ''}`); }

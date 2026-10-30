@@ -3,7 +3,13 @@
 import { readFileSync } from 'node:fs';
 
 export const WORDS = JSON.parse(readFileSync(new URL('../content/words.json', import.meta.url), 'utf8'));
-export const SMART_MULT = 1.5;
+// v0.58 (рішення Віктора 30.10): раз на 3 раунди, лише дітям; правильно → удар ×2, помилка → удар −25 %
+export const SMART_MULT = 2;
+export const FLOP_MULT = 0.75;
+export const SMART_EVERY = 3;
+export const SMART_MAX_AGE = 13;   // розумні завдання бачать гравці з віком до 13 включно
+export const smartFor = (age) => !!age && age <= SMART_MAX_AGE;
+export const smartRound = (round) => round % SMART_EVERY === 0;   // round = номер поточного раунду мінус 1 (0, 3, 6 …)
 
 /** Питання для гравця за віком. Повертає { kind, q, a, choices } (a завжди серед choices). */
 export function makeQuiz(rng, age) {

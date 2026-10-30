@@ -1,7 +1,7 @@
 // Темп показу раунду на ТБ (v0.56): сервер кладе в кожну подію `ms`, ТБ грає рівно стільки, а наступний раунд
 // стартує після показу. Одне джерело правди, щоб телефони й ТБ не розходились.
 export const SHOW_MS = {
-  round: 900, wave: 1100, card: 1600, smart: 1000, reinforce: 1400, summon: 1000,
+  round: 900, wave: 1100, card: 1600, smart: 1000, flop: 1000, reinforce: 1400, summon: 1000,
   block: 1400, dodge: 1300, absorb: 350, heal: 900, shield: 700, poison: 700, stun: 900, skip: 700,
   rage: 1600, death: 1300, deathBoss: 2400, end: 1600, dmgHit: 1500, dmgCard: 1400, dmgMinion: 1000, dmgOther: 700, dmgCrit: 1800,
 };

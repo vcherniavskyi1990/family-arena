@@ -1,7 +1,7 @@
 // Рушій бою: чисті функції, без мережі й часу. Усі ходять одночасно (як у combats.ru): кожен потай обирає
 // зону удару, дві зони блоку, ціль і карти; потім раунд розкривається разом (карти Hearthstone-стилю: мана росте +1 за хід).
 import { makeRng } from './rng.js';
-import { SMART_MULT } from './quiz.js';
+import { SMART_MULT, FLOP_MULT } from './quiz.js';
 import { cardById, classById, mobById, ZONES } from './content.js';
 
 // v0.57 (рішення Віктора 30.10): рука 4, одна карта за хід, карти вдвічі дорожчі й вдвічі сильніші, мана +1 за раунд
@@ -123,7 +123,7 @@ export function normalizeMove(b, f, move = {}) {
     cards.push(id);
   }
   if (cost > f.mana) return 'не вистачає мани';
-  return { target: target.id, attack, blocks, cards, smart: !!move.smart };
+  return { target: target.id, attack, blocks, cards, smart: !!move.smart, flop: !!move.flop && !move.smart };
 }
 
 /** Хід бота/моба: випадкові зони, карти жадібно за маною. */
@@ -160,7 +160,7 @@ export function resolveRound(b) {
     if (typeof f.move === 'string') f.move = normalizeMove(b, f, {});
   }
   const order = alive(b);
-  for (const f of order) if (f.move.smart) { ev.push({ t: 'smart', who: f.id }); f.stats.smartHits = (f.stats.smartHits || 0) + 1; }
+  for (const f of order) { if (f.move.smart) { ev.push({ t: 'smart', who: f.id }); f.stats.smartHits = (f.stats.smartHits || 0) + 1; } else if (f.move.flop) ev.push({ t: 'flop', who: f.id }); }
 
   // 1. Карти: спершу щити, баффи, мана, добір; потім шкода, лікування, отрута, оглушення; потім призови
   const played = [];
@@ -228,7 +228,8 @@ export function resolveRound(b) {
     if (rng.chance(f.crit + (zone === 'head' ? 0.1 : 0))) { dmg = Math.round(dmg * 1.6); crit = true; f.stats.crits += 1; }
     if (f.raged) dmg = Math.round(dmg * 1.5);
     if (f.move.smart) dmg = Math.round(dmg * SMART_MULT);
-    hurt(b, f, t, dmg, ev, 'hit', { zone, crit, smart: !!f.move.smart });
+    if (f.move.flop) dmg = Math.round(dmg * FLOP_MULT);
+    hurt(b, f, t, dmg, ev, 'hit', { zone, crit, smart: !!f.move.smart, flop: !!f.move.flop });
     if (f.mob && mobById[f.mob].poison && t.alive) t.effects.poison = { v: mobById[f.mob].poison, turns: 2 };
     if (f.mob && mobById[f.mob].aoe && f.raged) {
       for (const o of enemiesOf(b, f)) if (o !== t && o.alive) hurt(b, f, o, Math.round(dmg * 0.4), ev, 'breath');

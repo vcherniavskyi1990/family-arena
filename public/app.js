@@ -288,7 +288,7 @@
     var spent = m.cards.reduce(function (s, id) { return s + cardOf(id).cost; }, 0);
     var handIdx = me.hand.map(function (c, i) { return { c: c, i: i }; }).sort(function (x, y) { var ax = x.c.cost <= me.mana ? 0 : 1, ay = y.c.cost <= me.mana ? 0 : 1; return ax - ay || x.c.cost - y.c.cost || x.i - y.i; });   // доступні першими
     h += '<h3>🃏 Карти (мана ' + (me.mana - spent) + ', одна за хід)</h3><div class="hand">' + handIdx.map(function (ci) { var c = ci.c, i = ci.i; var key = c.id + '#' + i; var sel = m.cards.indexOf(key) >= 0; var can = sel || (c.cost <= me.mana - spent && m.cards.length < 1); return '<div class="hcard ' + (sel ? 'sel' : '') + (can ? '' : ' off') + '" data-card="' + key + '"><div class="cost">' + c.cost + '</div><div class="ico">' + (c.image ? '<img src="' + esc(c.image) + '" alt="">' : esc(c.icon)) + '</div><div class="nm r-' + c.rarity + '">' + esc(c.name) + '</div><div class="muted">' + esc(c.text) + '</div></div>'; }).join('') + '</div>';
-    if (me.quiz) h += '<div class="card quiz"><h3>🧠 Розумна карта: ' + (me.quiz.kind === 'english' ? 'англійська' : 'математика') + '</h3><div class="big">' + esc(me.quiz.q) + '</div><div class="row">' + me.quiz.choices.map(function (c) { return '<button class="btn-sm grow ' + (String(m.quiz) === String(c) ? 'btn-blue' : '') + '" data-quiz="' + esc(c) + '">' + esc(c) + '</button>'; }).join('') + '</div><div class="small muted">Правильна відповідь: удар у півтора раза сильніший. Можна пропустити.</div></div>';
+    if (me.quiz) h += '<div class="card quiz"><h3>🧠 Розумна карта: ' + (me.quiz.kind === 'english' ? 'англійська' : 'математика') + '</h3><div class="big">' + esc(me.quiz.q) + '</div><div class="row">' + me.quiz.choices.map(function (c) { return '<button class="btn-sm grow ' + (String(m.quiz) === String(c) ? 'btn-blue' : '') + '" data-quiz="' + esc(c) + '">' + esc(c) + '</button>'; }).join('') + '</div><div class="small muted">Правильно: удар подвійний. Помилка: удар слабший на чверть. Можна пропустити.</div></div>';
     var ok = m.attack && m.blocks.length === 2;
     h += '<button class="btn-primary btn-block" id="go" ' + (ok ? '' : 'disabled') + '>' + (ok ? '⚡ Зробити хід' : 'Обери удар і 2 блоки') + '</button>';
     return h;
@@ -315,7 +315,8 @@
       case 'skip': return '💫 ' + who + ' пропускає удар';
       case 'shield': return '🛡 ' + who + ' щит +' + e.v;
       case 'reinforce': return '🧟 ' + (e.dm ? 'Ведучий кличе' : who + ' кличе підмогу') + ': ' + esc((e.names || []).join(', '));
-      case 'smart': return '🧠 ' + who + ' розв’язав розумну карту: удар ×1.5';
+      case 'smart': return '🧠 ' + who + ' розв’язав: удар ×2';
+      case 'flop': return '🧠 ' + who + ' помилився: удар слабший';
       case 'end': return e.winner === myTeam() ? '🏆 ПЕРЕМОГА!' : '💀 Поразка…';
       default: return null;
     }
