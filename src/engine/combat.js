@@ -4,9 +4,14 @@ import { makeRng } from './rng.js';
 import { SMART_MULT } from './quiz.js';
 import { cardById, classById, mobById, ZONES } from './content.js';
 
-export const HAND_MAX = 5;
-export const MANA_MAX = 10;
-export const MAX_CARDS_PER_TURN = 3;
+// v0.57 (рішення Віктора 30.10): рука 4, одна карта за хід, карти вдвічі дорожчі й вдвічі сильніші, мана +1 за раунд
+export const HAND_MAX = 4;
+export const MANA_MAX = 20;
+export const MAX_CARDS_PER_TURN = 1;
+export const START_MANA = 2;
+export const SHIELD_CAP = 60;
+export const MOB_SCALE = { hp: 1, atk: 2.3, bossHp: 0.65, bossAtk: 1.5 };   // глобальна складність монстрів, підібрана симуляцією (tests/balance.test.js)
+export const HERO_GROWTH = { hp: 16, atk: 3 };   // приріст героя за рівень
 
 /** Гравець → боєць. equipmentBonus = {atk, def, hp, mana, crit} з предметів. */
 export function fighterFromPlayer(player, rng) {
@@ -14,15 +19,15 @@ export function fighterFromPlayer(player, rng) {
   const lvl = player.level || 1;
   const eq = player.bonus || { atk: 0, def: 0, hp: 0, mana: 0, crit: 0 };
   const h = handicap(player.age);
-  const maxHp = Math.round((cls.hp + (lvl - 1) * 6 + (eq.hp || 0)) * h.hp);
+  const maxHp = Math.round((cls.hp + (lvl - 1) * HERO_GROWTH.hp + (eq.hp || 0)) * h.hp);
   const deck = rng.shuffle(player.deck && player.deck.length ? player.deck : []);
   const f = {
     id: player.id, name: player.name, icon: player.icon || cls.icon, avatar: player.avatar || null, team: 0, kind: 'player', pet: player.pet || null, frame: player.cosmetics && player.cosmetics.frame || null, cry: player.cry || null,
     class: cls.id, level: lvl,
     maxHp, hp: maxHp,
-    atk: Math.round((cls.atk + (lvl - 1) * 1 + (eq.atk || 0)) * h.dmg), def: cls.def + (eq.def || 0),
+    atk: Math.round((cls.atk + (lvl - 1) * HERO_GROWTH.atk + (eq.atk || 0) * 2) * h.dmg), def: cls.def + (eq.def || 0),   // v0.57: удари вдвічі сильніші, бій 4–7 раундів
     crit: cls.crit + (eq.crit || 0), dodge: cls.dodge, spell: cls.spell || 1, healMult: cls.heal || 1,
-    maxMana: Math.min(MANA_MAX, cls.mana + (eq.mana || 0)), mana: 1,
+    maxMana: Math.min(MANA_MAX, cls.mana + (eq.mana || 0)), mana: START_MANA,
     deck, hand: [], discard: [], shield: 0, buffs: [], minions: [], effects: {},
     alive: true, move: null, stats: { dmgDealt: 0, dmgTaken: 0, blocks: 0, crits: 0, heals: 0, kills: 0 },
   };
@@ -41,7 +46,7 @@ export function handicap(age) {
 
 /** Фора в дуелі: слабша команда (за середнім рівнем) дістає +10 % здоров'я за рівень різниці, до +50 %;
  *  «друге дихання»: хто програв 3 дуелі поспіль, іде в бій із +20 % здоров'я і сили. */
-export const FORA = { perLevel: 0.1, max: 0.5, secondWind: 0.2, lossesFor: 3, secondWindMax: 0.6 };
+export const FORA = { perLevel: 0.1, max: 0.5, secondWind: 0.2, lossesFor: 3, secondWindMax: 0.4 };
 export function applyFora(teams, losses = {}) {
   const avg = (t) => t.length ? t.reduce((s, f) => s + (f.level || 1), 0) / t.length : 0;
   const diff = avg(teams[0]) - avg(teams[1]);
@@ -58,10 +63,10 @@ export function applyFora(teams, losses = {}) {
 
 export function fighterFromMob(mobId, index, scale = 1) {
   const m = mobById[mobId];
-  const maxHp = Math.round(m.hp * scale);
+  const maxHp = Math.round(m.hp * scale * MOB_SCALE.hp * (m.boss ? MOB_SCALE.bossHp : 1));
   return {
     id: `${mobId}#${index}`, name: m.name, icon: m.icon, avatar: m.image || null, team: 1, kind: m.boss ? 'boss' : 'mob', mob: m.id, custom: !!m.custom, author: m.author || null,
-    level: m.level, maxHp, hp: maxHp, atk: Math.round(m.atk * scale), def: m.def,
+    level: m.level, maxHp, hp: maxHp, atk: Math.round(m.atk * (1 + (scale - 1) * 0.5) * MOB_SCALE.atk * (m.boss ? MOB_SCALE.bossAtk : 1)), def: m.def,   // більше гравців: здоров'я монстрів росте повністю, удар лише наполовину
     crit: m.crit || 0.05, dodge: m.dodge || 0.03, spell: 1, healMult: 1,
     maxMana: 0, mana: 0, deck: [], hand: [], discard: [], shield: 0, buffs: [], minions: [], effects: {},
     alive: true, move: null, raged: false, stats: { dmgDealt: 0, dmgTaken: 0, blocks: 0, crits: 0, heals: 0, kills: 0 },
@@ -256,7 +261,7 @@ export function resolveRound(b) {
     }
     f.effects.stunned = false; f.effects.untouchable = false;
     f.buffs = f.buffs.map(x => ({ ...x, turns: x.turns - 1 })).filter(x => x.turns > 0);
-    f.shield = Math.min(f.shield, 30);
+    f.shield = Math.min(f.shield, SHIELD_CAP);
     if (f.kind === 'player') { f.mana = Math.min(f.maxMana, f.mana + 1); draw(f, 1); }
     f.move = null;
   }

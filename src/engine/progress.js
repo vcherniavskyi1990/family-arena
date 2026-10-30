@@ -1,5 +1,5 @@
 // Прогрес героя: досвід і рівні, лут 5 рідкостей, спорядження, крафт, досягнення. Чисті функції над об'єктом гравця.
-import { ITEMS, ACHIEVEMENTS, CARDS, PETS, RARITY_ORDER, cardById, petById } from './content.js';
+import { ITEMS, ACHIEVEMENTS, CARDS, PETS, RARITY_ORDER, cardById, petById, DECK_SIZE } from './content.js';
 
 export const MAX_LEVEL = 20;
 export const xpForLevel = (lvl) => Math.round(100 * Math.pow(lvl, 1.5));
@@ -158,7 +158,7 @@ export function checkAchievements(p) {
 
 export function sellPrice(it) { return Math.round(5 * ITEMS.rarities[it.rarity].mult * (1 + it.level * 0.2)); }
 
-/** Колода: 20 карт, не більше 2 однакових, лише дозволені. */
+/** Колода: 12 карт (DECK_SIZE), не більше 2 однакових, лише дозволені. */
 /** Колода за гравця: найкращі доступні карти (клас + спільні, рідкісні лише зі знайдених), до 2 копій, з розумною кривою мани. */
 export function autoDeck(p) {
   const pool = CARDS.filter(c => (c.class === 'all' || c.class === p.class) && (RARITY_ORDER.indexOf(c.rarity) < 2 || p.collection.includes(c.id)));
@@ -172,25 +172,25 @@ export function autoDeck(p) {
   };
   const sorted = pool.slice().sort((a, b) => score(b) - score(a) || a.cost - b.cost);
   const deck = []; let big = 0, small = 0;
-  const take = (c) => { deck.push(c.id); if (c.cost >= 5) big++; if (c.cost <= 2) small++; };
-  for (let copy = 0; copy < 2 && deck.length < 20; copy++) {
+  const take = (c) => { deck.push(c.id); if (c.cost >= 10) big++; if (c.cost <= 4) small++; };
+  for (let copy = 0; copy < 2 && deck.length < DECK_SIZE; copy++) {
     for (const c of sorted) {
-      if (deck.length >= 20) break;
+      if (deck.length >= DECK_SIZE) break;
       if (deck.filter(x => x === c.id).length > copy) continue;
-      if (c.cost >= 5 && big >= 5) continue;
+      if (c.cost >= 10 && big >= 3) continue;
       take(c);
     }
   }
   // мало дешевих карт: заміняємо найдорожчі на дешеві
-  if (small < 6) {
-    const cheap = sorted.filter(c => c.cost <= 2);
-    for (const c of cheap) { if (small >= 6 || deck.length === 0) break; const n = deck.filter(x => x === c.id).length; if (n >= 2) continue; const idx = deck.map(id => cardById[id].cost).lastIndexOf(Math.max(...deck.map(id => cardById[id].cost))); if (cardById[deck[idx]].cost <= 2) break; deck.splice(idx, 1); deck.push(c.id); small++; }
+  if (small < 4) {
+    const cheap = sorted.filter(c => c.cost <= 4);
+    for (const c of cheap) { if (small >= 4 || deck.length === 0) break; const n = deck.filter(x => x === c.id).length; if (n >= 2) continue; const idx = deck.map(id => cardById[id].cost).lastIndexOf(Math.max(...deck.map(id => cardById[id].cost))); if (cardById[deck[idx]].cost <= 4) break; deck.splice(idx, 1); deck.push(c.id); small++; }
   }
-  while (deck.length < 20 && sorted.length) deck.push(sorted[deck.length % sorted.length].id);
-  return deck.slice(0, 20);
+  while (deck.length < DECK_SIZE && sorted.length) deck.push(sorted[deck.length % sorted.length].id);
+  return deck.slice(0, DECK_SIZE);
 }
 export function setDeck(p, deck) {
-  if (!Array.isArray(deck) || deck.length !== 20) return 'у колоді має бути 20 карт';
+  if (!Array.isArray(deck) || deck.length !== DECK_SIZE) return `у колоді має бути ${DECK_SIZE} карт`;
   const counts = {};
   for (const id of deck) {
     const c = cardById[id];

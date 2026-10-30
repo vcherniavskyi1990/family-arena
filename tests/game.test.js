@@ -33,7 +33,7 @@ test('гравці: створення, вхід за PIN, токен', () => {
   assert.ok(g.login(dad.id, '1234'), 'після паузи правильний PIN заходить');
   assert.throws(() => g.login(dad.id, '0000'), /PIN/, 'лічильник скинуто: одна невдача без паузи');
   assert.ok(g.login(dad.id, '1234'));
-  assert.equal(g.players[dad.id].deck.length, 20);
+  assert.equal(g.players[dad.id].deck.length, 12);
 });
 
 test('дуель від лобі до результатів', () => {
@@ -123,7 +123,7 @@ test('магазин, продаж, зміна колоди', () => {
   assert.ok(a.inventory.some(i => i.id === it.id));
   const gold = a.gold; g.sell(a, it.id);
   assert.ok(a.gold > gold);
-  assert.throws(() => g.setDeck(a, []), /20/);
+  assert.throws(() => g.setDeck(a, []), /12/);
 });
 
 test('2×2: дві команди по двоє, бій іде до кінця', () => {
@@ -226,7 +226,7 @@ test('рейд: лише у вихідні, мінімум двоє, епічн�
   // бос рейду має кликати підмогу; дамо команді читерські хп, щоб дійти до боса
   let guard = 0, reinforced = false;
   while (g.battle && guard++ < 400) {
-    for (const f of g.battle.fighters) if (f.kind === 'player') f.hp = f.maxHp;
+    for (const f of g.battle.fighters) if (f.kind === 'player') { f.maxHp = 5000; f.hp = f.maxHp; }   // читерське здоров'я: тест про підмогу й лут, не про баланс
     g.fire('round');
     if (g.lastRound && g.lastRound.events.some(e => e.t === 'reinforce')) reinforced = true;
   }
@@ -284,7 +284,7 @@ test('свої карти: дитина створює, батько підтв�
   assert.ok(g.players[a.id].collection.includes(c.id));
   assert.ok(g.allowedCards(a).some(x => x.id === c.id), 'карта доступна для колоди');
   assert.ok(!g.allowedCards(dad).some(x => x.id === c.id), 'чужа карта не доступна');
-  const deck = g.players[a.id].deck.slice(0, 18).concat([c.id, c.id]);
+  const deck = g.players[a.id].deck.slice(0, 10).concat([c.id, c.id]);
   g.setDeck(a, deck);
   // відхилена карта зникає
   const c2 = g.createCustomCard(a, { name: 'Слабка', template: 'shield' });
@@ -295,7 +295,7 @@ test('свої карти: дитина створює, батько підтв�
   // у бою карта розігрується
   g.setMode(dad, { mode: 'duel' }); g.join(dad); g.join(a); g.ready(dad, true); g.ready(a, true);
   const f = g.battle.fighters.find(x => x.id === a.id);
-  f.hand = [c.id]; f.mana = 4;
+  f.hand = [c.id]; f.mana = 8;
   g.move(a, { attack: 'head', blocks: ['chest', 'belt'], cards: [c.id] });
   g.fire('round');
   assert.ok(g.lastRound.events.some(e => e.t === 'card' && e.card === c.id && e.name === 'Крипер-бум'));
@@ -534,7 +534,7 @@ test('міграція старих гравців: відсутні поля д
   st.flushAll && st.flushAll();
   const g = new Game({ store: new Store(dir), now: () => Date.UTC(2026, 9, 26, 15, 0), realTimers: false });
   const p1 = g.players.p1, p2 = g.players.p2;
-  assert.equal(p1.deck.length, 20); assert.equal(p1.stats.smart, 0); assert.equal(p1.stats.kills, 2); assert.equal(p1.stats.level, 3);
+  assert.equal(p1.deck.length, 12); assert.equal(p1.stats.smart, 0); assert.equal(p1.stats.kills, 2); assert.equal(p1.stats.level, 3);
   assert.equal(p1.simple, true, '7 років: простий режим увімкнено');
   assert.equal(p2.class, 'warrior'); assert.deepEqual(p2.collection, []);
   JSON.stringify(g.playerState(p1)); JSON.stringify(g.tvState());
@@ -946,8 +946,8 @@ test('авто-колода: валідна, рідкісні лише зі зн
   const g = makeGame();
   for (const cls of ['warrior', 'mage', 'healer', 'archer', 'rogue', 'paladin', 'engineer']) {
     const a = g.createPlayer({ name: 'P' + cls, classId: cls, age: 10, pin: '1111' }); const p = g.players[a.id];
-    const d = g.autoDeck(p); assert.equal(d.length, 20); assert.deepEqual(p.deck, d);
-    const costs = d.map(id => cardById[id].cost); assert.ok(costs.filter(c => c >= 5).length <= 5, cls + ': дорогих ≤5'); assert.ok(costs.filter(c => c <= 2).length >= 6, cls + ': дешевих ≥6');
+    const d = g.autoDeck(p); assert.equal(d.length, 12); assert.deepEqual(p.deck, d);
+    const costs = d.map(id => cardById[id].cost); assert.ok(costs.filter(c => c >= 10).length <= 3, cls + ': дорогих ≤3'); assert.ok(costs.filter(c => c <= 4).length >= 4, cls + ': дешевих ≥6');
   }
   const b = g.createPlayer({ name: 'B', classId: 'mage', age: 10, pin: '1111' }); const pb = g.players[b.id];
   const d0 = g.autoDeck(pb); assert.ok(!d0.includes('lightning'), 'рідкісна без колекції не береться');

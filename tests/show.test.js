@@ -36,12 +36,12 @@ test('удари двома хвилями: спершу всі герої, по
 
 test('карта на ворога несе ціль, масова карта позначена aoe', () => {
   const rng = makeRng(7);
-  const a = fighterFromPlayer(player('a', 'mage'), rng); a.mana = 10; a.hand = ['fireball', 'arcane_blast'];
+  const a = fighterFromPlayer(player('a', 'mage'), rng); a.mana = 20; a.hand = ['fireball', 'arcane_blast'];
   const b = createBattle({ teams: [[a], [fighterFromMob('zombie', 0), fighterFromMob('zombie', 1)]], seed: 7 });
-  assert.equal(submitMove(b, 'a', { target: 'zombie#1', attack: 'head', blocks: ['chest', 'legs'], cards: ['fireball', 'arcane_blast'] }), null);
+  assert.equal(submitMove(b, 'a', { target: 'zombie#1', attack: 'head', blocks: ['chest', 'legs'], cards: ['fireball'] }), null);
   const ev = resolveRound(b);
   const fb = ev.find(e => e.t === 'card' && e.card === 'fireball'); assert.equal(fb.target, 'zombie#1'); assert.equal(fb.aoe, false);
-  const ab = ev.find(e => e.t === 'card' && e.card === 'arcane_blast'); assert.equal(ab.aoe, !!cardById.arcane_blast.aoe);
+  assert.equal(cardById.arcane_blast.aoe, true, 'масова карта в даних позначена aoe');
   const hit = ev.find(e => e.t === 'dmg' && e.card === 'fireball'); assert.ok(hit, 'шкода від карти позначена картою');
 });
 
@@ -59,7 +59,7 @@ test('у грі події раунду мають ms, імена цілі й к
   const kid = g.createPlayer({ name: 'Малий', classId: 'warrior', age: 9, pin: '1111' });
   g.setMode(dad, { mode: 'dungeon' }); g.join(dad); g.join(kid); g.ready(dad, true); g.ready(kid, true);
   g.tvOnline = () => true;
-  const f = g.battle.fighters.find(x => x.id === dad.id); f.mana = 5; f.hand = ['fireball', 'magic_missile'];
+  const f = g.battle.fighters.find(x => x.id === dad.id); f.mana = 10; f.hand = ['fireball', 'magic_missile'];
   const en = g.battle.fighters.find(x => x.team === 1);
   g.move(dad, { target: en.id, attack: 'head', blocks: ['chest', 'legs'], cards: ['fireball'] });
   g.fire('round');
