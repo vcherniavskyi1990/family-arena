@@ -718,7 +718,7 @@ export class Game {
       if (mut && mut.startMana) f.mana = Math.min(f.maxMana, mut.startMana);
     }
     const bossRoom = r.room === r.rooms.length - 1 && !d.practice;
-    this.battle = createBattle({ teams: [r.team, mobs], seed: this.seed + r.room, mode: 'dungeon', meta: { room: r.room + 1, rooms: r.rooms.length, boss: bossRoom, practice: !!d.practice, dungeon: r.dungeon, raid: !!d.raid, scale, campaign: !!r.campaign, canvas: bossRoom || !!r.campaign, scene: this.artFor('scene_' + r.dungeon), mutator: mut ? { id: mut.id, name: mut.name, icon: mut.icon } : null } });
+    this.battle = createBattle({ teams: [r.team, mobs], seed: this.seed + r.room, mode: 'dungeon', meta: { room: r.room + 1, rooms: r.rooms.length, boss: bossRoom, practice: !!d.practice, dungeon: r.dungeon, dungeonName: d.name, raid: !!d.raid, scale, campaign: !!r.campaign, canvas: bossRoom || !!r.campaign, scene: this.artFor('scene_' + r.dungeon), mutator: mut ? { id: mut.id, name: mut.name, icon: mut.icon } : null } });
     this.roundEvents = [{ t: 'room', n: r.room + 1, of: r.rooms.length, boss: r.room === r.rooms.length - 1 && !d.practice, practice: !!d.practice, names: mobs.map(m => m.name) }];
     this.recordFrame();
   }
@@ -1620,10 +1620,10 @@ export class Game {
     const books = [{ n: 1, title: 'Книга 1: Дім у небезпеці', runs: c.runs, locked: false }, { n: 2, title: 'Книга 2: Портал', runs: c.runs2, locked: c.runs < 1 }];
     const base = { book: c.book, books, pending: this.campaignChoiceView(), n: ch.n, title: ch.title, intro: ch.intro, dungeon: d.name, icon: d.icon, level: d.level, mutator: ch.mutator ? (MUTATORS.find(m => m.id === ch.mutator) || {}).name : null };
     if (c.book === 2) {
-      const chapters = []; for (let n = 1; n <= CAMPAIGN2_LEN; n++) { const done = c.done2.find(x => x.n === n); chapters.push({ n, title: done ? camp2ById[done.id].title : n === ch.n ? ch.title : '?', done: !!done }); }
+      const chapters = []; for (let n = 1; n <= CAMPAIGN2_LEN; n++) { const done = c.done2.find(x => x.n === n); chapters.push({ n, title: done ? camp2ById[done.id].title : n === ch.n ? ch.title : '?', dungeon: done ? camp2ById[done.id].dungeon : n === ch.n ? ch.dungeon : null, done: !!done }); }
       return { ...base, of: CAMPAIGN2_LEN, runs: c.runs2, done: c.done2.map(x => x.n), chapters };
     }
-    return { ...base, of: CAMPAIGN.length, runs: c.runs, done: c.done.map(x => x.n), chapters: CAMPAIGN.map(x => ({ n: x.n, title: x.title, done: c.done.some(y => y.n === x.n) })) };
+    return { ...base, of: CAMPAIGN.length, runs: c.runs, done: c.done.map(x => x.n), chapters: CAMPAIGN.map(x => ({ n: x.n, title: x.title, dungeon: x.dungeon, done: c.done.some(y => y.n === x.n) })) };
   }
   /** Резервна копія всіх даних гри (без токенів входу) і відновлення з неї. */
   serviceStatus() {

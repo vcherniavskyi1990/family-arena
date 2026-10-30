@@ -1376,3 +1376,12 @@ test('v0.59 полотно: бос і кампанія вмикають canvas, 
   writeFileSync(join(artDir, 'mob_' + boss.mob + '.png'), 'x'); g.artCache = {};
   const pb = g.battleView().fighters.find(f => f.kind === 'boss'); assert.equal(pb.avatar, '/art/mob_' + boss.mob + '.png', 'портрет боса з artDir');
 });
+
+test('v0.59 мапа: розділи кампанії несуть id підземелля, бій знає назву підземелля', () => {
+  const g = makeGame();
+  const a = g.createPlayer({ name: 'A', classId: 'warrior', age: 40, pin: '1111', role: 'parent' });
+  const cv = g.campaignView();
+  assert.equal(cv.chapters[0].dungeon, 'kitchen_caves'); assert.ok(cv.chapters.every(c => typeof c.dungeon === 'string'), 'книга 1: усі розділи з підземеллям');
+  g.setMode(a, { mode: 'dungeon', dungeonId: 'kitchen_caves' }); g.join(a); g.ready(a, true);
+  assert.equal(g.battle.meta.dungeon, 'kitchen_caves'); assert.equal(g.battle.meta.dungeonName, 'Кухонні печери');
+});
