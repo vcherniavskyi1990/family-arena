@@ -231,7 +231,8 @@
       case 'round': say('<b>Раунд ' + e.n + '</b>: усі розкривають ходи!'); caption('Раунд ' + e.n, 'rnd', ms); break;
       case 'wave': wave(e.team, ms); say('<b>' + WAVE[e.team] + '</b>'); break;
       case 'reinforce': say('🧟 ' + (e.dm ? '<b>Ведучий</b> кличе' : '<b>' + who + '</b> кличе підмогу') + ': ' + esc((e.names || []).join(', ')) + ' ' + esc((e.icons || []).join(''))); beep(200, 300, 'sawtooth', 0.07); break;
-      case 'smart': floatText(e.who, '🧠 ×1.5', 'heal'); say('🧠 <b>' + who + '</b> розв’язав розумну карту: удар у півтора раза сильніший!'); beep(900, 150, 'sine', 0.06); break;
+      case 'smart': floatText(e.who, '🧠 ×2', 'heal'); caption('🧠 ' + who + '<br><b>розв’язав: удар подвійний!</b>', 'crit', ms); say('🧠 <b>' + who + '</b> розв’язав розумну карту: удар подвійний!'); beep(900, 150, 'sine', 0.06); break;
+      case 'flop': floatText(e.who, '🧠 −25 %', 'miss'); caption('🧠 ' + who + '<br><span class="blk">помилка: удар слабший на чверть</span>', 'dot', ms); say('🧠 <b>' + who + '</b> помилився: удар слабший'); beep(200, 200, 'sine', 0.05); break;
       case 'card': showCard(e); if (e.target) arrow(e.who, e.target, 'card', ms); say('🃏 ' + who + ' грає <b>' + esc(e.name) + '</b>' + (e.targetName ? ' на ' + esc(e.targetName) : e.aoe ? ' на всіх' : '')); beep(520, 120, 'triangle'); break;
       case 'block': flash(e.who, 'blocked'); if (e.by) arrow(e.by, e.who, 'blocked', ms); floatText(e.who, '🛡 БЛОК', 'block'); caption(by + ' → ' + who + '<br><span class="blk">🛡 БЛОК · ' + ZONE[e.zone] + '</span>', 'blk', ms); say('🛡 ' + who + ' заблокував удар ' + by + ' (' + ZONE[e.zone] + ')'); beep(300, 80); break;
       case 'dodge': if (e.by) arrow(e.by, e.who, 'blocked', ms); floatText(e.who, 'повз!', 'miss'); caption(by + ' → ' + who + '<br><span class="blk">💨 ухилився</span>', 'blk', ms); say('💨 ' + who + ' ухилився від ' + by); break;

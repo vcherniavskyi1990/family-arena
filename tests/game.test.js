@@ -143,13 +143,15 @@ test('2×2: дві команди по двоє, бій іде до кінця',
   assert.ok(g.history.lastReplay.frames.length >= 2, 'повтор записано');
 });
 
-test('розумні карти: правильна відповідь підсилює удар, неправильна ні', () => {
+test('розумні карти: правильна відповідь подвоює удар, помилка послаблює, раз на 3 раунди, лише дітям', () => {
   const g = makeGame();
   const a = g.createPlayer({ name: 'Віктор', classId: 'warrior', age: 10, pin: '1111' });
   const b = g.createPlayer({ name: 'Олександр', classId: 'mage', age: 7, pin: '2222' });
-  g.setMode(a, { mode: 'duel' }); g.join(a); g.join(b); g.ready(a, true); g.ready(b, true);
+  const dad = g.createPlayer({ name: 'Тато', classId: 'healer', age: 40, pin: '1234', role: 'admin' });
+  g.setMode(a, { mode: 'duel' }); g.join(a); g.join(b); g.join(dad); g.ready(a, true); g.ready(b, true); g.ready(dad, true);
   const st = g.playerState(a);
   assert.ok(st.battle.me.quiz && st.battle.me.quiz.choices.length === 3, 'є питання');
+  assert.equal(g.playerState(dad).battle.me.quiz, null, 'дорослий без завдання');
   const fa = g.battle.fighters.find(f => f.id === a.id);
   const right = fa.quiz.a;
   g.move(a, { attack: 'head', blocks: ['chest', 'belt'], cards: [], quiz: right });
@@ -157,11 +159,18 @@ test('розумні карти: правильна відповідь підс�
   assert.equal(g.players[a.id].stats.smart, 1);
   const fb = g.battle.fighters.find(f => f.id === b.id);
   g.move(b, { attack: 'head', blocks: ['chest', 'belt'], cards: [], quiz: 'не знаю' });
-  // після ходу обох раунд уже розіграно
+  g.move(dad, { attack: 'head', blocks: ['chest', 'belt'], cards: [] });
+  // після ходу всіх раунд уже розіграно
   const ev = g.lastRound.events;
   assert.ok(ev.some(e => e.t === 'smart' && e.who === a.id), 'подія smart для Віктора');
   assert.ok(!ev.some(e => e.t === 'smart' && e.who === b.id));
+  assert.ok(ev.some(e => e.t === 'flop' && e.who === b.id), 'помилка Олександра позначена');
   assert.equal(g.players[b.id].stats.smart, 0);
+  // раунди 2 і 3 без завдання, раунд 4 знову з ним
+  const seen = {}; let guard = 0;
+  while (g.battle && !g.battle.over && guard++ < 20) { for (const f of g.battle.fighters) { f.maxHp = 5000; f.hp = 5000; }   // щоб бій дожив до 4-го раунду
+    g.fire('round'); if (g.battle && g.roundEnds) seen[g.battle.round + 1] = !!g.playerState(a).battle.me.quiz; if (g.battle && g.battle.round >= 3 && g.roundEnds) break; }
+  assert.deepEqual(seen, { 2: false, 3: false, 4: true }, JSON.stringify(seen));
   // без розумних карт питання немає
   g.updateSettings({ smartCards: false });
   g.fire('round');
